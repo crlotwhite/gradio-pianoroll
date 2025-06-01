@@ -14,6 +14,10 @@
   import DebugComponent from './DebugComponent.svelte';
   import { audioEngine } from '../utils/audioEngine';
   import { beatsToFlicks, flicksToBeats, formatFlicks } from '../utils/flicks';
+  import { createEventDispatcher } from 'svelte';
+
+  // 이벤트 디스패처 생성
+  const dispatch = createEventDispatcher();
 
   // Props
   export let width = 1000;  // Total width of the piano roll
@@ -56,6 +60,7 @@
   function zoomIn() {
     if (pixelsPerBeat < MAX_PIXELS_PER_BEAT) {
       pixelsPerBeat += ZOOM_STEP;
+      dispatchDataChange();
     }
   }
 
@@ -63,6 +68,7 @@
   function zoomOut() {
     if (pixelsPerBeat > MIN_PIXELS_PER_BEAT) {
       pixelsPerBeat -= ZOOM_STEP;
+      dispatchDataChange();
     }
   }
 
@@ -72,6 +78,25 @@
 
   // References to DOM elements
   let containerElement: HTMLDivElement;
+
+  // 전체 데이터 변경 이벤트 발생
+  function dispatchDataChange() {
+    dispatch('dataChange', {
+      notes,
+      tempo,
+      timeSignature,
+      editMode,
+      snapSetting,
+      pixelsPerBeat
+    });
+  }
+
+  // 노트만 변경 이벤트 발생
+  function dispatchNoteChange() {
+    dispatch('noteChange', {
+      notes
+    });
+  }
 
   // Sync scroll handlers
   function handleGridScroll(event: CustomEvent) {
@@ -84,14 +109,17 @@
   // Settings handlers
   function handleTimeSignatureChange(event: CustomEvent) {
     timeSignature = event.detail;
+    dispatchDataChange();
   }
 
   function handleEditModeChange(event: CustomEvent) {
     editMode = event.detail;
+    dispatchDataChange();
   }
 
   function handleSnapChange(event: CustomEvent) {
     snapSetting = event.detail;
+    dispatchDataChange();
   }
 
   // Handle zoom changes from toolbar
@@ -188,6 +216,17 @@
     notes = event.detail.notes;
     // Re-render audio when notes change
     renderAudio();
+    // 노트 변경 이벤트 발생
+    dispatchNoteChange();
+  }
+
+  // Handle tempo changes
+  function handleTempoChange(event: CustomEvent) {
+    tempo = event.detail;
+    // Re-render audio when tempo changes
+    renderAudio();
+    // 전체 데이터 변경 이벤트 발생
+    dispatchDataChange();
   }
 
   onMount(() => {
@@ -217,11 +256,7 @@
     {editMode}
     {snapSetting}
     {isPlaying}
-    on:tempoChange={(e) => {
-      tempo = e.detail;
-      // Re-render audio when tempo changes
-      renderAudio();
-    }}
+    on:tempoChange={handleTempoChange}
     on:timeSignatureChange={handleTimeSignatureChange}
     on:editModeChange={handleEditModeChange}
     on:snapChange={handleSnapChange}
