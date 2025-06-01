@@ -68,9 +68,8 @@
     <button
       class="playback-button"
       on:click={togglePlay}
-      title={isPlaying ? 'Pause' : 'Play'}
-    >
-      <span class="icon">{isPlaying ? '⏸️' : '▶️'}</span>
+      title={isPlaying ? 'Pause' : 'Play'}>
+      {isPlaying ? '⏸' : '▶'}
     </button>
 
     <button
@@ -78,7 +77,7 @@
       on:click={stop}
       title="Stop"
     >
-      <span class="icon">⏹️</span>
+      ⏹
     </button>
   </div>
 
@@ -160,7 +159,7 @@
   .toolbar {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     padding: 8px 12px;
     height: 40px;
     background-color: #3a3a3a;
@@ -198,6 +197,20 @@
     font-size: 12px;
     padding: 4px 6px;
     width: 50px;
+    height: 30px;
+  }
+
+  .tempo-input-group input {
+    width: 70px;
+    margin: 0 5px;
+    text-align: right;
+    font-weight: bold;
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    height: 30px !important;
+    background-color: #2c2c2c !important;
+    color: #fff !important;
   }
 
   .unit, .divider {
@@ -241,6 +254,7 @@
   .edit-mode-buttons {
     display: flex;
     gap: 4px;
+    height: 30px;
   }
 
   .snap-control-container {
