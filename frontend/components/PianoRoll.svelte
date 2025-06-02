@@ -32,6 +32,15 @@
     duration: number,
     startFlicks?: number,      // Optional for backward compatibility
     durationFlicks?: number,   // Optional for backward compatibility
+    startSeconds?: number,     // Optional - seconds timing
+    durationSeconds?: number,  // Optional - seconds timing  
+    endSeconds?: number,       // Optional - end time in seconds
+    startBeats?: number,       // Optional - beats timing
+    durationBeats?: number,    // Optional - beats timing
+    startTicks?: number,       // Optional - MIDI ticks timing
+    durationTicks?: number,    // Optional - MIDI ticks timing
+    startSample?: number,      // Optional - sample timing
+    durationSamples?: number,  // Optional - sample timing
     pitch: number,
     velocity: number,
     lyric?: string
@@ -42,6 +51,10 @@
   export let timeSignature = { numerator: 4, denominator: 4 };
   export let editMode = 'select'; // 'select', 'draw', 'erase', etc.
   export let snapSetting = '1/4'; // Default snap setting: 1/4
+
+  // Audio metadata
+  export let sampleRate = 44100; // Audio sample rate
+  export let ppqn = 480;         // MIDI pulses per quarter note
 
   // Playback state
   let isPlaying = false;
@@ -89,7 +102,9 @@
       timeSignature,
       editMode,
       snapSetting,
-      pixelsPerBeat
+      pixelsPerBeat,
+      sampleRate,
+      ppqn
     });
   }
 
@@ -331,6 +346,8 @@
           {pixelsPerBeat}
           {currentFlicks}
           {isPlaying}
+          {sampleRate}
+          {ppqn}
           on:scroll={handleGridScroll}
           on:noteChange={handleNoteChange}
         />

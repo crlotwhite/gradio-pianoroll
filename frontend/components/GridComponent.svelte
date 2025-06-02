@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
-  import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks } from '../utils/flicks';
+  import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks, calculateAllTimingData } from '../utils/flicks';
   
   // Props
   export let width = 880;  // Width of the grid (total width - keyboard width)
@@ -15,6 +15,15 @@
     duration: number,
     startFlicks?: number,      // Optional for backward compatibility
     durationFlicks?: number,   // Optional for backward compatibility  
+    startSeconds?: number,     // Optional - seconds timing
+    durationSeconds?: number,  // Optional - seconds timing  
+    endSeconds?: number,       // Optional - end time in seconds
+    startBeats?: number,       // Optional - beats timing
+    durationBeats?: number,    // Optional - beats timing
+    startTicks?: number,       // Optional - MIDI ticks timing
+    durationTicks?: number,    // Optional - MIDI ticks timing
+    startSample?: number,      // Optional - sample timing
+    durationSamples?: number,  // Optional - sample timing
     pitch: number,
     velocity: number,
     lyric?: string
@@ -31,6 +40,10 @@
   export let verticalScroll = 0;  // Vertical scroll position
   export let currentFlicks = 0;  // Current playback position in flicks (added for playhead tracking)
   export let isPlaying = false;  // Whether playback is active
+  
+  // Audio metadata
+  export let sampleRate = 44100; // Audio sample rate
+  export let ppqn = 480;         // MIDI pulses per quarter note
   
   // Constants
   const NOTE_HEIGHT = 20;  // Height of a note row (same as white key height)
@@ -255,16 +268,29 @@
         initialDuration = pixelsPerBeat / 8;
       }
       
+      // Calculate timing data for start position and duration
+      const startTiming = calculateAllTimingData(time, pixelsPerBeat, tempo, sampleRate, ppqn);
+      const durationTiming = calculateAllTimingData(initialDuration, pixelsPerBeat, tempo, sampleRate, ppqn);
+      
       // Create a new note with duration based on snap setting
       const newNote = {
         id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         start: time,
         duration: initialDuration,
-        startFlicks: pixelsToFlicks(time, pixelsPerBeat, tempo),
-        durationFlicks: pixelsToFlicks(initialDuration, pixelsPerBeat, tempo),
         pitch: creationPitch,
         velocity: 100,
-        lyric: '라'  // Default lyric is '라'
+        lyric: '라',  // Default lyric is '라'
+        startFlicks: startTiming.flicks,
+        durationFlicks: durationTiming.flicks,
+        startSeconds: startTiming.seconds,
+        durationSeconds: durationTiming.seconds,
+        endSeconds: startTiming.seconds + durationTiming.seconds,
+        startBeats: startTiming.beats,
+        durationBeats: durationTiming.beats,
+        startTicks: startTiming.ticks,
+        durationTicks: durationTiming.ticks,
+        startSample: startTiming.samples,
+        durationSamples: durationTiming.samples
       };
       
       // Add note to the collection
@@ -388,11 +414,19 @@
             const newStart = Math.max(0, note.start + (gridMovementX * gridSize));
             const newPitch = Math.max(0, Math.min(127, note.pitch - gridMovementY));
             
+            // Calculate all timing data for new start position
+            const newStartTiming = calculateAllTimingData(newStart, pixelsPerBeat, tempo, sampleRate, ppqn);
+            
             return {
               ...note,
               start: newStart,
-              startFlicks: pixelsToFlicks(newStart, pixelsPerBeat, tempo),
-              pitch: newPitch
+              pitch: newPitch,
+              startFlicks: newStartTiming.flicks,
+              startSeconds: newStartTiming.seconds,
+              startBeats: newStartTiming.beats,
+              startTicks: newStartTiming.ticks,
+              startSample: newStartTiming.samples,
+              endSeconds: newStartTiming.seconds + (note.durationSeconds || 0)
             };
           }
           return note;
@@ -440,10 +474,18 @@
           // Ensure minimum size
           newDuration = Math.max(gridSize, snappedWidth);
           
+          // Calculate all timing data for new duration
+          const newDurationTiming = calculateAllTimingData(newDuration, pixelsPerBeat, tempo, sampleRate, ppqn);
+          
           return {
             ...note,
             duration: newDuration,
-            durationFlicks: pixelsToFlicks(newDuration, pixelsPerBeat, tempo)
+            durationFlicks: newDurationTiming.flicks,
+            durationSeconds: newDurationTiming.seconds,
+            durationBeats: newDurationTiming.beats,
+            durationTicks: newDurationTiming.ticks,
+            durationSamples: newDurationTiming.samples,
+            endSeconds: (note.startSeconds || 0) + newDurationTiming.seconds
           };
         }
         return note;

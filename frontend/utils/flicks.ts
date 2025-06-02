@@ -132,3 +132,63 @@ export function getExactNoteFlicks(noteDivision: string, tempo: number): number 
   
   return beatsToFlicks(beats, tempo);
 }
+
+/**
+ * Convert pixels to seconds for direct audio processing
+ */
+export function pixelsToSeconds(pixels: number, pixelsPerBeat: number, tempo: number): number {
+  return (pixels * 60) / (pixelsPerBeat * tempo);
+}
+
+/**
+ * Convert seconds to pixels
+ */
+export function secondsToPixels(seconds: number, pixelsPerBeat: number, tempo: number): number {
+  return (seconds * pixelsPerBeat * tempo) / 60;
+}
+
+/**
+ * Convert pixels to MIDI ticks
+ */
+export function pixelsToTicks(pixels: number, pixelsPerBeat: number, ppqn: number = 480): number {
+  const beats = pixelsToBeats(pixels, pixelsPerBeat);
+  return Math.round(beats * ppqn);
+}
+
+/**
+ * Convert MIDI ticks to pixels
+ */
+export function ticksToPixels(ticks: number, pixelsPerBeat: number, ppqn: number = 480): number {
+  const beats = ticks / ppqn;
+  return beatsToPixels(beats, pixelsPerBeat);
+}
+
+/**
+ * Convert pixels to audio samples
+ */
+export function pixelsToSamples(pixels: number, pixelsPerBeat: number, tempo: number, sampleRate: number = 44100): number {
+  const seconds = pixelsToSeconds(pixels, pixelsPerBeat, tempo);
+  return Math.round(seconds * sampleRate);
+}
+
+/**
+ * Convert audio samples to pixels
+ */
+export function samplesToPixels(samples: number, pixelsPerBeat: number, tempo: number, sampleRate: number = 44100): number {
+  const seconds = samples / sampleRate;
+  return secondsToPixels(seconds, pixelsPerBeat, tempo);
+}
+
+/**
+ * Calculate all timing representations for a given pixel value
+ */
+export function calculateAllTimingData(pixels: number, pixelsPerBeat: number, tempo: number, 
+                                     sampleRate: number = 44100, ppqn: number = 480) {
+  return {
+    seconds: pixelsToSeconds(pixels, pixelsPerBeat, tempo),
+    beats: pixelsToBeats(pixels, pixelsPerBeat),
+    flicks: pixelsToFlicks(pixels, pixelsPerBeat, tempo),
+    ticks: pixelsToTicks(pixels, pixelsPerBeat, ppqn),
+    samples: pixelsToSamples(pixels, pixelsPerBeat, tempo, sampleRate)
+  };
+}
