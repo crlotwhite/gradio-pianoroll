@@ -156,8 +156,8 @@ class AudioEngine {
     return renderedBuffer;
   }
   
-  // Play the rendered audio buffer
-  play(startPositionInFlicks: number = 0): void {
+  // Play the rendered audio buffer from current position or specified position
+  play(startPositionInFlicks?: number): void {
     if (!this.audioContext || !this.renderBuffer || this.isPlaying) return;
     
     // Resume audio context if suspended
@@ -171,13 +171,13 @@ class AudioEngine {
     this.renderSource.connect(this.gainNode!);
     
     // Calculate start position in seconds
-    const startPositionInSeconds = flicksToSeconds(startPositionInFlicks);
+    const startPositionInSeconds = flicksToSeconds(startPositionInFlicks || this.currentPlaybackFlicks);
     const currentTime = this.audioContext.currentTime;
     
     // Start playback
     this.renderSource.start(currentTime, startPositionInSeconds);
     this.startTime = currentTime - startPositionInSeconds;
-    this.playbackStartFlicks = startPositionInFlicks;
+    this.playbackStartFlicks = startPositionInFlicks || this.currentPlaybackFlicks;
     this.isPlaying = true;
     
     // Start updating playhead position
@@ -220,7 +220,7 @@ class AudioEngine {
   // Resume playback from paused position
   resume(): void {
     if (this.isPlaying) return;
-    this.play(this.currentPlaybackFlicks);
+    this.play();
   }
   
   // Toggle play/pause
@@ -240,6 +240,40 @@ class AudioEngine {
     
     const elapsedSeconds = this.audioContext.currentTime - this.startTime;
     return this.playbackStartFlicks + secondsToFlicks(elapsedSeconds);
+  }
+  
+  // Seek to a specific position in flicks
+  seekToFlicks(flicks: number): void {
+    // Clamp the position to valid range (0 to buffer duration)
+    const clampedFlicks = Math.max(0, flicks);
+    
+    if (this.renderBuffer) {
+      const bufferDurationFlicks = secondsToFlicks(this.renderBuffer.duration);
+      const finalFlicks = Math.min(clampedFlicks, bufferDurationFlicks);
+      
+      if (this.isPlaying) {
+        // If currently playing, stop and restart from new position
+        this.stop();
+        this.currentPlaybackFlicks = finalFlicks;
+        this.play();
+      } else {
+        // If not playing, just update the position
+        this.currentPlaybackFlicks = finalFlicks;
+        
+        // Update playhead immediately
+        if (this.onPlayheadUpdate) {
+          this.onPlayheadUpdate(finalFlicks);
+        }
+      }
+    } else {
+      // No buffer yet, just store the position
+      this.currentPlaybackFlicks = clampedFlicks;
+      
+      // Update playhead immediately
+      if (this.onPlayheadUpdate) {
+        this.onPlayheadUpdate(clampedFlicks);
+      }
+    }
   }
   
   // Update playhead position

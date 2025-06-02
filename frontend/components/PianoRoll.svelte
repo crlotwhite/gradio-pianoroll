@@ -171,7 +171,7 @@
   }
 
   function startPlayback() {
-    audioEngine.play(currentFlicks);
+    audioEngine.play();
     isPlaying = true;
   }
 
@@ -184,6 +184,8 @@
     audioEngine.stop();
     isPlaying = false;
     currentFlicks = 0;
+    // Also reset the audio engine's internal position
+    audioEngine.seekToFlicks(0);
   }
 
   function togglePlayback() {
@@ -227,6 +229,15 @@
     renderAudio();
     // 전체 데이터 변경 이벤트 발생
     dispatchDataChange();
+  }
+
+  // Handle position change from timeline click
+  function handlePositionChange(event: CustomEvent) {
+    const { flicks } = event.detail;
+    currentFlicks = flicks;
+    
+    // Seek audio engine to new position
+    audioEngine.seekToFlicks(flicks);
   }
 
   onMount(() => {
@@ -277,7 +288,9 @@
         {snapSetting}
         {horizontalScroll}
         {pixelsPerBeat}
+        {tempo}
         on:zoomChange={handleZoomChange}
+        on:positionChange={handlePositionChange}
       />
     </div>
 

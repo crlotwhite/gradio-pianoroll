@@ -3,6 +3,7 @@
 -->
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
+  import { beatsToFlicks } from '../utils/flicks';
   
   // Props
   export let width = 880;  // Width of the timeline (same as grid width)
@@ -11,6 +12,7 @@
   export let snapSetting = '1/8';  // Snap grid setting (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, none)
   export let horizontalScroll = 0;  // Horizontal scroll position synced with GridComponent
   export let pixelsPerBeat = 80;  // Pixels per beat (controls zoom level)
+  export let tempo = 120;  // Tempo in BPM (needed for flicks conversion)
   
   // Set up event dispatcher
   const dispatch = createEventDispatcher();
@@ -188,6 +190,23 @@
     // (Playback functionality could be added here)
   }
   
+  // Handle timeline click to seek
+  function handleTimelineClick(event: MouseEvent) {
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left + horizontalScroll;
+    
+    // Convert x position to beats
+    const beats = x / pixelsPerBeat;
+    
+    // Convert beats to flicks
+    const flicks = beatsToFlicks(beats, tempo);
+    
+    // Dispatch position change event
+    dispatch('positionChange', { flicks });
+  }
+  
   // Set up the component
   onMount(() => {
     // Get canvas context
@@ -247,6 +266,8 @@
     bind:this={canvas} 
     width={width} 
     height={timelineHeight}
+    on:click={handleTimelineClick}
+    style="cursor: pointer;"
   ></canvas>
 </div>
 
