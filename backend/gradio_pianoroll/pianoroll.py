@@ -23,6 +23,14 @@ def generate_note_id() -> str:
     random_chars = ''.join(random.choices(string.ascii_lowercase + string.digits, k=5))
     return f"note-{timestamp}-{random_chars}"
 
+def pixels_to_flicks(pixels: float, pixels_per_beat: float, tempo: float) -> float:
+    """
+    Convert pixels to flicks for accurate timing calculation.
+    Formula: pixels * 60 * FLICKS_PER_SECOND / (pixels_per_beat * tempo)
+    """
+    FLICKS_PER_SECOND = 705600000
+    return (pixels * 60 * FLICKS_PER_SECOND) / (pixels_per_beat * tempo)
+
 class PianoRoll(Component):
 
     EVENTS = [
@@ -72,12 +80,18 @@ class PianoRoll(Component):
         self.width = width
         self.height = height
         
-        # Define default notes with auto-generated IDs
+        # Default settings for flicks calculation
+        default_pixels_per_beat = 80
+        default_tempo = 120
+        
+        # Define default notes with auto-generated IDs and flicks values
         default_notes = [
             {
                 "id": generate_note_id(),
                 "start": 80,  # 1st beat of measure 1
                 "duration": 80,  # Quarter note
+                "startFlicks": pixels_to_flicks(80, default_pixels_per_beat, default_tempo),
+                "durationFlicks": pixels_to_flicks(80, default_pixels_per_beat, default_tempo),
                 "pitch": 60,  # Middle C
                 "velocity": 100,
                 "lyric": "안녕"
@@ -86,6 +100,8 @@ class PianoRoll(Component):
                 "id": generate_note_id(),
                 "start": 160,  # 1st beat of measure 2
                 "duration": 160,  # Half note
+                "startFlicks": pixels_to_flicks(160, default_pixels_per_beat, default_tempo),
+                "durationFlicks": pixels_to_flicks(160, default_pixels_per_beat, default_tempo),
                 "pitch": 64,  # E
                 "velocity": 90,
                 "lyric": "하세요"
@@ -94,6 +110,8 @@ class PianoRoll(Component):
                 "id": generate_note_id(),
                 "start": 320,  # 1st beat of measure 3
                 "duration": 80,  # Quarter note
+                "startFlicks": pixels_to_flicks(320, default_pixels_per_beat, default_tempo),
+                "durationFlicks": pixels_to_flicks(80, default_pixels_per_beat, default_tempo),
                 "pitch": 67,  # G
                 "velocity": 95,
                 "lyric": "반가워요"
@@ -103,17 +121,28 @@ class PianoRoll(Component):
         if value is None:
             self.value = {
                 "notes": default_notes,
-                "tempo": 120,
+                "tempo": default_tempo,
                 "timeSignature": { "numerator": 4, "denominator": 4 },
                 "editMode": "select",
-                "snapSetting": "1/4"
+                "snapSetting": "1/4",
+                "pixelsPerBeat": default_pixels_per_beat
             }
         else:
-            # Ensure all notes have IDs, generate them if missing
+            # Ensure all notes have IDs and flicks values, generate them if missing
             if "notes" in value and value["notes"]:
+                pixels_per_beat = value.get("pixelsPerBeat", default_pixels_per_beat)
+                tempo = value.get("tempo", default_tempo)
+                
                 for note in value["notes"]:
                     if "id" not in note or not note["id"]:
                         note["id"] = generate_note_id()
+                    
+                    # Add flicks values if missing
+                    if "startFlicks" not in note:
+                        note["startFlicks"] = pixels_to_flicks(note["start"], pixels_per_beat, tempo)
+                    if "durationFlicks" not in note:
+                        note["durationFlicks"] = pixels_to_flicks(note["duration"], pixels_per_beat, tempo)
+            
             self.value = value
 
         self._attrs = {
@@ -157,38 +186,58 @@ class PianoRoll(Component):
         Returns:
             the data after postprocessing, sent to the frontend
         """
-        # Ensure all notes have IDs when sending to frontend
+        # Ensure all notes have IDs and flicks values when sending to frontend
         if value and "notes" in value and value["notes"]:
+            pixels_per_beat = value.get("pixelsPerBeat", 80)
+            tempo = value.get("tempo", 120)
+            
             for note in value["notes"]:
                 if "id" not in note or not note["id"]:
                     note["id"] = generate_note_id()
+                
+                # Add flicks values if missing
+                if "startFlicks" not in note:
+                    note["startFlicks"] = pixels_to_flicks(note["start"], pixels_per_beat, tempo)
+                if "durationFlicks" not in note:
+                    note["durationFlicks"] = pixels_to_flicks(note["duration"], pixels_per_beat, tempo)
         return value
 
     def example_payload(self):
+        pixels_per_beat = 80
+        tempo = 120
+        
         return {
             "notes": [
                 {
                     "id": generate_note_id(),
                     "start": 80,
                     "duration": 80,
+                    "startFlicks": pixels_to_flicks(80, pixels_per_beat, tempo),
+                    "durationFlicks": pixels_to_flicks(80, pixels_per_beat, tempo),
                     "pitch": 60,
                     "velocity": 100,
                     "lyric": "안녕"
                 }
             ],
-            "tempo": 120,
+            "tempo": tempo,
             "timeSignature": { "numerator": 4, "denominator": 4 },
             "editMode": "select",
-            "snapSetting": "1/4"
+            "snapSetting": "1/4",
+            "pixelsPerBeat": pixels_per_beat
         }
 
     def example_value(self):
+        pixels_per_beat = 80
+        tempo = 120
+        
         return {
             "notes": [
                 {
                     "id": generate_note_id(),
                     "start": 80,
                     "duration": 80,
+                    "startFlicks": pixels_to_flicks(80, pixels_per_beat, tempo),
+                    "durationFlicks": pixels_to_flicks(80, pixels_per_beat, tempo),
                     "pitch": 60,
                     "velocity": 100,
                     "lyric": "안녕"
@@ -197,15 +246,18 @@ class PianoRoll(Component):
                     "id": generate_note_id(),
                     "start": 160,
                     "duration": 160,
+                    "startFlicks": pixels_to_flicks(160, pixels_per_beat, tempo),
+                    "durationFlicks": pixels_to_flicks(160, pixels_per_beat, tempo),
                     "pitch": 64,
                     "velocity": 90,
                     "lyric": "하세요"
                 }
             ],
-            "tempo": 120,
+            "tempo": tempo,
             "timeSignature": { "numerator": 4, "denominator": 4 },
             "editMode": "select",
-            "snapSetting": "1/4"
+            "snapSetting": "1/4",
+            "pixelsPerBeat": pixels_per_beat
         }
 
     def api_info(self):
@@ -218,13 +270,15 @@ class PianoRoll(Component):
                         "type": "object",
                         "properties": {
                             "id": {"type": "string"},
-                            "start": {"type": "number"},
-                            "duration": {"type": "number"},
-                            "pitch": {"type": "number"},
-                            "velocity": {"type": "number"},
-                            "lyric": {"type": "string"}
+                            "start": {"type": "number", "description": "Start position in pixels"},
+                            "duration": {"type": "number", "description": "Duration in pixels"},
+                            "startFlicks": {"type": "number", "description": "Start position in flicks (precise timing)"},
+                            "durationFlicks": {"type": "number", "description": "Duration in flicks (precise timing)"},
+                            "pitch": {"type": "number", "description": "MIDI pitch (0-127)"},
+                            "velocity": {"type": "number", "description": "MIDI velocity (0-127)"},
+                            "lyric": {"type": "string", "description": "Optional lyric text"}
                         },
-                        "required": ["id", "start", "duration", "pitch", "velocity"]
+                        "required": ["id", "start", "duration", "startFlicks", "durationFlicks", "pitch", "velocity"]
                     }
                 },
                 "tempo": {
@@ -246,6 +300,10 @@ class PianoRoll(Component):
                 "snapSetting": {
                     "type": "string",
                     "description": "Note snap setting"
+                },
+                "pixelsPerBeat": {
+                    "type": "number",
+                    "description": "Zoom level in pixels per beat"
                 }
             },
             "required": ["notes", "tempo", "timeSignature", "editMode", "snapSetting"],

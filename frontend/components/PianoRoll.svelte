@@ -30,6 +30,8 @@
     id: string,
     start: number,
     duration: number,
+    startFlicks?: number,      // Optional for backward compatibility
+    durationFlicks?: number,   // Optional for backward compatibility
     pitch: number,
     velocity: number,
     lyric?: string
@@ -50,8 +52,8 @@
   // References to components
   let waveformComponent: any; // Reference to waveform component
 
-  // Zoom level (pixels per beat)
-  let pixelsPerBeat = 80; // Default zoom level
+  // Zoom level (pixels per beat) - now controlled from parent
+  export let pixelsPerBeat = 80;
   const MIN_PIXELS_PER_BEAT = 40; // Minimum zoom level
   const MAX_PIXELS_PER_BEAT = 200; // Maximum zoom level
   const ZOOM_STEP = 20; // Zoom step size (must be integer to avoid coordinate calculation errors)

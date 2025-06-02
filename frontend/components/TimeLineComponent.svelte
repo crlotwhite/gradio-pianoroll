@@ -3,7 +3,7 @@
 -->
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
-  import { beatsToFlicks } from '../utils/flicks';
+  import { beatsToFlicks, pixelsToFlicks } from '../utils/flicks';
   
   // Props
   export let width = 880;  // Width of the timeline (same as grid width)
@@ -197,11 +197,8 @@
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left + horizontalScroll;
     
-    // Convert x position to beats
-    const beats = x / pixelsPerBeat;
-    
-    // Convert beats to flicks
-    const flicks = beatsToFlicks(beats, tempo);
+    // Convert x position to flicks using direct conversion for higher precision
+    const flicks = pixelsToFlicks(x, pixelsPerBeat, tempo);
     
     // Dispatch position change event
     dispatch('positionChange', { flicks });

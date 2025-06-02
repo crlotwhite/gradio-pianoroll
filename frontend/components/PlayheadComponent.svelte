@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { flicksToBeats } from '../utils/flicks';
+  import { flicksToBeats, flicksToPixels } from '../utils/flicks';
 
   // Props
   export let width = 880;
@@ -15,9 +15,9 @@
   export let currentFlicks = 0;
   export let isPlaying = false;
 
-  // Calculated position
+  // Calculated position using more precise flicks conversion
   $: positionInBeats = flicksToBeats(currentFlicks, tempo);
-  $: positionInPixels = positionInBeats * pixelsPerBeat;
+  $: positionInPixels = flicksToPixels(currentFlicks, pixelsPerBeat, tempo);
   $: visiblePosition = positionInPixels - horizontalScroll;
   $: isVisible = visiblePosition >= 0 && visiblePosition <= width;
 

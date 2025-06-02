@@ -12,10 +12,11 @@
 export const FLICKS_PER_SECOND = 705600000;
 
 /**
- * Convert seconds to flicks
+ * Convert seconds to flicks with higher precision
+ * Removed Math.round() to maintain precision
  */
 export function secondsToFlicks(seconds: number): number {
-  return Math.round(seconds * FLICKS_PER_SECOND);
+  return seconds * FLICKS_PER_SECOND;
 }
 
 /**
@@ -26,23 +27,51 @@ export function flicksToSeconds(flicks: number): number {
 }
 
 /**
- * Convert beats to flicks based on tempo
+ * Convert beats to flicks based on tempo with higher precision
+ * Direct calculation to avoid intermediate rounding
  */
 export function beatsToFlicks(beats: number, tempo: number): number {
-  // beats * 60 seconds per minute / tempo = seconds
-  // then convert seconds to flicks
-  const seconds = (beats * 60) / tempo;
-  return secondsToFlicks(seconds);
+  // Optimized formula: beats * 60 * FLICKS_PER_SECOND / tempo
+  return (beats * 60 * FLICKS_PER_SECOND) / tempo;
 }
 
 /**
  * Convert flicks to beats based on tempo
  */
 export function flicksToBeats(flicks: number, tempo: number): number {
-  // Convert flicks to seconds
-  const seconds = flicksToSeconds(flicks);
-  // Convert seconds to beats: seconds * tempo / 60
-  return seconds * tempo / 60;
+  // Direct calculation: flicks * tempo / (60 * FLICKS_PER_SECOND)
+  return (flicks * tempo) / (60 * FLICKS_PER_SECOND);
+}
+
+/**
+ * Convert pixels to flicks directly
+ * This avoids the pixel -> beats -> flicks conversion chain
+ */
+export function pixelsToFlicks(pixels: number, pixelsPerBeat: number, tempo: number): number {
+  // Formula: pixels * 60 * FLICKS_PER_SECOND / (pixelsPerBeat * tempo)
+  return (pixels * 60 * FLICKS_PER_SECOND) / (pixelsPerBeat * tempo);
+}
+
+/**
+ * Convert flicks to pixels directly
+ */
+export function flicksToPixels(flicks: number, pixelsPerBeat: number, tempo: number): number {
+  // Formula: flicks * pixelsPerBeat * tempo / (60 * FLICKS_PER_SECOND)
+  return (flicks * pixelsPerBeat * tempo) / (60 * FLICKS_PER_SECOND);
+}
+
+/**
+ * Convert pixels to beats with higher precision
+ */
+export function pixelsToBeats(pixels: number, pixelsPerBeat: number): number {
+  return pixels / pixelsPerBeat;
+}
+
+/**
+ * Convert beats to pixels
+ */
+export function beatsToPixels(beats: number, pixelsPerBeat: number): number {
+  return beats * pixelsPerBeat;
 }
 
 /**
@@ -66,6 +95,13 @@ export function snapToFlicks(snapSetting: string, timeSignature: { numerator: nu
 }
 
 /**
+ * Round flicks to nearest integer when precision is not critical
+ */
+export function roundFlicks(flicks: number): number {
+  return Math.round(flicks);
+}
+
+/**
  * Format flicks to a human-readable string (useful for debugging)
  */
 export function formatFlicks(flicks: number): string {
@@ -73,4 +109,26 @@ export function formatFlicks(flicks: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}:${remainingSeconds.toFixed(3)}`;
+}
+
+/**
+ * Get the exact flicks value for common note divisions
+ * This ensures precise timing for standard musical divisions
+ */
+export function getExactNoteFlicks(noteDivision: string, tempo: number): number {
+  const divisions: { [key: string]: number } = {
+    '1/1': 4,     // Whole note = 4 beats
+    '1/2': 2,     // Half note = 2 beats
+    '1/4': 1,     // Quarter note = 1 beat
+    '1/8': 0.5,   // Eighth note = 0.5 beats
+    '1/16': 0.25, // Sixteenth note = 0.25 beats
+    '1/32': 0.125 // Thirty-second note = 0.125 beats
+  };
+  
+  const beats = divisions[noteDivision];
+  if (beats === undefined) {
+    throw new Error(`Unknown note division: ${noteDivision}`);
+  }
+  
+  return beatsToFlicks(beats, tempo);
 }

@@ -2,7 +2,7 @@
  * Audio Engine for rendering and playing notes
  * Uses Web Audio API to synthesize sounds based on note data
  */
-import { flicksToSeconds, beatsToFlicks, secondsToFlicks } from './flicks';
+import { flicksToSeconds, beatsToFlicks, secondsToFlicks, pixelsToFlicks, roundFlicks } from './flicks';
 
 // MIDI note to frequency conversion (A4 = 69 = 440Hz)
 function midiToFreq(midi: number): number {
@@ -100,6 +100,8 @@ class AudioEngine {
       id: string;
       start: number;
       duration: number;
+      startFlicks?: number;      // Optional flicks values for higher precision
+      durationFlicks?: number;   // Optional flicks values for higher precision
       pitch: number;
       velocity: number;
     }>,
@@ -127,13 +129,19 @@ class AudioEngine {
     
     // Render each note
     notes.forEach(note => {
-      // Convert from pixels to beats using pixelsPerBeat as the conversion factor
-      const noteStartBeats = note.start / pixelsPerBeat;
-      const noteDurationBeats = note.duration / pixelsPerBeat;
+      // Use flicks values if available, otherwise convert from pixels
+      let noteStartFlicks: number;
+      let noteDurationFlicks: number;
       
-      // Convert from beats to flicks
-      const noteStartFlicks = beatsToFlicks(noteStartBeats, tempo);
-      const noteDurationFlicks = beatsToFlicks(noteDurationBeats, tempo);
+      if (note.startFlicks !== undefined && note.durationFlicks !== undefined) {
+        // Use precise flicks values if available
+        noteStartFlicks = note.startFlicks;
+        noteDurationFlicks = note.durationFlicks;
+      } else {
+        // Fallback to pixel-to-flicks conversion for backward compatibility
+        noteStartFlicks = pixelsToFlicks(note.start, pixelsPerBeat, tempo);
+        noteDurationFlicks = pixelsToFlicks(note.duration, pixelsPerBeat, tempo);
+      }
       
       const noteStartTime = flicksToSeconds(noteStartFlicks);
       const noteDuration = flicksToSeconds(noteDurationFlicks);

@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
+  import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks } from '../utils/flicks';
   
   // Props
   export let width = 880;  // Width of the grid (total width - keyboard width)
@@ -12,6 +13,8 @@
     id: string,
     start: number,
     duration: number,
+    startFlicks?: number,      // Optional for backward compatibility
+    durationFlicks?: number,   // Optional for backward compatibility  
     pitch: number,
     velocity: number,
     lyric?: string
@@ -257,6 +260,8 @@
         id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         start: time,
         duration: initialDuration,
+        startFlicks: pixelsToFlicks(time, pixelsPerBeat, tempo),
+        durationFlicks: pixelsToFlicks(initialDuration, pixelsPerBeat, tempo),
         pitch: creationPitch,
         velocity: 100,
         lyric: '라'  // Default lyric is '라'
@@ -386,6 +391,7 @@
             return {
               ...note,
               start: newStart,
+              startFlicks: pixelsToFlicks(newStart, pixelsPerBeat, tempo),
               pitch: newPitch
             };
           }
@@ -436,7 +442,8 @@
           
           return {
             ...note,
-            duration: newDuration
+            duration: newDuration,
+            durationFlicks: pixelsToFlicks(newDuration, pixelsPerBeat, tempo)
           };
         }
         return note;
@@ -675,34 +682,38 @@
     dispatch('positionInfo', currentMousePosition);
   }
   
-  // Snap value to grid based on selected snap setting
+  // Snap value to grid based on selected snap setting with higher precision
   function snapToGrid(value: number) {
     // If snap is set to 'none', return the exact value
     if (snapSetting === 'none') {
       return value;
     }
     
-    // Parse the snap setting fraction
-    let divisionValue = 4; // Default to quarter note (1/4)
-    
-    if (snapSetting !== 'none') {
-      const [numerator, denominator] = snapSetting.split('/');
-      if (numerator === '1' && denominator) {
-        divisionValue = parseInt(denominator);
+    try {
+      // Use the precise note flicks calculation for better accuracy
+      const exactNoteFlicks = getExactNoteFlicks(snapSetting, tempo);
+      const exactNotePixels = flicksToPixels(exactNoteFlicks, pixelsPerBeat, tempo);
+      
+      // Round to nearest grid position
+      return Math.round(value / exactNotePixels) * exactNotePixels;
+    } catch (error) {
+      // Fallback to original calculation if snap setting is not recognized
+      console.warn(`Unknown snap setting: ${snapSetting}, using fallback calculation`);
+      
+      // Parse the snap setting fraction
+      let divisionValue = 4; // Default to quarter note (1/4)
+      
+      if (snapSetting !== 'none') {
+        const [numerator, denominator] = snapSetting.split('/');
+        if (numerator === '1' && denominator) {
+          divisionValue = parseInt(denominator);
+        }
       }
+      
+      // Calculate grid size based on the snap setting
+      const gridSize = pixelsPerBeat / divisionValue;
+      return Math.round(value / gridSize) * gridSize;
     }
-    
-    // Calculate grid size based on the snap setting
-    // Dividing one beat by the division value
-    // For 1/1: Full beat, so gridSize = pixelsPerBeat
-    // For 1/2: Half beat, so gridSize = pixelsPerBeat / 2
-    // For 1/4: Quarter beat, so gridSize = pixelsPerBeat / 4
-    // For 1/8: Eighth beat, so gridSize = pixelsPerBeat / 8
-    // For 1/16: Sixteenth beat, so gridSize = pixelsPerBeat / 16
-    // For 1/32: Thirty-second beat, so gridSize = pixelsPerBeat / 32
-    const gridSize = pixelsPerBeat / divisionValue;
-    
-    return Math.round(value / gridSize) * gridSize;
   }
   
   // Convert beat position to pixel position
@@ -986,7 +997,10 @@
       // Maintain relative position by scaling the start time
       start: note.start * scaleFactor,
       // Scale the duration proportionally
-      duration: note.duration * scaleFactor
+      duration: note.duration * scaleFactor,
+      // Update flicks values to match the new pixel positions
+      startFlicks: pixelsToFlicks(note.start * scaleFactor, pixelsPerBeat, tempo),
+      durationFlicks: pixelsToFlicks(note.duration * scaleFactor, pixelsPerBeat, tempo)
     }));
     
     // Notify parent of note changes

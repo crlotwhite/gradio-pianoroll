@@ -18,7 +18,8 @@
 		tempo: 120,
 		timeSignature: { numerator: 4, denominator: 4 },
 		editMode: 'select',
-		snapSetting: '1/4'
+		snapSetting: '1/4',
+		pixelsPerBeat: 80
 	};
 	export let container = true;
 	export let scale: number | null = null;
@@ -41,7 +42,8 @@
 			tempo: 120,
 			timeSignature: { numerator: 4, denominator: 4 },
 			editMode: 'select',
-			snapSetting: '1/4'
+			snapSetting: '1/4',
+			pixelsPerBeat: 80
 		};
 	} else {
 		// 개별 속성이 없는 경우에만 기본값 설정
@@ -50,11 +52,12 @@
 		if (!value.timeSignature) value.timeSignature = { numerator: 4, denominator: 4 };
 		if (!value.editMode) value.editMode = 'select';
 		if (!value.snapSetting) value.snapSetting = '1/4';
+		if (!value.pixelsPerBeat) value.pixelsPerBeat = 80;
 	}
 
 	// 피아노롤에서 데이터 변경 시 호출되는 핸들러
 	function handlePianoRollChange(event: CustomEvent) {
-		const { notes, tempo, timeSignature, editMode, snapSetting } = event.detail;
+		const { notes, tempo, timeSignature, editMode, snapSetting, pixelsPerBeat } = event.detail;
 
 		// value 전체 업데이트
 		value = {
@@ -62,7 +65,8 @@
 			tempo,
 			timeSignature,
 			editMode,
-			snapSetting
+			snapSetting,
+			pixelsPerBeat
 		};
 
 		// Gradio로 변경사항 전달
@@ -105,6 +109,7 @@
 		timeSignature={value.timeSignature}
 		editMode={value.editMode}
 		snapSetting={value.snapSetting}
+		pixelsPerBeat={value.pixelsPerBeat || 80}
 		on:dataChange={handlePianoRollChange}
 		on:noteChange={handleNotesChange}
 	/>
