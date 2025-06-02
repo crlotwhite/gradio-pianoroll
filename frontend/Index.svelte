@@ -13,36 +13,8 @@
 	export let elem_classes: string[] = [];
 	export let visible = true;
 
-	// 기본 샘플 노트 데이터
-	const defaultNotes = [
-		{
-			id: 'note-1',
-			start: 80, // 1st beat of measure 1
-			duration: 80, // Quarter note
-			pitch: 60, // Middle C
-			velocity: 100,
-			lyric: '안녕'
-		},
-		{
-			id: 'note-2',
-			start: 160, // 1st beat of measure 2
-			duration: 160, // Half note
-			pitch: 64, // E
-			velocity: 90,
-			lyric: '하세요'
-		},
-		{
-			id: 'note-3',
-			start: 320, // 1st beat of measure 3
-			duration: 80, // Quarter note
-			pitch: 67, // G
-			velocity: 95,
-			lyric: '반가워요'
-		}
-	];
-
 	export let value = {
-		notes: defaultNotes,
+		notes: [],
 		tempo: 120,
 		timeSignature: { numerator: 4, denominator: 4 },
 		editMode: 'select',
@@ -62,17 +34,22 @@
 	export let width = 800;
 	export let height = 400;
 
-
-
-	// value가 초기화되지 않았거나 note가 비어있을 때 기본값 설정
-	$: if (!value || !value.notes) {
+	// value가 초기화되지 않았거나 필수 속성이 누락된 경우 기본값 설정
+	$: if (!value || typeof value !== 'object') {
 		value = {
-			notes: defaultNotes,
-			tempo: value?.tempo || 120,
-			timeSignature: value?.timeSignature || { numerator: 4, denominator: 4 },
-			editMode: value?.editMode || 'select',
-			snapSetting: value?.snapSetting || '1/4'
+			notes: [],
+			tempo: 120,
+			timeSignature: { numerator: 4, denominator: 4 },
+			editMode: 'select',
+			snapSetting: '1/4'
 		};
+	} else {
+		// 개별 속성이 없는 경우에만 기본값 설정
+		if (!value.notes) value.notes = [];
+		if (!value.tempo) value.tempo = 120;
+		if (!value.timeSignature) value.timeSignature = { numerator: 4, denominator: 4 };
+		if (!value.editMode) value.editMode = 'select';
+		if (!value.snapSetting) value.snapSetting = '1/4';
 	}
 
 	// 피아노롤에서 데이터 변경 시 호출되는 핸들러

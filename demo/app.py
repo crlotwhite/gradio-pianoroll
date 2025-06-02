@@ -7,16 +7,16 @@ def convert(piano_roll):
     print(piano_roll)
     print("Type:", type(piano_roll))
     return piano_roll
+    
 with gr.Blocks() as demo:
     gr.Markdown("# Gradio PianoRoll: Gradio에서 피아노롤 컴포넌트 사용")
 
     with gr.Row():
         with gr.Column():
-            # 초기값을 명시적으로 설정
+            # 초기값을 명시적으로 설정 (ID는 자동 생성됨)
             initial_value = {
                 "notes": [
                     {
-                        "id": "note-1",
                         "start": 80,
                         "duration": 80,
                         "pitch": 60,

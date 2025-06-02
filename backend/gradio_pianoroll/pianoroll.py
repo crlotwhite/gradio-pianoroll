@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import time
+import random
+import string
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -9,6 +12,16 @@ from gradio.i18n import I18nData
 
 if TYPE_CHECKING:
     from gradio.components import Timer
+
+def generate_note_id() -> str:
+    """
+    Generate a unique note ID using the same algorithm as the frontend.
+    Format: note-{timestamp}-{random_string}
+    """
+    timestamp = int(time.time() * 1000)  # Milliseconds like Date.now()
+    # Generate 5-character random string similar to Math.random().toString(36).substr(2, 5)
+    random_chars = ''.join(random.choices(string.ascii_lowercase + string.digits, k=5))
+    return f"note-{timestamp}-{random_chars}"
 
 class PianoRoll(Component):
 
@@ -58,15 +71,49 @@ class PianoRoll(Component):
         """
         self.width = width
         self.height = height
+        
+        # Define default notes with auto-generated IDs
+        default_notes = [
+            {
+                "id": generate_note_id(),
+                "start": 80,  # 1st beat of measure 1
+                "duration": 80,  # Quarter note
+                "pitch": 60,  # Middle C
+                "velocity": 100,
+                "lyric": "안녕"
+            },
+            {
+                "id": generate_note_id(),
+                "start": 160,  # 1st beat of measure 2
+                "duration": 160,  # Half note
+                "pitch": 64,  # E
+                "velocity": 90,
+                "lyric": "하세요"
+            },
+            {
+                "id": generate_note_id(),
+                "start": 320,  # 1st beat of measure 3
+                "duration": 80,  # Quarter note
+                "pitch": 67,  # G
+                "velocity": 95,
+                "lyric": "반가워요"
+            }
+        ]
+        
         if value is None:
             self.value = {
-                "notes": [],
+                "notes": default_notes,
                 "tempo": 120,
                 "timeSignature": { "numerator": 4, "denominator": 4 },
                 "editMode": "select",
                 "snapSetting": "1/4"
             }
         else:
+            # Ensure all notes have IDs, generate them if missing
+            if "notes" in value and value["notes"]:
+                for note in value["notes"]:
+                    if "id" not in note or not note["id"]:
+                        note["id"] = generate_note_id()
             self.value = value
 
         self._attrs = {
@@ -110,13 +157,18 @@ class PianoRoll(Component):
         Returns:
             the data after postprocessing, sent to the frontend
         """
+        # Ensure all notes have IDs when sending to frontend
+        if value and "notes" in value and value["notes"]:
+            for note in value["notes"]:
+                if "id" not in note or not note["id"]:
+                    note["id"] = generate_note_id()
         return value
 
     def example_payload(self):
         return {
             "notes": [
                 {
-                    "id": "note-1",
+                    "id": generate_note_id(),
                     "start": 80,
                     "duration": 80,
                     "pitch": 60,
@@ -134,7 +186,7 @@ class PianoRoll(Component):
         return {
             "notes": [
                 {
-                    "id": "note-1",
+                    "id": generate_note_id(),
                     "start": 80,
                     "duration": 80,
                     "pitch": 60,
@@ -142,7 +194,7 @@ class PianoRoll(Component):
                     "lyric": "안녕"
                 },
                 {
-                    "id": "note-2",
+                    "id": generate_note_id(),
                     "start": 160,
                     "duration": 160,
                     "pitch": 64,
