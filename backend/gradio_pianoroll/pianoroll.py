@@ -60,7 +60,7 @@ def pixels_to_samples(pixels: float, pixels_per_beat: float, tempo: float, sampl
     seconds = pixels_to_seconds(pixels, pixels_per_beat, tempo)
     return int(seconds * sample_rate)
 
-def calculate_all_timing_data(pixels: float, pixels_per_beat: float, tempo: float, 
+def calculate_all_timing_data(pixels: float, pixels_per_beat: float, tempo: float,
                              sample_rate: int = 44100, ppqn: int = 480) -> dict:
     """
     Calculate all timing representations for a given pixel value.
@@ -72,6 +72,51 @@ def calculate_all_timing_data(pixels: float, pixels_per_beat: float, tempo: floa
         'flicks': pixels_to_flicks(pixels, pixels_per_beat, tempo),
         'ticks': pixels_to_ticks(pixels, pixels_per_beat, ppqn),
         'samples': pixels_to_samples(pixels, pixels_per_beat, tempo, sample_rate)
+    }
+
+def create_note_with_timing(note_id: str, start_pixels: float, duration_pixels: float,
+                          pitch: int, velocity: int, lyric: str,
+                          pixels_per_beat: float = 80, tempo: float = 120,
+                          sample_rate: int = 44100, ppqn: int = 480) -> dict:
+    """
+    Create a note with all timing data calculated from pixel values.
+
+    Args:
+        note_id: Unique identifier for the note
+        start_pixels: Start position in pixels
+        duration_pixels: Duration in pixels
+        pitch: MIDI pitch (0-127)
+        velocity: MIDI velocity (0-127)
+        lyric: Lyric text for the note
+        pixels_per_beat: Zoom level in pixels per beat
+        tempo: BPM tempo
+        sample_rate: Audio sample rate for sample calculations
+        ppqn: Pulses per quarter note for MIDI tick calculations
+
+    Returns:
+        Dictionary containing note data with all timing representations
+    """
+    start_timing = calculate_all_timing_data(start_pixels, pixels_per_beat, tempo, sample_rate, ppqn)
+    duration_timing = calculate_all_timing_data(duration_pixels, pixels_per_beat, tempo, sample_rate, ppqn)
+
+    return {
+        "id": note_id,
+        "start": start_pixels,
+        "duration": duration_pixels,
+        "startFlicks": start_timing['flicks'],
+        "durationFlicks": duration_timing['flicks'],
+        "startSeconds": start_timing['seconds'],
+        "durationSeconds": duration_timing['seconds'],
+        "endSeconds": start_timing['seconds'] + duration_timing['seconds'],
+        "startBeats": start_timing['beats'],
+        "durationBeats": duration_timing['beats'],
+        "startTicks": start_timing['ticks'],
+        "durationTicks": duration_timing['ticks'],
+        "startSample": start_timing['samples'],
+        "durationSamples": duration_timing['samples'],
+        "pitch": pitch,
+        "velocity": velocity,
+        "lyric": lyric
     }
 
 class PianoRoll(Component):
@@ -122,47 +167,22 @@ class PianoRoll(Component):
         """
         self.width = width
         self.height = height
-        
+
         # Default settings for flicks calculation
         default_pixels_per_beat = 80
         default_tempo = 120
         default_sample_rate = 44100
         default_ppqn = 480
-        
-        # Define default notes with auto-generated IDs and all timing values
-        def create_note_with_timing(note_id: str, start_pixels: float, duration_pixels: float, 
-                                  pitch: int, velocity: int, lyric: str) -> dict:
-            start_timing = calculate_all_timing_data(start_pixels, default_pixels_per_beat, default_tempo, 
-                                                   default_sample_rate, default_ppqn)
-            duration_timing = calculate_all_timing_data(duration_pixels, default_pixels_per_beat, default_tempo, 
-                                                      default_sample_rate, default_ppqn)
-            
-            return {
-                "id": note_id,
-                "start": start_pixels,
-                "duration": duration_pixels,
-                "startFlicks": start_timing['flicks'],
-                "durationFlicks": duration_timing['flicks'],
-                "startSeconds": start_timing['seconds'],
-                "durationSeconds": duration_timing['seconds'],
-                "endSeconds": start_timing['seconds'] + duration_timing['seconds'],
-                "startBeats": start_timing['beats'],
-                "durationBeats": duration_timing['beats'],
-                "startTicks": start_timing['ticks'],
-                "durationTicks": duration_timing['ticks'],
-                "startSample": start_timing['samples'],
-                "durationSamples": duration_timing['samples'],
-                "pitch": pitch,
-                "velocity": velocity,
-                "lyric": lyric
-            }
-        
+
         default_notes = [
-            create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕"),      # 1st beat of measure 1
-            create_note_with_timing(generate_note_id(), 160, 160, 64, 90, "하세요"),    # 1st beat of measure 2  
-            create_note_with_timing(generate_note_id(), 320, 80, 67, 95, "반가워요")    # 1st beat of measure 3
+            create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕",
+                                  default_pixels_per_beat, default_tempo, default_sample_rate, default_ppqn),      # 1st beat of measure 1
+            create_note_with_timing(generate_note_id(), 160, 160, 64, 90, "하세요",
+                                  default_pixels_per_beat, default_tempo, default_sample_rate, default_ppqn),    # 1st beat of measure 2
+            create_note_with_timing(generate_note_id(), 320, 80, 67, 95, "반가워요",
+                                  default_pixels_per_beat, default_tempo, default_sample_rate, default_ppqn)    # 1st beat of measure 3
         ]
-        
+
         if value is None:
             self.value = {
                 "notes": default_notes,
@@ -179,17 +199,17 @@ class PianoRoll(Component):
             if "notes" in value and value["notes"]:
                 pixels_per_beat = value.get("pixelsPerBeat", default_pixels_per_beat)
                 tempo = value.get("tempo", default_tempo)
-                
+
                 for note in value["notes"]:
                     if "id" not in note or not note["id"]:
                         note["id"] = generate_note_id()
-                    
+
                     # Add flicks values if missing
                     if "startFlicks" not in note:
                         note["startFlicks"] = pixels_to_flicks(note["start"], pixels_per_beat, tempo)
                     if "durationFlicks" not in note:
                         note["durationFlicks"] = pixels_to_flicks(note["duration"], pixels_per_beat, tempo)
-            
+
             self.value = value
 
         self._attrs = {
@@ -239,11 +259,11 @@ class PianoRoll(Component):
             tempo = value.get("tempo", 120)
             sample_rate = value.get("sampleRate", 44100)
             ppqn = value.get("ppqn", 480)
-            
+
             for note in value["notes"]:
                 if "id" not in note or not note["id"]:
                     note["id"] = generate_note_id()
-                
+
                 # Add all timing values if missing
                 if "startFlicks" not in note or "startSeconds" not in note:
                     start_timing = calculate_all_timing_data(note["start"], pixels_per_beat, tempo, sample_rate, ppqn)
@@ -254,7 +274,7 @@ class PianoRoll(Component):
                         "startTicks": start_timing['ticks'],
                         "startSample": start_timing['samples']
                     })
-                
+
                 if "durationFlicks" not in note or "durationSeconds" not in note:
                     duration_timing = calculate_all_timing_data(note["duration"], pixels_per_beat, tempo, sample_rate, ppqn)
                     note.update({
@@ -264,7 +284,7 @@ class PianoRoll(Component):
                         "durationTicks": duration_timing['ticks'],
                         "durationSamples": duration_timing['samples']
                     })
-                
+
                 # Calculate end time if missing
                 if "endSeconds" not in note:
                     note["endSeconds"] = note.get("startSeconds", 0) + note.get("durationSeconds", 0)
@@ -275,10 +295,11 @@ class PianoRoll(Component):
         tempo = 120
         sample_rate = 44100
         ppqn = 480
-        
+
         return {
             "notes": [
-                create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕")
+                create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕",
+                                      pixels_per_beat, tempo, sample_rate, ppqn)
             ],
             "tempo": tempo,
             "timeSignature": { "numerator": 4, "denominator": 4 },
@@ -294,37 +315,13 @@ class PianoRoll(Component):
         tempo = 120
         sample_rate = 44100
         ppqn = 480
-        
-        # Create helper function for examples
-        def create_example_note(note_id: str, start_pixels: float, duration_pixels: float, 
-                              pitch: int, velocity: int, lyric: str) -> dict:
-            start_timing = calculate_all_timing_data(start_pixels, pixels_per_beat, tempo, sample_rate, ppqn)
-            duration_timing = calculate_all_timing_data(duration_pixels, pixels_per_beat, tempo, sample_rate, ppqn)
-            
-            return {
-                "id": note_id,
-                "start": start_pixels,
-                "duration": duration_pixels,
-                "startFlicks": start_timing['flicks'],
-                "durationFlicks": duration_timing['flicks'],
-                "startSeconds": start_timing['seconds'],
-                "durationSeconds": duration_timing['seconds'],
-                "endSeconds": start_timing['seconds'] + duration_timing['seconds'],
-                "startBeats": start_timing['beats'],
-                "durationBeats": duration_timing['beats'],
-                "startTicks": start_timing['ticks'],
-                "durationTicks": duration_timing['ticks'],
-                "startSample": start_timing['samples'],
-                "durationSamples": duration_timing['samples'],
-                "pitch": pitch,
-                "velocity": velocity,
-                "lyric": lyric
-            }
-        
+
         return {
             "notes": [
-                create_example_note(generate_note_id(), 80, 80, 60, 100, "안녕"),
-                create_example_note(generate_note_id(), 160, 160, 64, 90, "하세요")
+                create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕",
+                                      pixels_per_beat, tempo, sample_rate, ppqn),
+                create_note_with_timing(generate_note_id(), 160, 160, 64, 90, "하세요",
+                                      pixels_per_beat, tempo, sample_rate, ppqn)
             ],
             "tempo": tempo,
             "timeSignature": { "numerator": 4, "denominator": 4 },
@@ -362,7 +359,7 @@ class PianoRoll(Component):
                             "velocity": {"type": "number", "description": "MIDI velocity (0-127)"},
                             "lyric": {"type": "string", "description": "Optional lyric text"}
                         },
-                        "required": ["id", "start", "duration", "startFlicks", "durationFlicks", 
+                        "required": ["id", "start", "duration", "startFlicks", "durationFlicks",
                                    "startSeconds", "durationSeconds", "endSeconds", "startBeats", "durationBeats",
                                    "startTicks", "durationTicks", "startSample", "durationSamples", "pitch", "velocity"]
                     }
@@ -397,7 +394,7 @@ class PianoRoll(Component):
                     "default": 44100
                 },
                 "ppqn": {
-                    "type": "integer", 
+                    "type": "integer",
                     "description": "Pulses Per Quarter Note for MIDI tick calculations",
                     "default": 480
                 }
