@@ -124,12 +124,20 @@ class PianoRoll(Component):
     EVENTS = [
         Events.change,
         Events.input,
+        Events.play,
+        Events.pause,
+        Events.stop,
+        Events.clear,
     ]
 
     def __init__(
         self,
         value: dict | None = None,
         *,
+        audio_data: str | None = None,
+        curve_data: dict | None = None,
+        segment_data: list | None = None,
+        use_backend_audio: bool = False,
         label: str | I18nData | None = None,
         every: "Timer | float | None" = None,
         inputs: Component | Sequence[Component] | set[Component] | None = None,
@@ -149,6 +157,10 @@ class PianoRoll(Component):
         """
         Parameters:
             value: default MIDI notes data to provide in piano roll. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
+            audio_data: 백엔드에서 전달받은 오디오 데이터 (base64 인코딩된 오디오 또는 URL)
+            curve_data: 백엔드에서 전달받은 선형 데이터 (피치 곡선, loudness 곡선 등)
+            segment_data: 백엔드에서 전달받은 구간 데이터 (발음 타이밍 등)
+            use_backend_audio: 백엔드 오디오를 사용할지 여부 (True시 프론트엔드 오디오 엔진 비활성화)
             label: the label for this component, displayed above the component if `show_label` is `True` and is also used as the header if there are a table of examples for this component. If None and used in a `gr.Interface`, the label will be the name of the parameter this component corresponds to.
             every: Continously calls `value` to recalculate it if `value` is a function (has no effect otherwise). Can provide a Timer whose tick resets `value`, or a float that provides the regular interval for the reset Timer.
             inputs: Components that are used as inputs to calculate `value` if `value` is a function (has no effect otherwise). `value` is recalculated any time the inputs change.
@@ -212,10 +224,20 @@ class PianoRoll(Component):
 
             self.value = value
 
+        # 백엔드 데이터 속성들
+        self.audio_data = audio_data
+        self.curve_data = curve_data or {}
+        self.segment_data = segment_data or []
+        self.use_backend_audio = use_backend_audio
+
         self._attrs = {
             "width": width,
             "height": height,
             "value": self.value,
+            "audio_data": self.audio_data,
+            "curve_data": self.curve_data,
+            "segment_data": self.segment_data,
+            "use_backend_audio": self.use_backend_audio,
         }
 
         super().__init__(
@@ -288,6 +310,37 @@ class PianoRoll(Component):
                 # Calculate end time if missing
                 if "endSeconds" not in note:
                     note["endSeconds"] = note.get("startSeconds", 0) + note.get("durationSeconds", 0)
+
+        # 백엔드 데이터 속성들도 함께 전달
+        if value and isinstance(value, dict):
+            # value에 이미 있는 백엔드 데이터를 우선하고, 없으면 컴포넌트 속성에서 가져옴
+            # 이렇게 하면 컴포넌트 인스턴스별로 독립적인 백엔드 설정이 가능함
+
+            if "audio_data" not in value or value["audio_data"] is None:
+                if hasattr(self, 'audio_data') and self.audio_data:
+                    value["audio_data"] = self.audio_data
+
+            if "curve_data" not in value or value["curve_data"] is None:
+                if hasattr(self, 'curve_data') and self.curve_data:
+                    value["curve_data"] = self.curve_data
+
+            if "segment_data" not in value or value["segment_data"] is None:
+                if hasattr(self, 'segment_data') and self.segment_data:
+                    value["segment_data"] = self.segment_data
+
+            if "use_backend_audio" not in value:
+                if hasattr(self, 'use_backend_audio'):
+                    value["use_backend_audio"] = self.use_backend_audio
+                else:
+                    value["use_backend_audio"] = False
+
+            # 디버깅용 로그 추가
+            print(f"🔊 [postprocess] Backend audio data processed:")
+            print(f"   - audio_data present: {bool(value.get('audio_data'))}")
+            print(f"   - use_backend_audio: {value.get('use_backend_audio', False)}")
+            print(f"   - curve_data present: {bool(value.get('curve_data'))}")
+            print(f"   - segment_data present: {bool(value.get('segment_data'))}")
+
         return value
 
     def example_payload(self):
@@ -397,8 +450,110 @@ class PianoRoll(Component):
                     "type": "integer",
                     "description": "Pulses Per Quarter Note for MIDI tick calculations",
                     "default": 480
+                },
+                # 백엔드 데이터 전달용 속성들
+                "audio_data": {
+                    "type": "string",
+                    "description": "Backend audio data (base64 encoded audio or URL)",
+                    "nullable": True
+                },
+                "curve_data": {
+                    "type": "object",
+                    "description": "Linear curve data (pitch curves, loudness curves, etc.)",
+                    "properties": {
+                        "pitch_curve": {
+                            "type": "array",
+                            "items": {"type": "number"},
+                            "description": "Pitch curve data points"
+                        },
+                        "loudness_curve": {
+                            "type": "array",
+                            "items": {"type": "number"},
+                            "description": "Loudness curve data points"
+                        },
+                        "formant_curves": {
+                            "type": "object",
+                            "description": "Formant frequency curves",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {"type": "number"}
+                            }
+                        }
+                    },
+                    "additionalProperties": True,
+                    "nullable": True
+                },
+                "segment_data": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "start": {"type": "number", "description": "Segment start time (seconds)"},
+                            "end": {"type": "number", "description": "Segment end time (seconds)"},
+                            "type": {"type": "string", "description": "Segment type (phoneme, syllable, word, etc.)"},
+                            "value": {"type": "string", "description": "Segment value/text"},
+                            "confidence": {"type": "number", "description": "Confidence score (0-1)", "minimum": 0, "maximum": 1}
+                        },
+                        "required": ["start", "end", "type", "value"]
+                    },
+                    "description": "Segmentation data (pronunciation timing, etc.)",
+                    "nullable": True
+                },
+                "use_backend_audio": {
+                    "type": "boolean",
+                    "description": "Whether to use backend audio (disables frontend audio engine when true)",
+                    "default": False
                 }
             },
             "required": ["notes", "tempo", "timeSignature", "editMode", "snapSetting"],
-            "description": "Piano roll data object containing notes array and settings"
+            "description": "Piano roll data object containing notes array, settings, and optional backend data"
         }
+
+    def update_backend_data(self, audio_data=None, curve_data=None, segment_data=None, use_backend_audio=None):
+        """
+        백엔드 데이터를 업데이트하는 메서드
+        """
+        if audio_data is not None:
+            self.audio_data = audio_data
+        if curve_data is not None:
+            self.curve_data = curve_data
+        if segment_data is not None:
+            self.segment_data = segment_data
+        if use_backend_audio is not None:
+            self.use_backend_audio = use_backend_audio
+
+        # _attrs도 업데이트
+        self._attrs.update({
+            "audio_data": self.audio_data,
+            "curve_data": self.curve_data,
+            "segment_data": self.segment_data,
+            "use_backend_audio": self.use_backend_audio,
+        })
+
+    def set_audio_data(self, audio_data: str):
+        """
+        오디오 데이터를 설정하는 메서드
+        """
+        self.audio_data = audio_data
+        self._attrs["audio_data"] = audio_data
+
+    def set_curve_data(self, curve_data: dict):
+        """
+        곡선 데이터를 설정하는 메서드 (피치 곡선, loudness 곡선 등)
+        """
+        self.curve_data = curve_data
+        self._attrs["curve_data"] = curve_data
+
+    def set_segment_data(self, segment_data: list):
+        """
+        구간 데이터를 설정하는 메서드 (발음 타이밍 등)
+        """
+        self.segment_data = segment_data
+        self._attrs["segment_data"] = segment_data
+
+    def enable_backend_audio(self, enable: bool = True):
+        """
+        백엔드 오디오 사용 여부를 설정하는 메서드
+        """
+        self.use_backend_audio = enable
+        self._attrs["use_backend_audio"] = enable

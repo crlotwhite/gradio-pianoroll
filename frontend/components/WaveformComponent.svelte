@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import { onMount, onDestroy, afterUpdate } from 'svelte';
-  import { audioEngine } from '../utils/audioEngine';
+  import { AudioEngineManager } from '../utils/audioEngine';
 
   // Props
   export let width = 880;
@@ -14,6 +14,17 @@
   export let tempo = 120;
   export let opacity = 0.7;
   export let top = 0; // Add position prop
+  export let elem_id = '';  // 컴포넌트 ID
+
+  // 백엔드 데이터 속성들
+  export let audio_data: string | null = null;
+  export let use_backend_audio: boolean = false;
+
+  // 추가: curve_data에서 웨이브폼 데이터 지원
+  export let curve_data: object | null = null;
+
+  // 컴포넌트별 오디오 엔진 인스턴스
+  $: audioEngine = AudioEngineManager.getInstance(elem_id || 'default');
 
   // Canvas references
   let canvasElement: HTMLCanvasElement;
@@ -64,14 +75,40 @@
     ctx.moveTo(0, height / 2);
     ctx.lineTo(width, height / 2);
     ctx.stroke();
+
+    // Draw "No waveform" message
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('웨이브폼이 없습니다. "Synthesize Audio" 버튼을 클릭하세요.', width / 2, height / 2);
   }
 
   // Draw waveform from audio buffer
   function drawWaveform() {
     if (!ctx) return;
 
-    // Get rendered buffer from audio engine
-    const buffer = audioEngine.getRenderedBuffer();
+    // 1순위: 백엔드에서 미리 계산된 웨이브폼 데이터 사용
+    if (curve_data && (curve_data as any).waveform_data) {
+      drawPreCalculatedWaveform((curve_data as any).waveform_data);
+      return;
+    }
+
+    // 2순위: 백엔드 오디오 버퍼 사용
+    let buffer: AudioBuffer | null = null;
+    if (use_backend_audio && backendAudioBuffer) {
+      buffer = backendAudioBuffer;
+    } else if (!use_backend_audio) {
+      // Synthesizer Demo에서는 백엔드 데이터가 없으면 프론트엔드 렌더링 금지
+      if (elem_id === "piano_roll_synth" && !audio_data && !(curve_data && (curve_data as any).waveform_data)) {
+        drawEmptyWaveform();
+        return;
+      }
+
+      // 프론트엔드 오디오 엔진 사용
+      buffer = audioEngine.getRenderedBuffer();
+    }
+
     if (!buffer) {
       drawEmptyWaveform();
       return;
@@ -100,7 +137,7 @@
     const endSample = Math.min(bufferLength, Math.floor((horizontalScroll + width) * samplesPerPixel));
 
     // Draw waveform
-    ctx.strokeStyle = WAVEFORM_COLOR;
+    ctx.strokeStyle = use_backend_audio ? '#4CAF50' : WAVEFORM_COLOR; // 백엔드 오디오는 녹색으로 표시
     ctx.lineWidth = 1.5;
     ctx.beginPath();
 
@@ -155,6 +192,72 @@
     ctx.moveTo(0, height / 2);
     ctx.lineTo(width, height / 2);
     ctx.stroke();
+
+    isRendered = true;
+  }
+
+  // 백엔드에서 미리 계산된 웨이브폼 데이터로 그리기
+  function drawPreCalculatedWaveform(waveformData: Array<{x: number, min: number, max: number}>) {
+    if (!ctx || !waveformData || waveformData.length === 0) {
+      drawEmptyWaveform();
+      return;
+    }
+
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw background
+    ctx.fillStyle = BACKGROUND_COLOR;
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw center line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
+
+    // Draw waveform from pre-calculated data
+    ctx.strokeStyle = '#4CAF50'; // 백엔드 웨이브폼은 녹색으로 표시
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+
+    const centerY = height / 2;
+    let hasDrawnAnyPoint = false;
+
+    // 웨이브폼 데이터를 x 좌표 기준으로 정렬
+    const sortedData = [...waveformData].sort((a, b) => a.x - b.x);
+
+    for (let screenX = 0; screenX < width; screenX++) {
+      // 스크롤 위치를 고려한 데이터 포인트 찾기
+      const dataX = screenX + horizontalScroll;
+
+      // 해당 위치에 가장 가까운 웨이브폼 데이터 찾기
+      const dataPoint = sortedData.find(point => Math.abs(point.x - dataX) < 1);
+
+      if (dataPoint) {
+        // Map sample values to y-coordinates (-1 to 1 범위를 canvas 높이로 매핑)
+        const minY = centerY + dataPoint.min * centerY * 0.9;
+        const maxY = centerY + dataPoint.max * centerY * 0.9;
+
+        if (!hasDrawnAnyPoint) {
+          ctx.moveTo(screenX, minY);
+          hasDrawnAnyPoint = true;
+        }
+
+        // Draw vertical line from min to max
+        ctx.lineTo(screenX, minY);
+        ctx.lineTo(screenX, maxY);
+      }
+    }
+
+    if (hasDrawnAnyPoint) {
+      ctx.stroke();
+      console.log(`웨이브폼 그리기 완료: ${waveformData.length}개 포인트 사용`);
+    } else {
+      console.log("웨이브폼 데이터가 현재 화면 영역에 없음");
+    }
 
     isRendered = true;
   }
@@ -243,8 +346,53 @@
   }
 
   // Update waveform when props change
-  $: if (ctx && (width || height || horizontalScroll || pixelsPerBeat || tempo)) {
+  $: if (ctx && (width || height || horizontalScroll || pixelsPerBeat || tempo || curve_data)) {
     drawWaveform();
+  }
+
+  // 백엔드 오디오 데이터 관련
+  let backendAudioBuffer: AudioBuffer | null = null;
+  let audioContextForDecoding: AudioContext | null = null;
+
+  // 백엔드 오디오 데이터 디코딩
+  async function decodeBackendAudio(audioData: string) {
+    if (!audioData) return;
+
+    try {
+      if (!audioContextForDecoding) {
+        audioContextForDecoding = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
+      let arrayBuffer: ArrayBuffer;
+
+      if (audioData.startsWith('data:')) {
+        // Base64 데이터 처리
+        const base64Data = audioData.split(',')[1];
+        const binaryString = atob(base64Data);
+        arrayBuffer = new ArrayBuffer(binaryString.length);
+        const uint8Array = new Uint8Array(arrayBuffer);
+        for (let i = 0; i < binaryString.length; i++) {
+          uint8Array[i] = binaryString.charCodeAt(i);
+        }
+      } else {
+        // URL 처리
+        const response = await fetch(audioData);
+        arrayBuffer = await response.arrayBuffer();
+      }
+
+      backendAudioBuffer = await audioContextForDecoding.decodeAudioData(arrayBuffer);
+
+      // 디코딩 완료 후 웨이브폼 다시 그리기
+      drawWaveform();
+    } catch (error) {
+      console.error('Error decoding backend audio:', error);
+      backendAudioBuffer = null;
+    }
+  }
+
+  // 백엔드 오디오 데이터 변경 감지
+  $: if (use_backend_audio && audio_data) {
+    decodeBackendAudio(audio_data);
   }
 
   onMount(() => {
