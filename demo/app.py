@@ -48,6 +48,9 @@ def initialize_phoneme_map():
         '피아노': 'p i a n o'
     }
 
+# 프로그램 시작 시 phoneme 매핑 초기화
+initialize_phoneme_map()
+
 def get_phoneme_mapping_list():
     """현재 phoneme 매핑 리스트 반환 (UI 표시용)"""
     global user_phoneme_map
@@ -999,25 +1002,79 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
             )
 
             # 가사 입력 시 자동 G2P 처리
-            def handle_phoneme_input_wrapper(piano_roll_data, lyric_data):
-                """가사 입력 시 G2P 처리 (piano_roll 데이터를 명시적으로 전달받음)"""
-                print("🗣️ Phoneme tab - Input event triggered:", lyric_data)
+            def handle_phoneme_input_event(piano_roll_data):
+                """가사 입력 이벤트 처리 - 피아노롤 변경사항을 감지하여 phoneme 생성"""
+                print("🗣️ Phoneme tab - Input event triggered")
+                print(f"   - Piano roll data: {type(piano_roll_data)}")
 
-                if not piano_roll_data:
+                if not piano_roll_data or 'notes' not in piano_roll_data:
                     return piano_roll_data, "피아노롤 데이터가 없습니다."
 
-                # process_lyric_input 함수 호출
-                updated_piano_roll, status_message = process_lyric_input(piano_roll_data, lyric_data)
-                return updated_piano_roll, status_message
+                return auto_generate_missing_phonemes(piano_roll_data)
+
+            def auto_generate_missing_phonemes(piano_roll_data):
+                """가사가 있지만 phoneme이 없는 노트들에 대해 자동으로 phoneme 생성"""
+                if not piano_roll_data or 'notes' not in piano_roll_data:
+                    return piano_roll_data, "피아노롤 데이터가 없습니다."
+
+                # 현재 notes를 복사
+                notes = piano_roll_data['notes'].copy()
+                updated_notes = []
+                changes_made = 0
+
+                for note in notes:
+                    note_copy = note.copy()
+
+                    # 가사가 있는 경우 처리
+                    lyric = note.get('lyric', '').strip()
+                    current_phoneme = note.get('phoneme', '').strip()
+
+                    if lyric:
+                        # G2P 실행하여 새로운 phoneme 생성
+                        new_phoneme = mock_g2p(lyric)
+
+                        # 기존 phoneme과 다르거나 없으면 업데이트
+                        if not current_phoneme or current_phoneme != new_phoneme:
+                            note_copy['phoneme'] = new_phoneme
+                            changes_made += 1
+                            print(f"   - G2P 적용: '{lyric}' -> '{new_phoneme}'")
+                    else:
+                        # 가사가 없으면 phoneme도 제거
+                        if current_phoneme:
+                            note_copy['phoneme'] = None
+                            changes_made += 1
+                            print(f"   - Phoneme 제거 (가사 없음)")
+
+                    updated_notes.append(note_copy)
+
+                if changes_made > 0:
+                    # 업데이트된 피아노롤 데이터 반환
+                    updated_piano_roll = piano_roll_data.copy()
+                    updated_piano_roll['notes'] = updated_notes
+                    return updated_piano_roll, f"자동 G2P 완료: {changes_made}개 노트 업데이트"
+                else:
+                    return piano_roll_data, "G2P 적용할 변경사항이 없습니다."
 
             piano_roll_phoneme.input(
-                fn=handle_phoneme_input_wrapper,
-                inputs=[piano_roll_phoneme],  # piano_roll 데이터를 명시적으로 전달
+                fn=handle_phoneme_input_event,
+                inputs=[piano_roll_phoneme],
                 outputs=[piano_roll_phoneme, phoneme_status_text],
                 show_progress=False
             )
 
-            # 자동 phoneme 생성
+            # 노트 변경 시에도 자동 phoneme 생성
+            def handle_phoneme_change_event(piano_roll_data):
+                """피아노롤 변경 시 자동 phoneme 처리"""
+                return auto_generate_missing_phonemes(piano_roll_data)
+
+            piano_roll_phoneme.change(
+                fn=handle_phoneme_change_event,
+                inputs=[piano_roll_phoneme],
+                outputs=[piano_roll_phoneme, phoneme_status_text],
+                show_progress=False
+            )
+
+            # 자동 phoneme 생성 (수동 버튼)
             btn_auto_generate.click(
                 fn=auto_generate_all_phonemes,
                 inputs=[piano_roll_phoneme],
@@ -1033,8 +1090,16 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=False
             )
 
-            # 노트 변경 시 JSON 출력 업데이트
-            piano_roll_phoneme.change(lambda x: x, inputs=piano_roll_phoneme, outputs=output_json_phoneme)
+            # 노트 변경 시 JSON 출력 업데이트 (자동 phoneme 처리와 별도로)
+            def update_json_output(piano_roll_data):
+                return piano_roll_data
+
+            piano_roll_phoneme.change(
+                fn=update_json_output,
+                inputs=[piano_roll_phoneme],
+                outputs=[output_json_phoneme],
+                show_progress=False
+            )
 
             # 재생 이벤트 로깅
             def log_phoneme_play_event(event_data=None):
