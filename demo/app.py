@@ -644,21 +644,21 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
             )
 
             # 이벤트 로깅을 위한 함수들
-            def log_play_event(event_data):
+            def log_play_event(event_data=None):
                 print("🎵 Play event triggered:", event_data)
-                return f"재생 시작됨: {event_data}"
+                return f"재생 시작됨: {event_data if event_data else '재생 중'}"
 
-            def log_pause_event(event_data):
+            def log_pause_event(event_data=None):
                 print("⏸️ Pause event triggered:", event_data)
-                return f"일시정지됨: {event_data}"
+                return f"일시정지됨: {event_data if event_data else '일시정지'}"
 
-            def log_stop_event(event_data):
+            def log_stop_event(event_data=None):
                 print("⏹️ Stop event triggered:", event_data)
-                return f"정지됨: {event_data}"
+                return f"정지됨: {event_data if event_data else '정지'}"
 
-            def log_input_event(lyric_data):
+            def log_input_event(lyric_data=None):
                 print("✏️ Lyric input event triggered:", lyric_data)
-                return f"가사 입력: {lyric_data}"
+                return f"가사 입력: {lyric_data if lyric_data else '입력됨'}"
 
             # 이벤트 리스너 설정
             piano_roll_synth.play(log_play_event, outputs=status_text)
