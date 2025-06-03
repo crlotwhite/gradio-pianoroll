@@ -26,7 +26,8 @@
     durationSamples?: number,  // Optional - sample timing
     pitch: number,
     velocity: number,
-    lyric?: string
+    lyric?: string,
+    phoneme?: string
   }> = [];
   // Tempo is used to calculate timing and note positioning
   export let tempo = 120;  // BPM
@@ -943,11 +944,28 @@
 
         // Create text that fits within note width
         let text = note.lyric;
+
+        // Add phoneme if available
+        if (note.phoneme) {
+          text += ` [${note.phoneme}]`;
+        }
+
         const maxWidth = note.duration - 6;
         let textWidth = ctx.measureText(text).width;
 
         if (textWidth > maxWidth) {
-          text = text.substring(0, Math.floor(text.length * (maxWidth / textWidth))) + '...';
+          // Try to fit as much text as possible
+          if (note.phoneme && text.length > note.lyric.length) {
+            // If phoneme makes it too long, try without phoneme
+            text = note.lyric;
+            textWidth = ctx.measureText(text).width;
+
+            if (textWidth > maxWidth) {
+              text = text.substring(0, Math.floor(text.length * (maxWidth / textWidth))) + '...';
+            }
+          } else {
+            text = text.substring(0, Math.floor(text.length * (maxWidth / textWidth))) + '...';
+          }
         }
 
         ctx.fillText(text, noteX + note.duration / 2, noteY + NOTE_HEIGHT / 2);

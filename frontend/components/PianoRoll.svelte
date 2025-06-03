@@ -57,7 +57,8 @@
     durationSamples?: number,  // Optional - sample timing
     pitch: number,
     velocity: number,
-    lyric?: string
+    lyric?: string,
+    phoneme?: string
   }> = [];
 
   // Settings

@@ -14,7 +14,8 @@
     duration: number,
     pitch: number,
     velocity: number,
-    lyric?: string
+    lyric?: string,
+    phoneme?: string
   }> = [];
   export let isPlaying = false;
   export let isRendering = false;
@@ -80,6 +81,9 @@
               Pitch: {note.pitch}, Velocity: {note.velocity}
               {#if note.lyric}
                 , Lyric: "{note.lyric}"
+              {/if}
+              {#if note.phoneme}
+                , Phoneme: [{note.phoneme}]
               {/if}
             </div>
           {/each}
