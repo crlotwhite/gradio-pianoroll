@@ -8,13 +8,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gradio_pianoroll"
-version = "0.0.2"
+version = "0.0.3"
 description = "A PianoRoll Component for Gradio."
 readme = "README.md"
 license = "apache-2.0"
 requires-python = ">=3.10"
 authors = [{ name = "crlotwhite", email = "crlotwhite@gmail.com" }]
-keywords = ["gradio-custom-component", "gradio-template-Fallback"]
+keywords = ["gradio-custom-component", "gradio-template-Fallback", "audio"]
 # Add dependencies here
 dependencies = ["gradio>=4.0,<6.0"]
 classifiers = [
@@ -38,8 +38,8 @@ classifiers = [
 # encounter your project in the wild.
 
 # [project.urls]
-# repository = "your github repository"
-# space = "your space url"
+# repository = "https://github.com/crlotwhite/gradio-pianoroll"
+# space = "https://huggingface.co/spaces/crlotwhite/gradio_pianoroll"
 
 [project.optional-dependencies]
 dev = ["build", "twine"]
