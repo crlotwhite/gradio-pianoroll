@@ -9,6 +9,7 @@
   export let editMode = 'select'; // 'select', 'draw', 'erase', etc.
   export let snapSetting = '1/4'; // Default snap setting
   export let isPlaying = false; // Playback status
+  export let isRendering = false; // 오디오 렌더링 중인지 여부
 
   const dispatch = createEventDispatcher();
 
@@ -60,6 +61,11 @@
   function togglePlay() {
     dispatch('togglePlay');
   }
+
+  // 오디오 다운로드 함수
+  function downloadAudio() {
+    dispatch('downloadAudio');
+  }
 </script>
 
 <div class="toolbar">
@@ -78,6 +84,15 @@
       title="Stop"
     >
       ⏹
+    </button>
+
+    <button
+      class="playback-button download-button"
+      on:click={downloadAudio}
+      title="Download Audio (WAV)"
+      disabled={isRendering}
+    >
+      {isRendering ? '⏳' : '💾'}
     </button>
   </div>
 
@@ -298,5 +313,20 @@
     .icon {
       margin-right: 0;
     }
+  }
+
+  .download-button {
+    color: #4CAF50; /* 다운로드 버튼은 녹색으로 */
+  }
+
+  .download-button:hover {
+    background-color: #3c3c3c;
+    color: #66BB6A;
+  }
+
+  .download-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
   }
 </style>

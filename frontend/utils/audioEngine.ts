@@ -335,6 +335,97 @@ class AudioEngine {
   getRenderedBuffer(): AudioBuffer | null {
     return this.renderBuffer;
   }
+
+  // WAV 파일로 내보내기
+  exportToWav(): Blob | null {
+    if (!this.renderBuffer) {
+      console.warn('No rendered audio buffer available for export');
+      return null;
+    }
+
+    return this.audioBufferToWav(this.renderBuffer);
+  }
+
+  // 오디오 다운로드
+  downloadAudio(filename: string = 'piano_roll_audio.wav'): void {
+    const wavBlob = this.exportToWav();
+    if (!wavBlob) {
+      console.error('Failed to export audio');
+      return;
+    }
+
+    // 다운로드 링크 생성
+    const url = URL.createObjectURL(wavBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+
+    // 임시로 DOM에 추가하고 클릭하여 다운로드 시작
+    document.body.appendChild(link);
+    link.click();
+
+    // 정리
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  // AudioBuffer를 WAV Blob으로 변환
+  private audioBufferToWav(buffer: AudioBuffer): Blob {
+    const length = buffer.length;
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const bitsPerSample = 16;
+    const bytesPerSample = bitsPerSample / 8;
+    const blockAlign = numberOfChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = length * blockAlign;
+    const bufferSize = 44 + dataSize;
+
+    // WAV 헤더 생성
+    const arrayBuffer = new ArrayBuffer(bufferSize);
+    const view = new DataView(arrayBuffer);
+
+    // RIFF chunk descriptor
+    this.writeString(view, 0, 'RIFF');
+    view.setUint32(4, bufferSize - 8, true);
+    this.writeString(view, 8, 'WAVE');
+
+    // FMT sub-chunk
+    this.writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true); // Sub-chunk size (16 for PCM)
+    view.setUint16(20, 1, true); // Audio format (1 for PCM)
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitsPerSample, true);
+
+    // Data sub-chunk
+    this.writeString(view, 36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    // 오디오 데이터 쓰기
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const channelData = buffer.getChannelData(channel);
+        // 부동소수점을 16비트 정수로 변환
+        const sample = Math.max(-1, Math.min(1, channelData[i]));
+        const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        view.setInt16(offset, intSample, true);
+        offset += 2;
+      }
+    }
+
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
+  }
+
+  // 문자열을 DataView에 쓰기
+  private writeString(view: DataView, offset: number, string: string): void {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
 }
 
 // AudioEngine 인스턴스 관리자

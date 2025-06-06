@@ -567,6 +567,121 @@
     audioEngine.seekToFlicks(0);
   }
 
+  // 오디오 다운로드 함수
+  async function downloadAudio() {
+    console.log("💾 Download audio function called");
+    console.log("- use_backend_audio:", use_backend_audio);
+    console.log("- audio_data present:", !!audio_data);
+
+    if (use_backend_audio && audio_data) {
+      // 백엔드 오디오 다운로드
+      isRendering = true;
+      try {
+        await downloadBackendAudio();
+      } finally {
+        isRendering = false;
+      }
+    } else {
+      // 프론트엔드 오디오 다운로드
+      await downloadFrontendAudio();
+    }
+  }
+
+  // 백엔드 오디오 다운로드 (이미 생성된 오디오 파일)
+  async function downloadBackendAudio() {
+    console.log("💾 Downloading backend audio...");
+
+    if (!audio_data) {
+      console.error("❌ No backend audio data available for download");
+      return;
+    }
+
+    try {
+      let blob: Blob;
+      let filename = 'piano_roll_audio.wav';
+
+      if (audio_data.startsWith('data:')) {
+        // Base64 데이터의 경우 Blob으로 변환
+        const response = await fetch(audio_data);
+        blob = await response.blob();
+
+        // MIME 타입에서 확장자 추출
+        const mimeMatch = audio_data.match(/data:audio\/([^;]+)/);
+        if (mimeMatch) {
+          const format = mimeMatch[1];
+          filename = `piano_roll_audio.${format}`;
+        }
+      } else {
+        // URL의 경우 fetch로 가져와서 Blob으로 변환
+        const response = await fetch(audio_data);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        blob = await response.blob();
+
+        // URL에서 확장자 추출 시도
+        const urlMatch = audio_data.match(/\.([^.?]+)(\?|$)/);
+        if (urlMatch) {
+          const extension = urlMatch[1];
+          filename = `piano_roll_audio.${extension}`;
+        }
+      }
+
+      // Blob URL 생성 및 다운로드
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+
+      // 임시로 DOM에 추가하고 클릭하여 다운로드 시작
+      document.body.appendChild(link);
+      link.click();
+
+      // 정리
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      console.log("✅ Backend audio download initiated:", filename);
+    } catch (error) {
+      console.error("❌ Error downloading backend audio:", error);
+    }
+  }
+
+  // 프론트엔드 오디오 다운로드 (렌더링 후 WAV로 변환)
+  async function downloadFrontendAudio() {
+    console.log("💾 Downloading frontend audio...");
+
+    try {
+      // 오디오가 렌더링되지 않았다면 먼저 렌더링
+      if (!audioEngine.getRenderedBuffer()) {
+        console.log("🔄 No rendered buffer, rendering audio first...");
+        isRendering = true;
+        await renderAudio();
+        isRendering = false;
+      }
+
+      // 렌더링된 오디오가 있는지 확인
+      if (!audioEngine.getRenderedBuffer()) {
+        console.error("❌ Failed to render audio for download");
+        return;
+      }
+
+      // 파일명 생성 (현재 시간 포함)
+      const now = new Date();
+      const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '_');
+      const filename = `piano_roll_${timestamp}.wav`;
+
+      // 다운로드 실행
+      audioEngine.downloadAudio(filename);
+
+      console.log("✅ Frontend audio download initiated:", filename);
+    } catch (error) {
+      console.error("❌ Error downloading frontend audio:", error);
+    } finally {
+      isRendering = false;
+    }
+  }
+
   function togglePlayback() {
     if (isPlaying) {
       pause();
@@ -686,6 +801,7 @@
     {editMode}
     {snapSetting}
     {isPlaying}
+    {isRendering}
     on:tempoChange={handleTempoChange}
     on:timeSignatureChange={handleTimeSignatureChange}
     on:editModeChange={handleEditModeChange}
@@ -695,6 +811,7 @@
     on:pause={pause}
     on:stop={stop}
     on:togglePlay={togglePlayback}
+    on:downloadAudio={downloadAudio}
   />
 
   <div class="piano-roll-main" style="height: {height - 40}px;">
