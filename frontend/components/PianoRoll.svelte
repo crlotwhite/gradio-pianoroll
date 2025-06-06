@@ -9,7 +9,6 @@
   import KeyboardComponent from './KeyboardComponent.svelte';
   import GridComponent from './GridComponent.svelte';
   import TimeLineComponent from './TimeLineComponent.svelte';
-  import WaveformComponent from './WaveformComponent.svelte';
   import PlayheadComponent from './PlayheadComponent.svelte';
   import DebugComponent from './DebugComponent.svelte';
   import { AudioEngineManager } from '../utils/audioEngine';
@@ -30,6 +29,7 @@
   export let audio_data: string | null = null;
   export let curve_data: object | null = null;
   export let segment_data: Array<any> | null = null;
+  export let line_data: object | null = null;  // Line layer data
   export let use_backend_audio: boolean = false;
 
   // use_backend_audio prop 변경 감지
@@ -75,10 +75,6 @@
   let isPlaying = false;
   let isRendering = false;
   let currentFlicks = 0;
-  let waveformOpacity = 0.7; // Initial opacity for waveform
-
-  // References to components
-  let waveformComponent: any; // Reference to waveform component
 
   // Zoom level (pixels per beat) - now controlled from parent
   export let pixelsPerBeat = 80;
@@ -144,6 +140,7 @@
   function handleGridScroll(event: CustomEvent) {
     horizontalScroll = event.detail.horizontalScroll;
     verticalScroll = event.detail.verticalScroll;
+    console.log('🎨 PianoRoll: scroll received, verticalScroll =', verticalScroll);
     // The scroll values are now reactively bound to the other components
     // and will trigger updates when they change
   }
@@ -185,13 +182,7 @@
       return;
     }
 
-    // Synthesizer Demo에서는 초기 자동 렌더링 방지
-    // elem_id가 "piano_roll_synth"인 경우 사용자가 명시적으로 요청할 때만 렌더링
-    if (elem_id === "piano_roll_synth" && !(curve_data && (curve_data as any).waveform_data) && !audio_data) {
-      console.log("Synthesizer Demo: 자동 렌더링 건너뛰기 - 백엔드 오디오 생성 대기");
-      return;
-    }
-
+    // console.log("🎵 Frontend audio rendering started");
     isRendering = true;
     try {
       // Initialize component-specific audio engine
@@ -201,10 +192,8 @@
       // Pass pixelsPerBeat to ensure proper alignment between waveform and notes
       await audioEngine.renderNotes(notes, tempo, totalLengthInBeats, pixelsPerBeat);
 
-      // Update waveform visualization
-      if (waveformComponent) {
-        waveformComponent.forceRedraw();
-      }
+      // console.log("✅ Frontend audio rendering completed");
+      // Waveform is now updated through layer system automatically
     } catch (error) {
       console.error('Error rendering audio:', error);
     } finally {
@@ -298,7 +287,7 @@
       console.log("Audio buffer channels:", backendAudioBuffer.numberOfChannels);
 
       return backendAudioBuffer;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Backend audio decoding error:', error);
       console.error('Error details:', {
         name: error.name,
@@ -389,7 +378,7 @@
           console.warn("⚠️ Start position is beyond audio duration, not starting playback");
           isPlaying = false;
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("❌ Error starting backend audio playback:", error);
         console.error('Error details:', {
           name: error.name,
@@ -580,6 +569,121 @@
     audioEngine.seekToFlicks(0);
   }
 
+  // 오디오 다운로드 함수
+  async function downloadAudio() {
+    console.log("💾 Download audio function called");
+    console.log("- use_backend_audio:", use_backend_audio);
+    console.log("- audio_data present:", !!audio_data);
+
+    if (use_backend_audio && audio_data) {
+      // 백엔드 오디오 다운로드
+      isRendering = true;
+      try {
+        await downloadBackendAudio();
+      } finally {
+        isRendering = false;
+      }
+    } else {
+      // 프론트엔드 오디오 다운로드
+      await downloadFrontendAudio();
+    }
+  }
+
+  // 백엔드 오디오 다운로드 (이미 생성된 오디오 파일)
+  async function downloadBackendAudio() {
+    console.log("💾 Downloading backend audio...");
+
+    if (!audio_data) {
+      console.error("❌ No backend audio data available for download");
+      return;
+    }
+
+    try {
+      let blob: Blob;
+      let filename = 'piano_roll_audio.wav';
+
+      if (audio_data.startsWith('data:')) {
+        // Base64 데이터의 경우 Blob으로 변환
+        const response = await fetch(audio_data);
+        blob = await response.blob();
+
+        // MIME 타입에서 확장자 추출
+        const mimeMatch = audio_data.match(/data:audio\/([^;]+)/);
+        if (mimeMatch) {
+          const format = mimeMatch[1];
+          filename = `piano_roll_audio.${format}`;
+        }
+      } else {
+        // URL의 경우 fetch로 가져와서 Blob으로 변환
+        const response = await fetch(audio_data);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        blob = await response.blob();
+
+        // URL에서 확장자 추출 시도
+        const urlMatch = audio_data.match(/\.([^.?]+)(\?|$)/);
+        if (urlMatch) {
+          const extension = urlMatch[1];
+          filename = `piano_roll_audio.${extension}`;
+        }
+      }
+
+      // Blob URL 생성 및 다운로드
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+
+      // 임시로 DOM에 추가하고 클릭하여 다운로드 시작
+      document.body.appendChild(link);
+      link.click();
+
+      // 정리
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      console.log("✅ Backend audio download initiated:", filename);
+    } catch (error) {
+      console.error("❌ Error downloading backend audio:", error);
+    }
+  }
+
+  // 프론트엔드 오디오 다운로드 (렌더링 후 WAV로 변환)
+  async function downloadFrontendAudio() {
+    console.log("💾 Downloading frontend audio...");
+
+    try {
+      // 오디오가 렌더링되지 않았다면 먼저 렌더링
+      if (!audioEngine.getRenderedBuffer()) {
+        console.log("🔄 No rendered buffer, rendering audio first...");
+        isRendering = true;
+        await renderAudio();
+        isRendering = false;
+      }
+
+      // 렌더링된 오디오가 있는지 확인
+      if (!audioEngine.getRenderedBuffer()) {
+        console.error("❌ Failed to render audio for download");
+        return;
+      }
+
+      // 파일명 생성 (현재 시간 포함)
+      const now = new Date();
+      const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '_');
+      const filename = `piano_roll_${timestamp}.wav`;
+
+      // 다운로드 실행
+      audioEngine.downloadAudio(filename);
+
+      console.log("✅ Frontend audio download initiated:", filename);
+    } catch (error) {
+      console.error("❌ Error downloading frontend audio:", error);
+    } finally {
+      isRendering = false;
+    }
+  }
+
   function togglePlayback() {
     if (isPlaying) {
       pause();
@@ -641,8 +745,9 @@
     // Set up playhead position update callback
     audioEngine.setPlayheadUpdateCallback(updatePlayheadPosition);
 
-    // Initial audio render
-    if (notes.length > 0) {
+    // Initial audio render - 백엔드 오디오를 사용하지 않는 경우 항상 렌더링
+    if (!use_backend_audio) {
+      console.log("🎵 Initial frontend audio rendering on mount");
       renderAudio();
     }
   });
@@ -679,6 +784,12 @@
       console.error("❌ Failed to initialize backend audio:", error);
     });
   }
+
+  // Reactive statement to start frontend rendering when switching from backend to frontend
+  $: if (!use_backend_audio && audioEngine) {
+    console.log("🔄 Switched to frontend audio - starting automatic rendering");
+    renderAudio();
+  }
 </script>
 
 <div
@@ -692,6 +803,7 @@
     {editMode}
     {snapSetting}
     {isPlaying}
+    {isRendering}
     on:tempoChange={handleTempoChange}
     on:timeSignatureChange={handleTimeSignatureChange}
     on:editModeChange={handleEditModeChange}
@@ -701,6 +813,7 @@
     on:pause={pause}
     on:stop={stop}
     on:togglePlay={togglePlayback}
+    on:downloadAudio={downloadAudio}
   />
 
   <div class="piano-roll-main" style="height: {height - 40}px;">
@@ -728,21 +841,8 @@
       />
 
       <div class="grid-container" style="position: relative;">
-        <!-- Waveform positioned below the grid but above the grid lines -->
-        <WaveformComponent
-          bind:this={waveformComponent}
-          width={width - keyboardWidth}
-          height={(height - 40 - timelineHeight) / 2}
-          {horizontalScroll}
-          {pixelsPerBeat}
-          {tempo}
-          opacity={waveformOpacity}
-          top={(height - 100 - timelineHeight) / 2}
-          {audio_data}
-          {curve_data}
-          {use_backend_audio}
-          {elem_id}
-        />
+        <!-- Waveform is now handled by the layer system in GridComponent -->
+        <!-- <WaveformComponent> has been integrated into WaveformLayer -->
 
         <!-- Grid component containing notes and grid lines -->
         <GridComponent
@@ -760,6 +860,11 @@
           {isPlaying}
           {sampleRate}
           {ppqn}
+          {elem_id}
+          {audio_data}
+          {curve_data}
+          {line_data}
+          {use_backend_audio}
           on:scroll={handleGridScroll}
           on:noteChange={handleNoteChange}
           on:lyricInput={handleLyricInput}
