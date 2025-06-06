@@ -211,9 +211,9 @@
   // Mouse events for note manipulation
   function handleMouseDown(event: MouseEvent) {
     if (!canvas) return;
-    
+
     console.log('🖱️ Mouse down event triggered');
-    
+
     // Ensure layers are properly initialized
     ensureLayersReady();
 
@@ -229,17 +229,9 @@
 
 
 
-    // For drag operations, store the offset from the mouse to the note start
-    // This will help position notes more naturally when dragging
-    if (editMode === 'select') {
-      const clickedNote = findNoteAtPosition(x, y);
-      if (clickedNote && Math.abs(x - (clickedNote.start + clickedNote.duration)) >= 10) {
-        // Store the offset from mouse position to note start
-        // This will be used to maintain the same relative position during dragging
-        noteOffsetX = clickedNote.start - x;
-        noteOffsetY = (TOTAL_NOTES - 1 - clickedNote.pitch) * NOTE_HEIGHT - y;
-      }
-    }
+    // Reset offsets by default
+    noteOffsetX = 0;
+    noteOffsetY = 0;
 
     // Check if clicking on a note
     const clickedNote = findNoteAtPosition(x, y);
@@ -361,9 +353,15 @@
             console.log('🔘 Added note to selection:', clickedNote.id, 'Total selected:', selectedNotes.size);
           }
 
+          // Calculate offset from mouse position to note start for natural dragging
+          // This maintains the relative position between mouse and note during drag
+          noteOffsetX = clickedNote.start - x;
+          noteOffsetY = (TOTAL_NOTES - 1 - clickedNote.pitch) * NOTE_HEIGHT - y;
+
           isDragging = true;
           draggedNoteId = clickedNote.id;
           console.log('🖱️ Started dragging note:', clickedNote.id);
+          console.log('📏 Drag offsets:', { noteOffsetX, noteOffsetY });
         }
       } else {
         // Clicked empty space, clear selection unless shift is held
@@ -411,14 +409,16 @@
       // Move selected notes to snap to grid positions
       notes = notes.map(note => {
         if (selectedNotes.has(note.id)) {
-          // Calculate new position based on current mouse position
-          let newStart = x;
-          let newPitch = Math.floor(y / NOTE_HEIGHT);
+          // Calculate new position based on current mouse position with offset
+          // Apply the offset to maintain the original click position relative to the note
+          let newStart = x + noteOffsetX;
+          let newPitchY = y + noteOffsetY;
+          let newPitch = Math.floor(newPitchY / NOTE_HEIGHT);
           newPitch = TOTAL_NOTES - 1 - newPitch;
 
           // Snap to grid
           newStart = snapToGrid(newStart);
-          
+
           // Ensure valid ranges
           newStart = Math.max(0, newStart);
           newPitch = Math.max(0, Math.min(127, newPitch));
@@ -463,7 +463,7 @@
             const [numerator, denominator] = snapSetting.split('/');
             if (numerator === '1' && denominator) {
               const divisionValue = parseInt(denominator);
-              
+
               // 음악적 의미에 맞는 grid size 계산
               switch (divisionValue) {
                 case 1: // Whole note - 4 beats
@@ -541,7 +541,7 @@
           const [numerator, denominator] = snapSetting.split('/');
           if (numerator === '1' && denominator) {
             const divisionValue = parseInt(denominator);
-            
+
             // 음악적 의미에 맞는 minimum size 계산 (snap grid의 절반)
             switch (divisionValue) {
               case 1: // Whole note - 4 beats
@@ -702,7 +702,7 @@
   // x, y are already world coordinates (screen coordinates + scroll)
   function findNoteAtPosition(x: number, y: number) {
     console.log('🔍 Finding note at position:', x, y);
-    
+
     if (notesLayer) {
       // Convert world coordinates back to screen coordinates for the layer function
       const screenX = x - horizontalScroll;
@@ -711,7 +711,7 @@
       console.log('🎵 Found notes via layer:', foundNotes.length);
       return foundNotes.length > 0 ? foundNotes[0] : null;
     }
-    
+
     // Fallback to original implementation using world coordinates
     console.log('⚠️ Using fallback note finding');
     const foundNote = notes.find(note => {
@@ -845,7 +845,7 @@
         const [numerator, denominator] = snapSetting.split('/');
         if (numerator === '1' && denominator) {
           const divisionValue = parseInt(denominator);
-          
+
           // 음악적 의미에 맞는 grid size 계산
           switch (divisionValue) {
             case 1: // Whole note - 4 beats
@@ -884,7 +884,7 @@
   // Render using layer system
   function renderLayers() {
     if (!ctx || !canvas) return;
-    
+
     // Ensure layer system is initialized
     if (!layerManager) {
       initializeLayers();
@@ -1098,8 +1098,8 @@
 
   <!-- Layer Control Panel -->
   {#if layerManager}
-    <LayerControlPanel 
-      {layerManager} 
+    <LayerControlPanel
+      {layerManager}
       visible={showLayerControl}
       on:layerChanged={handleLayerChanged}
     />
