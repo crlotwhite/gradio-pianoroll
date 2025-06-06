@@ -34,11 +34,11 @@
     }
   }
   
-  // Get subdivisions based on snap setting
+  // Get subdivisions based on snap setting (음악적 의미에 맞게)
   function getSubdivisionsFromSnapSetting(): { count: number, pixelsPerSubdivision: number } {
     if (snapSetting === 'none') {
       // Default to quarter note subdivisions if snap is 'none'
-      return { count: 4, pixelsPerSubdivision: pixelsPerBeat / 4 };
+      return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
     }
     
     const [numerator, denominator] = snapSetting.split('/');
@@ -46,25 +46,25 @@
       const divisionValue = parseInt(denominator);
       
       switch (divisionValue) {
-        case 1: // Whole note
+        case 1: // Whole note - 4 beats
           return { count: 1, pixelsPerSubdivision: pixelsPerBeat * 4 };
-        case 2: // Half note
-          return { count: 2, pixelsPerSubdivision: pixelsPerBeat * 2 };
-        case 4: // Quarter note
-          return { count: 4, pixelsPerSubdivision: pixelsPerBeat };
-        case 8: // Eighth note
-          return { count: 8, pixelsPerSubdivision: pixelsPerBeat / 2 };
-        case 16: // Sixteenth note
-          return { count: 16, pixelsPerSubdivision: pixelsPerBeat / 4 };
-        case 32: // Thirty-second note
-          return { count: 32, pixelsPerSubdivision: pixelsPerBeat / 8 };
-        default: 
+        case 2: // Half note - 2 beats
+          return { count: 1, pixelsPerSubdivision: pixelsPerBeat * 2 };
+        case 4: // Quarter note - 1 beat
+          return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
+        case 8: // Eighth note - 0.5 beat
+          return { count: 2, pixelsPerSubdivision: pixelsPerBeat / 2 };
+        case 16: // Sixteenth note - 0.25 beat
           return { count: 4, pixelsPerSubdivision: pixelsPerBeat / 4 };
+        case 32: // Thirty-second note - 0.125 beat
+          return { count: 8, pixelsPerSubdivision: pixelsPerBeat / 8 };
+        default: 
+          return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
       }
     }
     
     // Default to quarter note subdivisions
-    return { count: 4, pixelsPerSubdivision: pixelsPerBeat / 4 };
+    return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
   }
   
   // Derived grid constants based on time signature
@@ -121,15 +121,32 @@
       ctx.stroke();
       
       // Draw beat lines within measure
-      for (let beat = 1; beat < beatsPerMeasure; beat++) {
-        const beatX = measureX + beat * pixelsPerBeat;
-        
-        ctx.strokeStyle = '#777777';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(beatX, timelineHeight - 15);
-        ctx.lineTo(beatX, timelineHeight);
-        ctx.stroke();
+      if (snapSetting === '1/1') {
+        // No beat lines for whole notes
+      } else if (snapSetting === '1/2') {
+        // Show only the middle beat line for half notes (divides measure in half)
+        const middleBeat = Math.floor(beatsPerMeasure / 2);
+        if (middleBeat > 0 && middleBeat < beatsPerMeasure) {
+          const beatX = measureX + middleBeat * pixelsPerBeat;
+          ctx.strokeStyle = '#777777';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(beatX, timelineHeight - 15);
+          ctx.lineTo(beatX, timelineHeight);
+          ctx.stroke();
+        }
+      } else {
+        // Show all beat lines for other snap settings
+        for (let beat = 1; beat < beatsPerMeasure; beat++) {
+          const beatX = measureX + beat * pixelsPerBeat;
+          
+          ctx.strokeStyle = '#777777';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(beatX, timelineHeight - 15);
+          ctx.lineTo(beatX, timelineHeight);
+          ctx.stroke();
+        }
       }
       
       // For 1/1 snap setting, don't show additional subdivision lines
@@ -138,33 +155,38 @@
         continue;
       }
       
-      // Calculate the number of divisions per measure based on snap setting
+      // Calculate the number of divisions per measure based on snap setting (음악적 의미에 맞게)
       let divisionsPerMeasure = 0;
       let pixelsPerDivision = 0;
       
       switch (snapSetting) {
+        case '1/1':
+          divisionsPerMeasure = beatsPerMeasure / 4; // 온음표: 4/4에서는 1개
+          if (divisionsPerMeasure < 1) divisionsPerMeasure = 1;
+          pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
+          break;
         case '1/2':
-          divisionsPerMeasure = beatsPerMeasure * 2; // 8 divisions in 4/4
+          divisionsPerMeasure = beatsPerMeasure / 2; // 2분음표: 4/4에서는 2개
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         case '1/4':
-          divisionsPerMeasure = beatsPerMeasure * 4; // 16 divisions in 4/4
+          divisionsPerMeasure = beatsPerMeasure; // 4분음표: 4/4에서는 4개
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         case '1/8':
-          divisionsPerMeasure = beatsPerMeasure * 8; // 32 divisions in 4/4
+          divisionsPerMeasure = beatsPerMeasure * 2; // 8분음표: 4/4에서는 8개
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         case '1/16':
-          divisionsPerMeasure = beatsPerMeasure * 16; // 64 divisions in 4/4
+          divisionsPerMeasure = beatsPerMeasure * 4; // 16분음표: 4/4에서는 16개
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         case '1/32':
-          divisionsPerMeasure = beatsPerMeasure * 32; // 128 divisions in 4/4
+          divisionsPerMeasure = beatsPerMeasure * 8; // 32분음표: 4/4에서는 32개
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         default:
-          divisionsPerMeasure = beatsPerMeasure * 4; // Default to quarter notes
+          divisionsPerMeasure = beatsPerMeasure; // Default to quarter notes
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
       }
       
