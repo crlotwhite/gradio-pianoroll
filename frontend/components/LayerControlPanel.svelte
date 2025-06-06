@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { LayerManager } from '../utils/layers';
+  import { LayerManager, LineLayer } from '../utils/layers';
 
   // Props
   export let layerManager: LayerManager | null = null;
@@ -16,9 +16,20 @@
   let forceUpdate = 0;
   $: layerInfo = layerManager && forceUpdate >= 0 ? layerManager.getLayerInfo() : [];
 
+  // Watch for layerManager changes and update automatically
+  $: if (layerManager) {
+    // Force reactive update when layerManager instance changes
+    triggerUpdate();
+  }
+
   // Force reactive update
   function triggerUpdate() {
     forceUpdate++;
+  }
+
+  // Export function to allow external updates
+  export function updateLayers() {
+    triggerUpdate();
   }
 
   function toggleLayerVisibility(layerName: string) {
@@ -165,6 +176,41 @@
                 <div class="z-index-display">
                   Z-Index: <span class="z-index-value">{layer.zIndex}</span>
                 </div>
+
+                <!-- Line layer specific controls -->
+                {#if layerManager}
+                  {@const layerInstance = layerManager.getLayer(layer.name)}
+                  {#if layerInstance instanceof LineLayer}
+                    {@const lineLayer = layerInstance}
+                    {@const config = lineLayer.getConfig()}
+                    <div class="line-layer-controls">
+                      <div class="line-info">
+                        <span class="line-label">Range:</span>
+                        <span class="line-range">{config.yMin.toFixed(1)} ~ {config.yMax.toFixed(1)}</span>
+                      </div>
+                      <div class="line-info">
+                        <span class="line-label">Position:</span>
+                        <span class="line-position">{config.position}</span>
+                      </div>
+                      <div class="line-info">
+                        <span class="line-label">Mode:</span>
+                        <span class="line-mode">{config.renderMode === 'piano_grid' ? 'Piano Grid Aligned' : 'Fixed Position'}</span>
+                      </div>
+                      {#if config.dataType}
+                        <div class="line-info">
+                          <span class="line-label">Type:</span>
+                          <span class="line-type">{config.dataType} ({config.unit || ''})</span>
+                        </div>
+                      {/if}
+                      {#if lineLayer.hasData()}
+                        <div class="line-info">
+                          <span class="line-label">Points:</span>
+                          <span class="line-data-count">{lineLayer.getData().length}</span>
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
+                {/if}
               </div>
             </div>
           {/each}
@@ -336,6 +382,55 @@
     color: #4CAF50;
     font-weight: bold;
     font-family: 'Roboto Mono', monospace;
+  }
+
+  /* Line layer specific styles */
+  .line-layer-controls {
+    margin-top: 6px;
+    padding: 6px;
+    background-color: rgba(60, 60, 60, 0.3);
+    border-radius: 3px;
+    border-left: 3px solid #FF6B6B;
+  }
+
+  .line-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2px;
+    font-size: 10px;
+  }
+
+  .line-label {
+    color: #aaa;
+    font-weight: 500;
+  }
+
+  .line-range, .line-position, .line-data-count, .line-mode, .line-type {
+    color: #ddd;
+    font-family: 'Roboto Mono', monospace;
+  }
+
+  .line-range {
+    color: #66BB6A;
+  }
+
+  .line-position {
+    color: #42A5F5;
+    text-transform: capitalize;
+  }
+
+  .line-data-count {
+    color: #FFA726;
+  }
+
+  .line-mode {
+    color: #E91E63;
+    font-weight: 600;
+  }
+
+  .line-type {
+    color: #9C27B0;
+    text-transform: uppercase;
   }
 
   /* Scrollbar styling */

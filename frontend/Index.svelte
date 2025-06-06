@@ -42,6 +42,7 @@
 	export let audio_data: string | null = null;
 	export let curve_data: object | null = null;
 	export let segment_data: Array<any> | null = null;
+	export let line_data: object | null = null;  // Line layer data (pitch curves, loudness, etc.)
 	export let use_backend_audio: boolean = false;
 
 	export let width = 800;
@@ -89,6 +90,10 @@
 		if ('use_backend_audio' in value && value.use_backend_audio !== undefined) {
 			// console.log("🔊 Backend audio flag:", value.use_backend_audio);
 			use_backend_audio = typeof value.use_backend_audio === 'boolean' ? value.use_backend_audio : false;
+		}
+		if ('line_data' in value && value.line_data !== undefined) {
+			console.log("📊 Line data updated:", value.line_data);
+			line_data = value.line_data && typeof value.line_data === 'object' ? value.line_data : null;
 		}
 	}
 
@@ -188,6 +193,7 @@
 		{audio_data}
 		{curve_data}
 		{segment_data}
+		{line_data}
 		{use_backend_audio}
 		{elem_id}
 		on:dataChange={handlePianoRollChange}

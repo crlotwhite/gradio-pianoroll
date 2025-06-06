@@ -29,6 +29,7 @@
   export let audio_data: string | null = null;
   export let curve_data: object | null = null;
   export let segment_data: Array<any> | null = null;
+  export let line_data: object | null = null;  // Line layer data
   export let use_backend_audio: boolean = false;
 
   // use_backend_audio prop 변경 감지
@@ -139,6 +140,7 @@
   function handleGridScroll(event: CustomEvent) {
     horizontalScroll = event.detail.horizontalScroll;
     verticalScroll = event.detail.verticalScroll;
+    console.log('🎨 PianoRoll: scroll received, verticalScroll =', verticalScroll);
     // The scroll values are now reactively bound to the other components
     // and will trigger updates when they change
   }
@@ -861,6 +863,7 @@
           {elem_id}
           {audio_data}
           {curve_data}
+          {line_data}
           {use_backend_audio}
           on:scroll={handleGridScroll}
           on:noteChange={handleNoteChange}

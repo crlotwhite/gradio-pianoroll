@@ -1,6 +1,6 @@
 /**
  * Layer System for Piano Roll Canvas Rendering
- * 
+ *
  * This system allows different visual elements (notes, waveforms, grid, playhead)
  * to be rendered as separate layers with independent properties like opacity,
  * visibility, and z-order.
@@ -31,7 +31,7 @@ export interface LayerProps {
 
 export abstract class BaseLayer {
   protected props: LayerProps;
-  
+
   constructor(name: string, zIndex: number = 0) {
     this.props = {
       opacity: 1.0,
@@ -194,13 +194,14 @@ export class LayerManager {
   }
 }
 
-// Predefined z-index constants for common layers
+// Layer Z-index constants for consistent layer ordering
 export const LayerZIndex = {
   BACKGROUND: 0,
   GRID: 10,
   WAVEFORM: 20,
+  LINES: 25,        // Line data layers (pitch curves, loudness, etc.)
   NOTES: 30,
   SELECTION: 40,
   PLAYHEAD: 50,
   UI_OVERLAY: 60
-} as const; 
+} as const;

@@ -5,9 +5,9 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks, calculateAllTimingData } from '../utils/flicks';
-  import { LayerManager, GridLayer, NotesLayer, WaveformLayer } from '../utils/layers';
+  import { LayerManager, GridLayer, NotesLayer, WaveformLayer, LineLayer } from '../utils/layers';
   import LayerControlPanel from './LayerControlPanel.svelte';
-  import type { LayerRenderContext, Note } from '../utils/layers';
+  import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint } from '../utils/layers';
   import { AudioEngineManager } from '../utils/audioEngine';
 
   // Props
@@ -54,6 +54,7 @@
   // Backend audio data (추가)
   export let audio_data: string | null = null;
   export let curve_data: object | null = null;
+  export let line_data: object | null = null;  // Line layer data
   export let use_backend_audio: boolean = false;
 
   // Constants
@@ -142,7 +143,9 @@
   let gridLayer: GridLayer;
   let notesLayer: NotesLayer;
   let waveformLayer: WaveformLayer;
+  let lineLayers: Map<string, LineLayer> = new Map();  // Dynamic line layers
   let showLayerControl = false;
+  let layerControlPanel: LayerControlPanel;
 
   // Audio engine for waveform data
   $: audioEngine = AudioEngineManager.getInstance(elem_id || 'default');
@@ -194,6 +197,7 @@
 
       if (newVerticalScroll !== verticalScroll) {
         verticalScroll = newVerticalScroll;
+        console.log('📊 GridComponent: verticalScroll updated to', verticalScroll);
         dispatch('scroll', { horizontalScroll, verticalScroll });
       }
     }
@@ -704,6 +708,112 @@
     }
   }
 
+  // Dynamic line layer management
+  function updateLineLayers() {
+    if (!layerManager || !line_data) return;
+
+    console.log('📊 Updating line layers with data:', line_data);
+
+    // Clear existing line layers
+    for (const [name, layer] of lineLayers) {
+      layerManager.removeLayer(name);
+    }
+    lineLayers.clear();
+
+    // Add new line layers based on line_data
+    if (typeof line_data === 'object' && line_data !== null) {
+      const layerConfigs = line_data as Record<string, any>;
+
+      Object.entries(layerConfigs).forEach(([layerName, layerInfo], index) => {
+        try {
+          // Default colors for different types of data
+          const defaultColors = [
+            '#FF6B6B', // Red
+            '#4ECDC4', // Teal
+            '#45B7D1', // Blue
+            '#96CEB4', // Green
+            '#FFEAA7', // Yellow
+            '#DDA0DD', // Plum
+            '#F39C12', // Orange
+            '#9B59B6'  // Purple
+          ];
+
+          // Determine if this is F0/pitch data that should follow piano grid
+          const isF0Data = layerName.toLowerCase().includes('f0') ||
+                          layerName.toLowerCase().includes('pitch') ||
+                          layerInfo.dataType === 'f0' ||
+                          layerInfo.renderMode === 'piano_grid';
+
+          const config: LineLayerConfig = {
+            name: layerName,
+            color: layerInfo.color || defaultColors[index % defaultColors.length],
+            lineWidth: layerInfo.lineWidth || 2,
+            yMin: layerInfo.yMin || 0,
+            yMax: layerInfo.yMax || 1,
+            height: layerInfo.height || (isF0Data ? undefined : height / 3), // F0는 전체 높이, 나머지는 1/3
+            position: isF0Data ? 'overlay' : (layerInfo.position || 'bottom'),
+            renderMode: isF0Data ? 'piano_grid' : 'default',
+            visible: layerInfo.visible !== false,
+            opacity: layerInfo.opacity || (isF0Data ? 0.8 : 1.0),
+            dataType: layerInfo.dataType,
+            unit: layerInfo.unit,
+            originalRange: layerInfo.originalRange
+          };
+
+          const lineLayer = new LineLayer(config);
+
+          // Convert data points if necessary
+          const dataPoints: LineDataPoint[] = [];
+          if (layerInfo.data && Array.isArray(layerInfo.data)) {
+            for (const point of layerInfo.data) {
+              if (typeof point === 'object' && point !== null) {
+                // Support different data formats
+                let x: number, y: number;
+
+                if ('x' in point && 'y' in point) {
+                  x = point.x;
+                  y = point.y;
+                } else if ('time' in point && 'value' in point) {
+                  // Convert time to pixels
+                  x = point.time * pixelsPerBeat * (tempo / 60);
+                  y = point.value;
+                } else if ('seconds' in point && 'value' in point) {
+                  // Convert seconds to pixels
+                  x = point.seconds * pixelsPerBeat * (tempo / 60);
+                  y = point.value;
+                } else {
+                  console.warn(`Unknown data point format for layer ${layerName}:`, point);
+                  continue;
+                }
+
+                dataPoints.push({ x, y });
+              }
+            }
+          }
+
+          lineLayer.setData(dataPoints);
+          lineLayers.set(layerName, lineLayer);
+          layerManager.addLayer(lineLayer);
+
+          console.log(`✅ Added line layer: ${layerName} with ${dataPoints.length} points (mode: ${config.renderMode})`);
+        } catch (error) {
+          console.error(`❌ Failed to create line layer ${layerName}:`, error);
+        }
+      });
+    }
+
+    console.log(`📊 Line layers updated: ${lineLayers.size} total layers`);
+    console.log(`📊 LayerManager has ${layerManager.getLayerNames().length} layers:`, layerManager.getLayerNames());
+
+    renderLayers();
+
+    // Update layer control panel to show new line layers
+    if (layerControlPanel) {
+      console.log('🎛️ Updating layer control panel');
+      layerControlPanel.updateLayers();
+    }
+  }
+
   // Layer control event handlers
   function handleLayerChanged() {
     renderLayers();
@@ -1161,6 +1271,11 @@
     renderLayers();
   }
 
+  // Update line layers when line_data changes
+  $: if (layerManager && line_data !== undefined) {
+    updateLineLayers();
+  }
+
   // Update waveform layer when audio engine renders new audio
   $: if (layerManager && waveformLayer && audioEngine) {
     const audioBuffer = audioEngine.getRenderedBuffer();
@@ -1215,6 +1330,7 @@
   <!-- Layer Control Panel -->
   {#if layerManager}
     <LayerControlPanel
+      bind:this={layerControlPanel}
       {layerManager}
       visible={showLayerControl}
       on:layerChanged={handleLayerChanged}

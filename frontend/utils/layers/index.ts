@@ -11,9 +11,11 @@ export { GridLayer } from './GridLayer';
 export { NotesLayer } from './NotesLayer';
 export { WaveformLayer } from './WaveformLayer';
 export { PlayheadLayer } from './PlayheadLayer';
+export { LineLayer } from './LineLayer';
 
-// Note interface for NotesLayer
+// Type interfaces
 export type { Note } from './NotesLayer';
+export type { LineDataPoint, LineLayerConfig } from './LineLayer';
 
 // Layer System exports
 export * from '../LayerSystem';
@@ -21,3 +23,4 @@ export * from './GridLayer';
 export * from './NotesLayer';
 export * from './PlayheadLayer';
 export * from './WaveformLayer';
+export * from './LineLayer';
