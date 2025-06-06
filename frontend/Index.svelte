@@ -72,24 +72,26 @@
 	}
 
 	// 백엔드 데이터 추출 - value가 변경될 때마다 백엔드 데이터 props 업데이트
+	let initialDataLogged = false;
 	$: if (value && typeof value === 'object') {
 		// value에서 백엔드 데이터가 있으면 props 업데이트
 		if ('audio_data' in value && value.audio_data !== undefined) {
-			console.log("🎵 Audio data updated:", !!value.audio_data);
+			if (!initialDataLogged) console.log("🎵 Audio data updated:", !!value.audio_data);
 			audio_data = typeof value.audio_data === 'string' ? value.audio_data : null;
 		}
 		if ('curve_data' in value && value.curve_data !== undefined) {
-			console.log("📊 Curve data updated:", value.curve_data);
+			if (!initialDataLogged) console.log("📊 Curve data updated:", !!value.curve_data);
 			curve_data = value.curve_data && typeof value.curve_data === 'object' ? value.curve_data : null;
 		}
 		if ('segment_data' in value && value.segment_data !== undefined) {
-			console.log("📍 Segment data updated:", value.segment_data);
+			if (!initialDataLogged) console.log("📍 Segment data updated:", !!value.segment_data);
 			segment_data = Array.isArray(value.segment_data) ? value.segment_data : null;
 		}
 		if ('use_backend_audio' in value && value.use_backend_audio !== undefined) {
-			console.log("🔊 Backend audio flag:", value.use_backend_audio);
+			if (!initialDataLogged) console.log("🔊 Backend audio flag:", value.use_backend_audio);
 			use_backend_audio = typeof value.use_backend_audio === 'boolean' ? value.use_backend_audio : false;
 		}
+		initialDataLogged = true;
 	}
 
 	// 피아노롤에서 데이터 변경 시 호출되는 핸들러 (tempo, 노트 정보 등)

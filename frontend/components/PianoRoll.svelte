@@ -9,9 +9,9 @@
   import KeyboardComponent from './KeyboardComponent.svelte';
   import GridComponent from './GridComponent.svelte';
   import TimeLineComponent from './TimeLineComponent.svelte';
-  import WaveformComponent from './WaveformComponent.svelte';
   import PlayheadComponent from './PlayheadComponent.svelte';
   import DebugComponent from './DebugComponent.svelte';
+  import { WaveformLayer, NoteLayer, type AudioData, type Note } from './layers';
   import { AudioEngineManager } from '../utils/audioEngine';
   import { beatsToFlicks, flicksToBeats, formatFlicks } from '../utils/flicks';
   import { createEventDispatcher } from 'svelte';
@@ -32,34 +32,17 @@
   export let segment_data: Array<any> | null = null;
   export let use_backend_audio: boolean = false;
 
-  // use_backend_audio prop 변경 감지
+  // use_backend_audio prop 변경 감지 (초기화 시에만 로그)
+  let hasLoggedInitialState = false;
   $: {
-    console.log("🔊 PianoRoll: use_backend_audio prop changed to:", use_backend_audio);
-    console.log("🔊 PianoRoll: audio_data present:", !!audio_data);
-    console.log("🔊 PianoRoll: elem_id:", elem_id);
+    if (!hasLoggedInitialState) {
+      console.log("🔊 PianoRoll initialized:", { use_backend_audio, hasAudioData: !!audio_data, elem_id });
+      hasLoggedInitialState = true;
+    }
   }
 
   // Shared state
-  export let notes: Array<{
-    id: string,
-    start: number,
-    duration: number,
-    startFlicks?: number,      // Optional for backward compatibility
-    durationFlicks?: number,   // Optional for backward compatibility
-    startSeconds?: number,     // Optional - seconds timing
-    durationSeconds?: number,  // Optional - seconds timing
-    endSeconds?: number,       // Optional - end time in seconds
-    startBeats?: number,       // Optional - beats timing
-    durationBeats?: number,    // Optional - beats timing
-    startTicks?: number,       // Optional - MIDI ticks timing
-    durationTicks?: number,    // Optional - MIDI ticks timing
-    startSample?: number,      // Optional - sample timing
-    durationSamples?: number,  // Optional - sample timing
-    pitch: number,
-    velocity: number,
-    lyric?: string,
-    phoneme?: string
-  }> = [];
+  export let notes: Note[] = [];
 
   // Settings
   export let tempo = 120;
@@ -78,7 +61,9 @@
   let waveformOpacity = 0.7; // Initial opacity for waveform
 
   // References to components
-  let waveformComponent: any; // Reference to waveform component
+  let gridComponent: any; // Reference to grid component for layer access
+  let waveformLayer: WaveformLayer | null = null; // Reference to waveform layer
+  let noteLayer: NoteLayer | null = null; // Reference to note layer
 
   // Zoom level (pixels per beat) - now controlled from parent
   export let pixelsPerBeat = 80;
@@ -202,8 +187,8 @@
       await audioEngine.renderNotes(notes, tempo, totalLengthInBeats, pixelsPerBeat);
 
       // Update waveform visualization
-      if (waveformComponent) {
-        waveformComponent.forceRedraw();
+      if (waveformLayer) {
+        waveformLayer.forceRedraw();
       }
     } catch (error) {
       console.error('Error rendering audio:', error);
@@ -301,9 +286,9 @@
     } catch (error) {
       console.error('❌ Backend audio decoding error:', error);
       console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
+        name: (error as Error).name,
+        message: (error as Error).message,
+        stack: (error as Error).stack
       });
       backendAudioBuffer = null;
       return null;
@@ -392,9 +377,9 @@
       } catch (error) {
         console.error("❌ Error starting backend audio playback:", error);
         console.error('Error details:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
+          name: (error as Error).name,
+          message: (error as Error).message,
+          stack: (error as Error).stack
         });
         isPlaying = false;
       }
@@ -641,11 +626,101 @@
     // Set up playhead position update callback
     audioEngine.setPlayheadUpdateCallback(updatePlayheadPosition);
 
-    // Initial audio render
-    if (notes.length > 0) {
-      renderAudio();
-    }
+    // Use requestAnimationFrame for smoother initialization
+    requestAnimationFrame(() => {
+      console.log('🔄 Setting up layers...');
+      setupWaveformLayer();
+      setupNoteLayer();
+
+      // Initial audio render only if there are notes
+      if (notes.length > 0) {
+        requestAnimationFrame(() => {
+          renderAudio();
+        });
+      }
+    });
   });
+
+  // Setup waveform layer
+  function setupWaveformLayer() {
+    if (!gridComponent) {
+      // Retry after a short delay if GridComponent isn't ready
+      requestAnimationFrame(() => setupWaveformLayer());
+      return;
+    }
+
+    // Create waveform layer
+    waveformLayer = new WaveformLayer({
+      id: 'waveform',
+      name: 'Waveform',
+      elemId: elem_id,
+      visible: true,
+      opacity: waveformOpacity,
+      zIndex: 1,
+      position: { top: Math.floor((height - 40 - timelineHeight) / 2) },
+      useBackendAudio: use_backend_audio,
+      audioData: {
+        audioUrl: audio_data || undefined,
+        waveformData: curve_data && (curve_data as any).waveform_data ? (curve_data as any).waveform_data : undefined,
+        isBackendAudio: use_backend_audio
+      }
+    });
+
+    // Add to layer manager using the exposed method
+    if (gridComponent.addLayer) {
+      gridComponent.addLayer(waveformLayer);
+      console.log('✅ Waveform layer added to grid component');
+    } else {
+      console.error('❌ Failed to add waveform layer - addLayer method not available');
+    }
+  }
+
+  // Setup note layer
+  function setupNoteLayer() {
+    if (!gridComponent) {
+      // Retry after a short delay if GridComponent isn't ready
+      requestAnimationFrame(() => setupNoteLayer());
+      return;
+    }
+
+    // Create note layer
+    noteLayer = new NoteLayer({
+      id: 'notes',
+      name: 'Notes',
+      notes: notes,
+      tempo: tempo,
+      timeSignature: timeSignature,
+      editMode: editMode,
+      snapSetting: snapSetting,
+      pixelsPerBeat: pixelsPerBeat,
+      sampleRate: sampleRate,
+      ppqn: ppqn,
+      visible: true,
+      opacity: 1.0,
+      zIndex: 2
+    });
+
+    // Set up event callbacks
+    noteLayer.setOnNotesChange((updatedNotes: Note[]) => {
+      notes = updatedNotes;
+      dispatchNoteChange();
+      // Re-render audio when notes change
+      renderAudio();
+    });
+
+    noteLayer.setOnLyricEdit((noteId: string, oldLyric: string, newLyric: string) => {
+      // This will trigger external lyric editing UI
+      // For now we'll handle this through the existing system
+    });
+
+    // Add to layer manager
+    if (gridComponent.addLayer) {
+      gridComponent.addLayer(noteLayer);
+      console.log('✅ Note layer added to grid component');
+    } else {
+      console.error('❌ Failed to add note layer - addLayer method not available');
+    }
+  }
 
   onDestroy(() => {
     // Clean up backend audio
@@ -678,6 +753,27 @@
     }).catch((error) => {
       console.error("❌ Failed to initialize backend audio:", error);
     });
+  }
+
+  // Update waveform layer when audio data changes
+  $: if (waveformLayer && (audio_data || curve_data)) {
+    const audioData: AudioData = {
+      audioUrl: audio_data || undefined,
+      waveformData: curve_data && (curve_data as any).waveform_data ? (curve_data as any).waveform_data : undefined,
+      isBackendAudio: use_backend_audio
+    };
+    waveformLayer.setAudioData(audioData);
+    waveformLayer.setUseBackendAudio(use_backend_audio);
+  }
+
+  // Update note layer when properties change
+  $: if (noteLayer) {
+    noteLayer.setNotes(notes);
+    noteLayer.setTempo(tempo);
+    noteLayer.setTimeSignature(timeSignature);
+    noteLayer.setEditMode(editMode);
+    noteLayer.setSnapSetting(snapSetting);
+    noteLayer.setPixelsPerBeat(pixelsPerBeat);
   }
 </script>
 
@@ -728,24 +824,9 @@
       />
 
       <div class="grid-container" style="position: relative;">
-        <!-- Waveform positioned below the grid but above the grid lines -->
-        <WaveformComponent
-          bind:this={waveformComponent}
-          width={width - keyboardWidth}
-          height={(height - 40 - timelineHeight) / 2}
-          {horizontalScroll}
-          {pixelsPerBeat}
-          {tempo}
-          opacity={waveformOpacity}
-          top={(height - 100 - timelineHeight) / 2}
-          {audio_data}
-          {curve_data}
-          {use_backend_audio}
-          {elem_id}
-        />
-
         <!-- Grid component containing notes and grid lines -->
         <GridComponent
+          bind:this={gridComponent}
           width={width - keyboardWidth}
           height={height - 40 - timelineHeight}
           {notes}

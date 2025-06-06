@@ -5,30 +5,12 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks, calculateAllTimingData } from '../utils/flicks';
+  import { LayerManager, createLayerEvent, type Viewport, type Note } from './layers';
 
   // Props
   export let width = 880;  // Width of the grid (total width - keyboard width)
   export let height = 520;  // Height of the grid
-  export let notes: Array<{
-    id: string,
-    start: number,
-    duration: number,
-    startFlicks?: number,      // Optional for backward compatibility
-    durationFlicks?: number,   // Optional for backward compatibility
-    startSeconds?: number,     // Optional - seconds timing
-    durationSeconds?: number,  // Optional - seconds timing
-    endSeconds?: number,       // Optional - end time in seconds
-    startBeats?: number,       // Optional - beats timing
-    durationBeats?: number,    // Optional - beats timing
-    startTicks?: number,       // Optional - MIDI ticks timing
-    durationTicks?: number,    // Optional - MIDI ticks timing
-    startSample?: number,      // Optional - sample timing
-    durationSamples?: number,  // Optional - sample timing
-    pitch: number,
-    velocity: number,
-    lyric?: string,
-    phoneme?: string
-  }> = [];
+  export let notes: Note[] = [];
   // Tempo is used to calculate timing and note positioning
   export let tempo = 120;  // BPM
 
@@ -117,6 +99,37 @@
   // State
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
+
+  // Layer system
+  let layerManager: LayerManager;
+
+  // Export methods to access layer manager
+  export function getLayerManager(): LayerManager {
+    return layerManager;
+  }
+
+  export function addLayer(layer: any): void {
+    if (layerManager) {
+      layerManager.addLayer(layer);
+      console.log(`✅ Layer ${layer?.id} added to LayerManager`);
+      // 레이어 추가 후 즉시 렌더링 트리거
+      requestAnimationFrame(() => {
+        drawGrid();
+      });
+    } else {
+      console.error('❌ LayerManager not available in GridComponent');
+    }
+  }
+
+  // Sync selected notes with note layer
+  function syncSelectedNotesToLayer(): void {
+    if (layerManager) {
+      const noteLayer = layerManager.getLayer('notes');
+      if (noteLayer && 'setSelectedNotes' in noteLayer) {
+        (noteLayer as any).setSelectedNotes(selectedNotes);
+      }
+    }
+  }
   let isDragging = false;
   let isResizing = false;
   let isCreatingNote = false;
@@ -166,9 +179,30 @@
   $: totalMeasures = 32;  // Adjustable
   $: totalGridWidth = totalMeasures * pixelsPerMeasure;
 
+  // Create viewport object for layers
+  $: viewport = {
+    width,
+    height,
+    horizontalScroll,
+    verticalScroll,
+    pixelsPerBeat,
+    tempo,
+    totalGridWidth,
+    totalGridHeight
+  } as Viewport;
+
   // Handle scrolling
   function handleScroll(event: WheelEvent) {
     event.preventDefault();
+
+    // Let layers handle the scroll event first
+    if (layerManager && canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const layerEvent = createLayerEvent('wheel', event, rect, viewport);
+      if (layerManager.handleEvent(layerEvent, viewport)) {
+        return; // Event was handled by a layer
+      }
+    }
 
     // Vertical scrolling with mouse wheel
     if (event.deltaY !== 0) {
@@ -211,6 +245,17 @@
   function handleMouseDown(event: MouseEvent) {
     if (!canvas) return;
 
+    // Let layers handle the mouse event first
+    if (layerManager) {
+      const rect = canvas.getBoundingClientRect();
+      const layerEvent = createLayerEvent('mousedown', event, rect, viewport);
+      if (layerManager.handleEvent(layerEvent, viewport)) {
+        console.log('🎯 MouseDown event handled by layer, skipping GridComponent logic');
+        return; // Event was handled by a layer
+      }
+    }
+
+    console.log('🎯 MouseDown event not handled by layers, using GridComponent logic');
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left + horizontalScroll;
     const y = event.clientY - rect.top + verticalScroll;
@@ -353,6 +398,15 @@
 
   function handleMouseMove(event: MouseEvent) {
     if (!canvas) return;
+
+    // Let layers handle the mouse event first
+    if (layerManager) {
+      const rect = canvas.getBoundingClientRect();
+      const layerEvent = createLayerEvent('mousemove', event, rect, viewport);
+      if (layerManager.handleEvent(layerEvent, viewport)) {
+        return; // Event was handled by a layer
+      }
+    }
 
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left + horizontalScroll;
@@ -497,7 +551,19 @@
     }
   }
 
-  function handleMouseUp() {
+  function handleMouseUp(event: MouseEvent) {
+    // Let layers handle the mouse event first
+    if (layerManager) {
+      const rect = canvas.getBoundingClientRect();
+      const layerEvent = createLayerEvent('mouseup', event, rect, viewport);
+      if (layerManager.handleEvent(layerEvent, viewport)) {
+        console.log('🎯 MouseUp event handled by layer, skipping GridComponent logic');
+        return; // Event was handled by a layer
+      }
+    }
+
+    console.log('🎯 MouseUp event not handled by layers, using GridComponent logic');
+
     // Check if we're finalizing note creation
     if (isCreatingNote) {
       // If the note is too small, remove it, but base minimum size on current snap setting
@@ -906,70 +972,9 @@
       ctx.stroke();
     }
 
-    // Draw notes
-    for (const note of notes) {
-      const noteX = note.start - horizontalScroll;
-      const noteY = (TOTAL_NOTES - 1 - note.pitch) * NOTE_HEIGHT - verticalScroll;
-
-      // Skip notes outside of visible area
-      if (
-        noteX + note.duration < 0 ||
-        noteX > width ||
-        noteY + NOTE_HEIGHT < 0 ||
-        noteY > height
-      ) {
-        continue;
-      }
-
-      // Draw note rectangle
-      ctx.fillStyle = selectedNotes.has(note.id) ? NOTE_SELECTED_COLOR : NOTE_COLOR;
-      ctx.fillRect(noteX, noteY, note.duration, NOTE_HEIGHT);
-
-      // Draw border
-      ctx.strokeStyle = '#1a1a1a';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(noteX, noteY, note.duration, NOTE_HEIGHT);
-
-      // Draw velocity indicator (brightness of note)
-      const velocityHeight = (NOTE_HEIGHT - 4) * (note.velocity / 127);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.fillRect(noteX + 2, noteY + 2 + (NOTE_HEIGHT - 4 - velocityHeight), note.duration - 4, velocityHeight);
-
-      // Draw lyric text if present and note is wide enough
-      if (note.lyric && note.duration > 20) {
-        ctx.fillStyle = LYRIC_COLOR;
-        ctx.font = '10px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        // Create text that fits within note width
-        let text = note.lyric;
-
-        // Add phoneme if available
-        if (note.phoneme) {
-          text += ` [${note.phoneme}]`;
-        }
-
-        const maxWidth = note.duration - 6;
-        let textWidth = ctx.measureText(text).width;
-
-        if (textWidth > maxWidth) {
-          // Try to fit as much text as possible
-          if (note.phoneme && text.length > note.lyric.length) {
-            // If phoneme makes it too long, try without phoneme
-            text = note.lyric;
-            textWidth = ctx.measureText(text).width;
-
-            if (textWidth > maxWidth) {
-              text = text.substring(0, Math.floor(text.length * (maxWidth / textWidth))) + '...';
-            }
-          } else {
-            text = text.substring(0, Math.floor(text.length * (maxWidth / textWidth))) + '...';
-          }
-        }
-
-        ctx.fillText(text, noteX + note.duration / 2, noteY + NOTE_HEIGHT / 2);
-      }
+    // Render layers (including notes)
+    if (layerManager) {
+      layerManager.render(ctx, viewport);
     }
   }
 
@@ -994,6 +999,10 @@
     // Get canvas context
     ctx = canvas.getContext('2d');
 
+    // Initialize layer manager
+    layerManager = new LayerManager();
+    console.log('✅ LayerManager initialized in GridComponent');
+
     // Set up canvas size
     canvas.width = width;
     canvas.height = height;
@@ -1004,13 +1013,15 @@
     // Notify parent of scroll position
     dispatch('scroll', { horizontalScroll, verticalScroll });
 
-    // Draw initial grid
-    drawGrid();
+    // Draw initial grid immediately for faster perceived performance
+    requestAnimationFrame(() => {
+      drawGrid();
 
-    // Set initial mouse position info for the center of the viewport
-    const centerX = horizontalScroll + width / 2;
-    const centerY = verticalScroll + height / 2;
-    updateMousePositionInfo(centerX, centerY);
+      // Set initial mouse position info after first render
+      const centerX = horizontalScroll + width / 2;
+      const centerY = verticalScroll + height / 2;
+      updateMousePositionInfo(centerX, centerY);
+    });
 
     // Expose coordinate conversion utilities to parent components
     dispatch('utilsReady', {
@@ -1062,6 +1073,20 @@
   $: if (isPlaying && currentFlicks) {
     // This reactive statement will trigger a redraw whenever currentFlicks changes during playback
     drawGrid();
+  }
+
+  // Sync notes with note layer when notes change
+  $: if (layerManager && notes) {
+    const noteLayer = layerManager.getLayer('notes');
+    if (noteLayer && 'setNotes' in noteLayer) {
+      console.log(`🔄 Syncing ${notes.length} notes to NoteLayer`);
+      (noteLayer as any).setNotes(notes);
+    }
+  }
+
+  // Sync selected notes with layer when selection changes
+  $: if (selectedNotes) {
+    syncSelectedNotesToLayer();
   }
 
   // Scale the position of notes when the zoom level (pixelsPerBeat) changes
