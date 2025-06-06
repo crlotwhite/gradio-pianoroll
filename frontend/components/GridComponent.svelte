@@ -5,9 +5,10 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks, calculateAllTimingData } from '../utils/flicks';
-  import { LayerManager, GridLayer, NotesLayer } from '../utils/layers';
+  import { LayerManager, GridLayer, NotesLayer, WaveformLayer } from '../utils/layers';
   import LayerControlPanel from './LayerControlPanel.svelte';
   import type { LayerRenderContext, Note } from '../utils/layers';
+  import { AudioEngineManager } from '../utils/audioEngine';
 
   // Props
   export let width = 880;  // Width of the grid (total width - keyboard width)
@@ -48,6 +49,12 @@
   // Audio metadata
   export let sampleRate = 44100; // Audio sample rate
   export let ppqn = 480;         // MIDI pulses per quarter note
+  export let elem_id = '';       // Component ID for audio engine management
+
+  // Backend audio data (추가)
+  export let audio_data: string | null = null;
+  export let curve_data: object | null = null;
+  export let use_backend_audio: boolean = false;
 
   // Constants
   const NOTE_HEIGHT = 20;  // Height of a note row (same as white key height)
@@ -134,7 +141,11 @@
   let layerManager: LayerManager;
   let gridLayer: GridLayer;
   let notesLayer: NotesLayer;
+  let waveformLayer: WaveformLayer;
   let showLayerControl = false;
+
+  // Audio engine for waveform data
+  $: audioEngine = AudioEngineManager.getInstance(elem_id || 'default');
 
   // Current mouse position info (for position display)
   let currentMousePosition = {
@@ -423,7 +434,7 @@
           newStart = Math.max(0, newStart);
           newPitch = Math.max(0, Math.min(127, newPitch));
 
-          console.log(`📍 Moving note ${note.id} to grid position ${newStart},${newPitch}`);
+          // console.log(`📍 Moving note ${note.id} to grid position ${newStart},${newPitch}`);
 
           // Calculate all timing data for new start position
           const newStartTiming = calculateAllTimingData(newStart, pixelsPerBeat, tempo, sampleRate, ppqn);
@@ -701,19 +712,19 @@
   // Helper to find a note at a specific position
   // x, y are already world coordinates (screen coordinates + scroll)
   function findNoteAtPosition(x: number, y: number) {
-    console.log('🔍 Finding note at position:', x, y);
+    // console.log('🔍 Finding note at position:', x, y);
 
     if (notesLayer) {
       // Convert world coordinates back to screen coordinates for the layer function
       const screenX = x - horizontalScroll;
       const screenY = y - verticalScroll;
       const foundNotes = notesLayer.findNotesAtPosition(screenX, screenY, horizontalScroll, verticalScroll);
-      console.log('🎵 Found notes via layer:', foundNotes.length);
+      // console.log('🎵 Found notes via layer:', foundNotes.length);
       return foundNotes.length > 0 ? foundNotes[0] : null;
     }
 
     // Fallback to original implementation using world coordinates
-    console.log('⚠️ Using fallback note finding');
+    // console.log('⚠️ Using fallback note finding');
     const foundNote = notes.find(note => {
       const noteY = (TOTAL_NOTES - 1 - note.pitch) * NOTE_HEIGHT;
       return (
@@ -723,7 +734,7 @@
         y <= noteY + NOTE_HEIGHT
       );
     });
-    console.log('🎵 Found note via fallback:', !!foundNote);
+    // console.log('🎵 Found note via fallback:', !!foundNote);
     return foundNote;
   }
 
@@ -924,7 +935,7 @@
       return;
     }
 
-    console.log('🎨 Initializing layer system...');
+    // console.log('🎨 Initializing layer system...');
 
     // Create layer manager
     layerManager = new LayerManager();
@@ -932,12 +943,14 @@
     // Create and add layers
     gridLayer = new GridLayer();
     notesLayer = new NotesLayer();
+    waveformLayer = new WaveformLayer();
 
     layerManager.addLayer(gridLayer);
+    layerManager.addLayer(waveformLayer);
     layerManager.addLayer(notesLayer);
 
-    console.log('✅ Layer system initialized with layers:', layerManager.getLayerNames());
-    console.log('Layer info:', layerManager.getLayerInfo());
+    // console.log('✅ Layer system initialized with layers:', layerManager.getLayerNames());
+    // console.log('Layer info:', layerManager.getLayerInfo());
   }
 
   // Legacy function name for compatibility
@@ -997,6 +1010,14 @@
     const centerY = verticalScroll + height / 2;
     updateMousePositionInfo(centerX, centerY);
 
+    // 초기 웨이브폼 렌더링 시도 (백엔드 오디오를 사용하지 않는 경우)
+    if (!use_backend_audio && waveformLayer) {
+      // console.log('🌊 Initial waveform auto-render attempt on mount');
+      setTimeout(() => {
+        autoRenderFrontendAudio();
+      }, 100); // 약간의 지연을 두어 다른 초기화가 완료된 후 실행
+    }
+
     // Expose coordinate conversion utilities to parent components
     dispatch('utilsReady', {
       xToMeasureInfo,
@@ -1007,15 +1028,86 @@
     });
   });
 
+  // Update waveform layer data when relevant props change
+  function updateWaveformLayer() {
+    if (!waveformLayer) return;
+
+    // 1순위: curve_data에서 미리 계산된 웨이브폼 데이터 사용
+    if (curve_data && (curve_data as any).waveform_data) {
+      waveformLayer.setPreCalculatedWaveform((curve_data as any).waveform_data);
+      waveformLayer.setUseBackendAudio(true);
+      // console.log('🌊 WaveformLayer: Using pre-calculated waveform data');
+      return;
+    }
+
+    // 2순위: 백엔드 오디오가 있고 use_backend_audio가 true인 경우
+    if (use_backend_audio && audio_data) {
+      // 백엔드 오디오는 별도로 디코딩해서 설정해야 함
+      waveformLayer.setUseBackendAudio(true);
+      // console.log('🌊 WaveformLayer: Using backend audio mode');
+      return;
+    }
+
+    // 3순위: 프론트엔드 오디오 엔진 버퍼 사용
+    const audioBuffer = audioEngine.getRenderedBuffer();
+    if (audioBuffer) {
+      waveformLayer.setAudioBuffer(audioBuffer);
+      waveformLayer.setUseBackendAudio(false);
+      // console.log('🌊 WaveformLayer: Using frontend audio buffer');
+      return;
+    }
+
+    // 4순위: 백엔드 오디오를 사용하지 않고 버퍼가 없는 경우 자동 렌더링 시도
+    if (!use_backend_audio && !audioBuffer) {
+      // console.log('🌊 WaveformLayer: No buffer available, attempting auto-render');
+      autoRenderFrontendAudio();
+    }
+
+    // 데이터가 없는 경우
+    waveformLayer.setAudioBuffer(null);
+    waveformLayer.setPreCalculatedWaveform(null);
+    // console.log('🌊 WaveformLayer: No waveform data available');
+  }
+
+  // 자동으로 프론트엔드 오디오 렌더링을 시도하는 함수
+  async function autoRenderFrontendAudio() {
+    try {
+      // console.log('🎵 Auto-rendering frontend audio for waveform...');
+
+      // 오디오 엔진 초기화 (사용자 상호작용 없이 시도)
+      audioEngine.initialize();
+
+      // 총 길이 계산 (32 마디)
+      const totalLengthInBeats = 32 * 4; // 32 measures * 4 beats per measure (4/4 time)
+
+      // 노트 렌더링
+      await audioEngine.renderNotes(notes, tempo, totalLengthInBeats, pixelsPerBeat);
+
+      // 렌더링 완료 후 웨이브폼 업데이트
+      const newAudioBuffer = audioEngine.getRenderedBuffer();
+      if (newAudioBuffer && waveformLayer) {
+        waveformLayer.setAudioBuffer(newAudioBuffer);
+        waveformLayer.setUseBackendAudio(false);
+        // console.log('✅ Auto-render completed, waveform updated');
+        renderLayers();
+      }
+    } catch (error: any) {
+      console.log('⚠️ Auto-render failed (expected if no user interaction):', error.message);
+      // 실패는 정상적인 동작 (사용자 상호작용이 필요한 경우)
+    }
+  }
+
   // Update when props change
   $: {
     if (ctx && canvas) {
       canvas.width = width;
       canvas.height = height;
       if (layerManager) {
+        updateWaveformLayer();
         renderLayers();
       } else {
         initializeLayers();
+        updateWaveformLayer();
         renderLayers();
       }
     }
@@ -1053,6 +1145,30 @@
   // Re-render grid when notes array changes
   $: if (notes && layerManager) {
     renderLayers();
+
+    // 노트가 변경되었고 백엔드 오디오를 사용하지 않는 경우 웨이브폼 자동 업데이트
+    if (!use_backend_audio && waveformLayer && !audioEngine.getRenderedBuffer()) {
+      // console.log('🌊 Notes changed, auto-updating waveform');
+      setTimeout(() => {
+        autoRenderFrontendAudio();
+      }, 50);
+    }
+  }
+
+  // Update waveform layer when audio data changes
+  $: if (layerManager && waveformLayer && (audio_data || curve_data || use_backend_audio !== undefined)) {
+    updateWaveformLayer();
+    renderLayers();
+  }
+
+  // Update waveform layer when audio engine renders new audio
+  $: if (layerManager && waveformLayer && audioEngine) {
+    const audioBuffer = audioEngine.getRenderedBuffer();
+    if (audioBuffer && !use_backend_audio) {
+      waveformLayer.setAudioBuffer(audioBuffer);
+      waveformLayer.setUseBackendAudio(false);
+      renderLayers();
+    }
   }
 
   // Scale the position of notes when the zoom level (pixelsPerBeat) changes

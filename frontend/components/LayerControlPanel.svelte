@@ -12,53 +12,83 @@
 
   const dispatch = createEventDispatcher();
 
-  // Layer information
-  $: layerInfo = layerManager ? layerManager.getLayerInfo() : [];
+  // Layer information - reactive with force update trigger
+  let forceUpdate = 0;
+  $: layerInfo = layerManager && forceUpdate >= 0 ? layerManager.getLayerInfo() : [];
+
+  // Force reactive update
+  function triggerUpdate() {
+    forceUpdate++;
+  }
 
   function toggleLayerVisibility(layerName: string) {
     if (!layerManager) return;
-    
+
     const layer = layerManager.getLayer(layerName);
     if (layer) {
       layerManager.setLayerVisible(layerName, !layer.isVisible());
+      triggerUpdate();
       dispatch('layerChanged');
     }
   }
 
   function updateLayerOpacity(layerName: string, opacity: number) {
     if (!layerManager) return;
-    
+
     layerManager.setLayerOpacity(layerName, opacity);
+    triggerUpdate();
     dispatch('layerChanged');
   }
 
   function moveLayerUp(layerName: string) {
     console.log('📈 Moving layer up:', layerName);
     if (!layerManager) return;
-    
-    const layer = layerManager.getLayer(layerName);
-    if (!layer) return;
 
-    // Get current z-index and increment it
-    const currentZ = layer.getZIndex();
-    console.log('Current Z:', currentZ, 'Moving to Z:', currentZ + 1);
-    
-    layerManager.setLayerZIndex(layerName, currentZ + 1);
+    const allLayers = layerManager.getLayerInfo().sort((a, b) => a.zIndex - b.zIndex);
+    const currentIndex = allLayers.findIndex(layer => layer.name === layerName);
+
+    if (currentIndex === -1 || currentIndex >= allLayers.length - 1) {
+      console.log('⚠️ Cannot move layer up - already at top or not found');
+      return;
+    }
+
+    // 현재 레이어와 위의 레이어의 z-index를 교환
+    const currentLayer = allLayers[currentIndex];
+    const upperLayer = allLayers[currentIndex + 1];
+
+    console.log(`🔄 Swapping layers: ${currentLayer.name} (${currentLayer.zIndex}) ↔ ${upperLayer.name} (${upperLayer.zIndex})`);
+
+    layerManager.setLayerZIndex(currentLayer.name, upperLayer.zIndex);
+    layerManager.setLayerZIndex(upperLayer.name, currentLayer.zIndex);
+
+    // 즉시 UI 업데이트
+    triggerUpdate();
     dispatch('layerChanged');
   }
 
   function moveLayerDown(layerName: string) {
     console.log('📉 Moving layer down:', layerName);
     if (!layerManager) return;
-    
-    const layer = layerManager.getLayer(layerName);
-    if (!layer) return;
 
-    // Get current z-index and decrement it
-    const currentZ = layer.getZIndex();
-    console.log('Current Z:', currentZ, 'Moving to Z:', currentZ - 1);
-    
-    layerManager.setLayerZIndex(layerName, currentZ - 1);
+    const allLayers = layerManager.getLayerInfo().sort((a, b) => a.zIndex - b.zIndex);
+    const currentIndex = allLayers.findIndex(layer => layer.name === layerName);
+
+    if (currentIndex === -1 || currentIndex <= 0) {
+      console.log('⚠️ Cannot move layer down - already at bottom or not found');
+      return;
+    }
+
+    // 현재 레이어와 아래의 레이어의 z-index를 교환
+    const currentLayer = allLayers[currentIndex];
+    const lowerLayer = allLayers[currentIndex - 1];
+
+    console.log(`🔄 Swapping layers: ${currentLayer.name} (${currentLayer.zIndex}) ↔ ${lowerLayer.name} (${lowerLayer.zIndex})`);
+
+    layerManager.setLayerZIndex(currentLayer.name, lowerLayer.zIndex);
+    layerManager.setLayerZIndex(lowerLayer.name, currentLayer.zIndex);
+
+    // 즉시 UI 업데이트
+    triggerUpdate();
     dispatch('layerChanged');
   }
 
@@ -81,10 +111,10 @@
         <div class="no-layers">No layers available</div>
       {:else}
         <div class="layers-list">
-          {#each layerInfo.sort((a, b) => b.zIndex - a.zIndex) as layer (layer.name)}
+          {#each layerInfo.sort((a, b) => b.zIndex - a.zIndex) as layer, index (layer.name + layer.zIndex)}
             <div class="layer-item" class:disabled={!layer.visible}>
               <div class="layer-header">
-                <button 
+                <button
                   class="visibility-toggle"
                   class:hidden={!layer.visible}
                   on:click={() => toggleLayerVisibility(layer.name)}
@@ -92,23 +122,27 @@
                 >
                   {layer.visible ? '👁️' : '👁️‍🗨️'}
                 </button>
-                
+
                 <span class="layer-name">{layer.name}</span>
-                
+
                 <div class="layer-controls">
-                  <button 
-                    class="move-button" 
+                  <button
+                    class="move-button"
+                    class:disabled={index === 0}
                     on:click={() => moveLayerUp(layer.name)}
-                    title="Move up"
+                    title="Move forward (above other layers)"
+                    disabled={index === 0}
                   >
-                    ⬆️
+                    🔼
                   </button>
-                  <button 
-                    class="move-button" 
+                  <button
+                    class="move-button"
+                    class:disabled={index === layerInfo.length - 1}
                     on:click={() => moveLayerDown(layer.name)}
-                    title="Move down"
+                    title="Move backward (below other layers)"
+                    disabled={index === layerInfo.length - 1}
                   >
-                    ⬇️
+                    🔽
                   </button>
                 </div>
               </div>
@@ -123,13 +157,13 @@
                     max="1"
                     step="0.1"
                     value={layer.opacity}
-                    on:input={(e) => updateLayerOpacity(layer.name, parseFloat(e.target.value))}
+                    on:input={(e) => updateLayerOpacity(layer.name, parseFloat(e.currentTarget.value))}
                   />
                   <span class="opacity-value">{Math.round(layer.opacity * 100)}%</span>
                 </div>
 
                 <div class="z-index-display">
-                  Z-Index: {layer.zIndex}
+                  Z-Index: <span class="z-index-value">{layer.zIndex}</span>
                 </div>
               </div>
             </div>
@@ -256,8 +290,15 @@
     transition: background-color 0.2s;
   }
 
-  .move-button:hover {
+  .move-button:hover:not(:disabled) {
     background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .move-button:disabled,
+  .move-button.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
   }
 
   .layer-properties {
@@ -291,6 +332,12 @@
     font-size: 11px;
   }
 
+  .z-index-value {
+    color: #4CAF50;
+    font-weight: bold;
+    font-family: 'Roboto Mono', monospace;
+  }
+
   /* Scrollbar styling */
   .panel-content::-webkit-scrollbar {
     width: 6px;
@@ -308,4 +355,4 @@
   .panel-content::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.5);
   }
-</style> 
+</style>

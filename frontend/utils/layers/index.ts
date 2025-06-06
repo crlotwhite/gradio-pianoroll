@@ -20,4 +20,4 @@ export * from '../LayerSystem';
 export * from './GridLayer';
 export * from './NotesLayer';
 export * from './PlayheadLayer';
-export * from './WaveformLayer'; 
+export * from './WaveformLayer';

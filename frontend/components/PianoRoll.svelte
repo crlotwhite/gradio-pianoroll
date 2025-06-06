@@ -9,7 +9,6 @@
   import KeyboardComponent from './KeyboardComponent.svelte';
   import GridComponent from './GridComponent.svelte';
   import TimeLineComponent from './TimeLineComponent.svelte';
-  import WaveformComponent from './WaveformComponent.svelte';
   import PlayheadComponent from './PlayheadComponent.svelte';
   import DebugComponent from './DebugComponent.svelte';
   import { AudioEngineManager } from '../utils/audioEngine';
@@ -75,10 +74,6 @@
   let isPlaying = false;
   let isRendering = false;
   let currentFlicks = 0;
-  let waveformOpacity = 0.7; // Initial opacity for waveform
-
-  // References to components
-  let waveformComponent: any; // Reference to waveform component
 
   // Zoom level (pixels per beat) - now controlled from parent
   export let pixelsPerBeat = 80;
@@ -185,13 +180,7 @@
       return;
     }
 
-    // Synthesizer Demo에서는 초기 자동 렌더링 방지
-    // elem_id가 "piano_roll_synth"인 경우 사용자가 명시적으로 요청할 때만 렌더링
-    if (elem_id === "piano_roll_synth" && !(curve_data && (curve_data as any).waveform_data) && !audio_data) {
-      console.log("Synthesizer Demo: 자동 렌더링 건너뛰기 - 백엔드 오디오 생성 대기");
-      return;
-    }
-
+    // console.log("🎵 Frontend audio rendering started");
     isRendering = true;
     try {
       // Initialize component-specific audio engine
@@ -201,10 +190,8 @@
       // Pass pixelsPerBeat to ensure proper alignment between waveform and notes
       await audioEngine.renderNotes(notes, tempo, totalLengthInBeats, pixelsPerBeat);
 
-      // Update waveform visualization
-      if (waveformComponent) {
-        waveformComponent.forceRedraw();
-      }
+      // console.log("✅ Frontend audio rendering completed");
+      // Waveform is now updated through layer system automatically
     } catch (error) {
       console.error('Error rendering audio:', error);
     } finally {
@@ -298,7 +285,7 @@
       console.log("Audio buffer channels:", backendAudioBuffer.numberOfChannels);
 
       return backendAudioBuffer;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Backend audio decoding error:', error);
       console.error('Error details:', {
         name: error.name,
@@ -389,7 +376,7 @@
           console.warn("⚠️ Start position is beyond audio duration, not starting playback");
           isPlaying = false;
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("❌ Error starting backend audio playback:", error);
         console.error('Error details:', {
           name: error.name,
@@ -641,8 +628,9 @@
     // Set up playhead position update callback
     audioEngine.setPlayheadUpdateCallback(updatePlayheadPosition);
 
-    // Initial audio render
-    if (notes.length > 0) {
+    // Initial audio render - 백엔드 오디오를 사용하지 않는 경우 항상 렌더링
+    if (!use_backend_audio) {
+      console.log("🎵 Initial frontend audio rendering on mount");
       renderAudio();
     }
   });
@@ -678,6 +666,12 @@
     }).catch((error) => {
       console.error("❌ Failed to initialize backend audio:", error);
     });
+  }
+
+  // Reactive statement to start frontend rendering when switching from backend to frontend
+  $: if (!use_backend_audio && audioEngine) {
+    console.log("🔄 Switched to frontend audio - starting automatic rendering");
+    renderAudio();
   }
 </script>
 
@@ -728,21 +722,8 @@
       />
 
       <div class="grid-container" style="position: relative;">
-        <!-- Waveform positioned below the grid but above the grid lines -->
-        <WaveformComponent
-          bind:this={waveformComponent}
-          width={width - keyboardWidth}
-          height={(height - 40 - timelineHeight) / 2}
-          {horizontalScroll}
-          {pixelsPerBeat}
-          {tempo}
-          opacity={waveformOpacity}
-          top={(height - 100 - timelineHeight) / 2}
-          {audio_data}
-          {curve_data}
-          {use_backend_audio}
-          {elem_id}
-        />
+        <!-- Waveform is now handled by the layer system in GridComponent -->
+        <!-- <WaveformComponent> has been integrated into WaveformLayer -->
 
         <!-- Grid component containing notes and grid lines -->
         <GridComponent
@@ -760,6 +741,10 @@
           {isPlaying}
           {sampleRate}
           {ppqn}
+          {elem_id}
+          {audio_data}
+          {curve_data}
+          {use_backend_audio}
           on:scroll={handleGridScroll}
           on:noteChange={handleNoteChange}
           on:lyricInput={handleLyricInput}

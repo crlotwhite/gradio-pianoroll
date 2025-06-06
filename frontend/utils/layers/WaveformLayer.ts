@@ -9,7 +9,7 @@ export class WaveformLayer extends BaseLayer {
   // Waveform colors
   private readonly WAVEFORM_COLOR = '#4287f5';
   private readonly BACKEND_WAVEFORM_COLOR = '#4CAF50';
-  private readonly BACKGROUND_COLOR = 'rgba(30, 30, 30, 0.4)';
+  private readonly BACKGROUND_COLOR = 'rgba(20, 20, 20, 0.05)'; // 매우 투명한 배경으로 변경
 
   private audioBuffer: AudioBuffer | null = null;
   private preCalculatedWaveform: Array<{x: number, min: number, max: number}> | null = null;
@@ -38,39 +38,51 @@ export class WaveformLayer extends BaseLayer {
   render(context: LayerRenderContext): void {
     const { ctx, width, height, horizontalScroll, pixelsPerBeat, tempo } = context;
 
-    // Clear the layer area
-    ctx.clearRect(0, 0, width, height);
+    // Calculate waveform position and size (lower half of the grid)
+    const waveformHeight = height / 3; // Use 1/3 of total height
+    const waveformTop = height - waveformHeight - 50; // Position in lower area
 
-    // Draw background
-    ctx.fillStyle = this.BACKGROUND_COLOR;
-    ctx.fillRect(0, 0, width, height);
+    // Save current context state
+    ctx.save();
+
+    // Set clipping region for waveform
+    ctx.beginPath();
+    ctx.rect(0, waveformTop, width, waveformHeight);
+    ctx.clip();
+
+    // Don't clear or draw background - keep it transparent
 
     // Draw center line
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(0, height / 2);
-    ctx.lineTo(width, height / 2);
+    const centerY = waveformTop + waveformHeight / 2;
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(width, centerY);
     ctx.stroke();
 
     // Render waveform data if available
     if (this.preCalculatedWaveform) {
-      this.drawPreCalculatedWaveform(ctx, width, height, horizontalScroll);
+      this.drawPreCalculatedWaveform(ctx, width, waveformHeight, waveformTop, horizontalScroll);
     } else if (this.audioBuffer) {
-      this.drawAudioBufferWaveform(ctx, width, height, horizontalScroll, pixelsPerBeat, tempo);
+      this.drawAudioBufferWaveform(ctx, width, waveformHeight, waveformTop, horizontalScroll, pixelsPerBeat, tempo);
     } else {
-      this.drawEmptyWaveform(ctx, width, height);
+      this.drawEmptyWaveform(ctx, width, waveformHeight, waveformTop);
     }
+
+    // Restore context state
+    ctx.restore();
   }
 
-  private drawPreCalculatedWaveform(
-    ctx: CanvasRenderingContext2D, 
-    width: number, 
-    height: number, 
+    private drawPreCalculatedWaveform(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    top: number,
     horizontalScroll: number
   ): void {
     if (!this.preCalculatedWaveform || this.preCalculatedWaveform.length === 0) {
-      this.drawEmptyWaveform(ctx, width, height);
+      this.drawEmptyWaveform(ctx, width, height, top);
       return;
     }
 
@@ -79,7 +91,7 @@ export class WaveformLayer extends BaseLayer {
     ctx.lineWidth = 1.5;
     ctx.beginPath();
 
-    const centerY = height / 2;
+    const centerY = top + height / 2;
     let hasDrawnAnyPoint = false;
 
     // Sort waveform data by x coordinate
@@ -94,8 +106,8 @@ export class WaveformLayer extends BaseLayer {
 
       if (dataPoint) {
         // Map sample values to y-coordinates (-1 to 1 range to canvas height)
-        const minY = centerY + dataPoint.min * centerY * 0.9;
-        const maxY = centerY + dataPoint.max * centerY * 0.9;
+        const minY = centerY + dataPoint.min * (height / 2) * 0.9;
+        const maxY = centerY + dataPoint.max * (height / 2) * 0.9;
 
         if (!hasDrawnAnyPoint) {
           ctx.moveTo(screenX, minY);
@@ -117,6 +129,7 @@ export class WaveformLayer extends BaseLayer {
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
+    top: number,
     horizontalScroll: number,
     pixelsPerBeat: number,
     tempo: number
@@ -140,7 +153,7 @@ export class WaveformLayer extends BaseLayer {
     ctx.beginPath();
 
     // Map audio samples to canvas coordinates
-    const centerY = height / 2;
+    const centerY = top + height / 2;
     let lastX = -1;
     let lastMaxY = centerY;
     let lastMinY = centerY;
@@ -162,8 +175,8 @@ export class WaveformLayer extends BaseLayer {
       }
 
       // Map sample values to y-coordinates
-      const minY = centerY + min * centerY * 0.9;
-      const maxY = centerY + max * centerY * 0.9;
+      const minY = centerY + min * (height / 2) * 0.9;
+      const maxY = centerY + max * (height / 2) * 0.9;
 
       // Only draw if different from last pixel to optimize performance
       if (x === 0 || lastX !== x - 1 || lastMinY !== minY || lastMaxY !== maxY) {
@@ -184,17 +197,17 @@ export class WaveformLayer extends BaseLayer {
     ctx.stroke();
   }
 
-  private drawEmptyWaveform(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  private drawEmptyWaveform(ctx: CanvasRenderingContext2D, width: number, height: number, top: number): void {
     // Draw "No waveform" message
     ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
     ctx.font = '14px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('웨이브폼이 없습니다. "Synthesize Audio" 버튼을 클릭하세요.', width / 2, height / 2);
+    ctx.fillText('웨이브폼이 없습니다. "Synthesize Audio" 버튼을 클릭하세요.', width / 2, top + height / 2);
   }
 
   // Helper methods
   hasWaveformData(): boolean {
     return this.audioBuffer !== null || (this.preCalculatedWaveform !== null && this.preCalculatedWaveform.length > 0);
   }
-} 
+}

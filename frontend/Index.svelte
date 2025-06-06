@@ -87,7 +87,7 @@
 			segment_data = Array.isArray(value.segment_data) ? value.segment_data : null;
 		}
 		if ('use_backend_audio' in value && value.use_backend_audio !== undefined) {
-			console.log("🔊 Backend audio flag:", value.use_backend_audio);
+			// console.log("🔊 Backend audio flag:", value.use_backend_audio);
 			use_backend_audio = typeof value.use_backend_audio === 'boolean' ? value.use_backend_audio : false;
 		}
 	}
