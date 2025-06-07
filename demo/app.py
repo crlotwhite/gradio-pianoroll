@@ -670,6 +670,7 @@ def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
             # PYIN 알고리즘 사용 (더 정확하지만 느림)
             f0, voiced_flag, voiced_probs = librosa.pyin(
                 y,
+                sr=sr,
                 fmin=librosa.note_to_hz('C2'),  # 약 65Hz
                 fmax=librosa.note_to_hz('C7')   # 약 2093Hz
             )
