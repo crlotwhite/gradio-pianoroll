@@ -75,10 +75,10 @@ class PianoRoll(Component):
         """
         Parameters:
             value: default MIDI notes data to provide in piano roll. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
-            audio_data: 백엔드에서 전달받은 오디오 데이터 (base64 인코딩된 오디오 또는 URL)
-            curve_data: 백엔드에서 전달받은 선형 데이터 (피치 곡선, loudness 곡선 등)
-            segment_data: 백엔드에서 전달받은 구간 데이터 (발음 타이밍 등)
-            use_backend_audio: 백엔드 오디오를 사용할지 여부 (True시 프론트엔드 오디오 엔진 비활성화)
+            audio_data: Backend audio data (base64 encoded audio or URL)
+            curve_data: Backend curve data (pitch curve, loudness curve, etc.)
+            segment_data: Backend segment data (pronunciation timing, etc.)
+            use_backend_audio: Whether to use backend audio engine (True disables frontend audio engine)
             label: the label for this component, displayed above the component if `show_label` is `True` and is also used as the header if there are a table of examples for this component. If None and used in a `gr.Interface`, the label will be the name of the parameter this component corresponds to.
             every: Continously calls `value` to recalculate it if `value` is a function (has no effect otherwise). Can provide a Timer whose tick resets `value`, or a float that provides the regular interval for the reset Timer.
             inputs: Components that are used as inputs to calculate `value` if `value` is a function (has no effect otherwise). `value` is recalculated any time the inputs change.
@@ -230,10 +230,10 @@ class PianoRoll(Component):
                 if "endSeconds" not in note:
                     note["endSeconds"] = note.get("startSeconds", 0) + note.get("durationSeconds", 0)
 
-        # 백엔드 데이터 속성들도 함께 전달
+        # Send backend data attributes along with the value
         if value and isinstance(value, dict):
-            # value에 이미 있는 백엔드 데이터를 우선하고, 없으면 컴포넌트 속성에서 가져옴
-            # 이렇게 하면 컴포넌트 인스턴스별로 독립적인 백엔드 설정이 가능함
+            # Prioritize backend data already in value, otherwise get from component attributes
+            # This allows for independent backend settings per component instance
 
             if "audio_data" not in value or value["audio_data"] is None:
                 if hasattr(self, 'audio_data') and self.audio_data:
@@ -253,7 +253,7 @@ class PianoRoll(Component):
                 else:
                     value["use_backend_audio"] = False
 
-            # 디버깅용 로그 추가
+            # Add debug logging
             print(f"🔊 [postprocess] Backend audio data processed:")
             print(f"   - audio_data present: {bool(value.get('audio_data'))}")
             print(f"   - use_backend_audio: {value.get('use_backend_audio', False)}")
@@ -385,7 +385,7 @@ class PianoRoll(Component):
                     "description": "Pulses Per Quarter Note for MIDI tick calculations",
                     "default": 480
                 },
-                # 백엔드 데이터 전달용 속성들
+                # Backend data attributes for passing
                 "audio_data": {
                     "type": "string",
                     "description": "Backend audio data (base64 encoded audio or URL)",
@@ -461,7 +461,7 @@ class PianoRoll(Component):
         if use_backend_audio is not None:
             self.use_backend_audio = use_backend_audio
 
-        # _attrs도 업데이트
+        # Update _attrs as well
         self._attrs.update({
             "audio_data": self.audio_data,
             "curve_data": self.curve_data,
