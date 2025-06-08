@@ -1,5 +1,7 @@
 ---
-tags: [gradio-custom-component, ]
+tags:
+- gradio-custom-component
+- Audio
 title: gradio_pianoroll
 short_description: A PianoRoll Component for
 colorFrom: blue
@@ -7,6 +9,8 @@ colorTo: yellow
 sdk: gradio
 pinned: false
 app_file: space.py
+license: apache-2.0
+emoji: 🎹
 ---
 
 # `gradio_pianoroll`
