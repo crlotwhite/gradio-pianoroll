@@ -1015,13 +1015,13 @@ def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=
                 # 시간(초)을 픽셀 X 좌표로 변환
                 x_pixel = time * (tempo / 60) * pixelsPerBeat
 
-                # Loudness 값을 0-100 픽셀 범위로 변환 (100픽셀 높이의 독립 영역)
+                # Loudness 값을 0-2560 픽셀 범위로 변환 (전체 grid canvas 높이 사용)
                 normalized_value = (value - actual_y_min) / y_range
-                y_pixel = normalized_value * 100  # 0-100 픽셀 범위
+                y_pixel = normalized_value * 2560  # 0-2560 픽셀 범위 (128개 노트 * 20픽셀 높이)
 
                 data_points.append({
                     "x": float(x_pixel),
-                    "y": float(max(0, min(100, y_pixel)))  # 범위 제한
+                    "y": float(max(0, min(2560, y_pixel)))  # 범위 제한
                 })
 
         if not data_points:
@@ -1037,11 +1037,11 @@ def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=
                 "color": "#4ECDC4",  # 청록색
                 "lineWidth": 2,
                 "yMin": 0,
-                "yMax": 100,  # 100픽셀 독립 영역
-                "position": "bottom",  # 하단에 별도 영역으로 표시
+                "yMax": 2560,  # 전체 grid canvas 높이 (128개 노트 * 20픽셀)
+                "position": "overlay",  # 전체 영역에 오버레이로 표시
                 "renderMode": "independent_range",  # 독립적인 Y축 범위
                 "visible": True,
-                "opacity": 0.8,
+                "opacity": 0.6,
                 "data": data_points,
                 # 메타데이터
                 "dataType": "loudness",
@@ -1058,7 +1058,7 @@ def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=
         print(f"📊 Loudness LineData 생성 완료: {len(data_points)}개 포인트")
         print(f"   - Loudness 범위: {min_value:.1f}{unit} ~ {max_value:.1f}{unit}")
         print(f"   - Y축 범위: {actual_y_min} ~ {actual_y_max}")
-        print(f"   - 렌더링 모드: 독립적인 범위")
+        print(f"   - 렌더링 모드: 전체 grid canvas 높이 (independent_range)")
 
         return line_data
 
@@ -1092,12 +1092,12 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
                 # 시간(초)을 픽셀 X 좌표로 변환
                 x_pixel = time * (tempo / 60) * pixelsPerBeat
 
-                # Voice/Unvoice 값을 0-100 픽셀 범위로 변환 (100픽셀 높이의 독립 영역)
-                y_pixel = value * 100  # 0-1 범위를 0-100 픽셀로
+                # Voice/Unvoice 값을 0-2560 픽셀 범위로 변환 (전체 grid canvas 높이 사용)
+                y_pixel = value * 2560  # 0-1 범위를 0-2560 픽셀로
 
                 data_points.append({
                     "x": float(x_pixel),
-                    "y": float(max(0, min(100, y_pixel)))  # 범위 제한
+                    "y": float(max(0, min(2560, y_pixel)))  # 범위 제한
                 })
 
         if not data_points:
@@ -1114,11 +1114,11 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
                 "color": "#9B59B6",  # 보라색
                 "lineWidth": 2,
                 "yMin": 0,
-                "yMax": 100,  # 100픽셀 독립 영역
-                "position": "bottom",  # 하단에 별도 영역으로 표시
+                "yMax": 2560,  # 전체 grid canvas 높이 (128개 노트 * 20픽셀)
+                "position": "overlay",  # 전체 영역에 오버레이로 표시
                 "renderMode": "independent_range",  # 독립적인 Y축 범위
                 "visible": True,
-                "opacity": 0.8,
+                "opacity": 0.6,
                 "data": data_points,
                 # 메타데이터
                 "dataType": "voicing",
@@ -1136,7 +1136,7 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
         print(f"📊 Voice/Unvoice LineData 생성 완료: {len(data_points)}개 포인트")
         print(f"   - Voice/Unvoice 범위: {min_value:.3f} ~ {max_value:.3f} ({unit})")
         print(f"   - Voiced 비율: {voiced_ratio:.1%}")
-        print(f"   - 렌더링 모드: 독립적인 범위")
+        print(f"   - 렌더링 모드: 전체 grid canvas 높이 (independent_range)")
 
         return line_data
 
@@ -1221,29 +1221,59 @@ def synthesize_and_analyze_features(piano_roll, attack, decay, sustain, release,
         # 피아노롤 업데이트
         updated_piano_roll = piano_roll.copy() if piano_roll else {}
 
-        # 기존 오디오 데이터 추가
+        # 백엔드 오디오 데이터 추가
         audio_base64 = audio_to_base64_wav(audio_data, SAMPLE_RATE)
         updated_piano_roll['audio_data'] = audio_base64
         updated_piano_roll['use_backend_audio'] = True
 
-        # 곡선 데이터 생성
+        # 템포와 픽셀당 비트 정보
         tempo = updated_piano_roll.get('tempo', 120)
         pixels_per_beat = updated_piano_roll.get('pixelsPerBeat', 80)
 
+        # 웨이브폼 데이터 계산 (백엔드 오디오용)
+        waveform_data = calculate_waveform_data(audio_data, pixels_per_beat, tempo)
+
+        # 곡선 데이터 생성 (오디오 특성 분석 결과)
         line_data = create_multi_feature_line_data(
             features, tempo, pixels_per_beat,
             loudness_y_min, loudness_y_max, loudness_use_db, voicing_use_probs
         )
 
+        # 통합 곡선 데이터 설정 (오디오 특성 + 웨이브폼)
+        curve_data = {}
+
+        # 오디오 특성 곡선 추가
+        if line_data:
+            curve_data.update(line_data)
+
+        # 웨이브폼 데이터 추가
+        if waveform_data:
+            curve_data['waveform_data'] = waveform_data
+            print(f"웨이브폼 데이터 생성: {len(waveform_data)} 포인트")
+
+        # 피아노롤에 곡선 데이터 설정
+        if curve_data:
+            updated_piano_roll['curve_data'] = curve_data
+
+        # line_data도 별도로 설정 (LineLayer용)
         if line_data:
             updated_piano_roll['line_data'] = line_data
+
+        print(f"🔊 [synthesize_and_analyze_features] Setting backend audio data:")
+        print(f"   - audio_data length: {len(audio_base64) if audio_base64 else 0}")
+        print(f"   - use_backend_audio: {updated_piano_roll['use_backend_audio']}")
+        print(f"   - waveform points: {len(waveform_data) if waveform_data else 0}")
+        print(f"   - feature curves: {len(line_data) if line_data else 0}")
 
         # 상태 메시지 생성
         status_parts = [f"오디오 합성 완료 ({wave_type} 파형)", analysis_status]
 
+        if waveform_data:
+            status_parts.append(f"웨이브폼 시각화 완료 ({len(waveform_data)}개 포인트)")
+
         if line_data:
             curve_count = len(line_data)
-            status_parts.append(f"{curve_count}개 곡선 시각화 완료")
+            status_parts.append(f"{curve_count}개 특성 곡선 시각화 완료")
 
         status_message = " | ".join(status_parts)
 
@@ -2128,7 +2158,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         width=1000,
                         value=initial_value_features,
                         elem_id="piano_roll_features",  # 고유 ID 부여
-                        use_backend_audio=False  # 초기에는 프론트엔드 엔진 사용
+                        use_backend_audio=True  # 백엔드 오디오 엔진 사용
                     )
             with gr.Row():
                 with gr.Column():
