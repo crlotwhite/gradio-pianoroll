@@ -37,12 +37,18 @@ classifiers = [
 # This will make it easy for people to find your deployed demo or source code when they
 # encounter your project in the wild.
 
-# [project.urls]
-# repository = "https://github.com/crlotwhite/gradio-pianoroll"
-# space = "https://huggingface.co/spaces/crlotwhite/gradio_pianoroll"
+[project.urls]
+repository = "https://github.com/crlotwhite/gradio-pianoroll"
+space = "https://huggingface.co/spaces/crlotwhite/gradio_pianoroll"
 
 [project.optional-dependencies]
 dev = ["build", "twine"]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocs-include-markdown-plugin>=6.0.0",
+    "pymdown-extensions>=10.0.0"
+]
 
 [tool.hatch.build]
 artifacts = ["/backend/gradio_pianoroll/templates", "*.pyi"]

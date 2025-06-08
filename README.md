@@ -14,7 +14,7 @@ emoji: 🎹
 ---
 
 # `gradio_pianoroll`
-<a href="https://pypi.org/project/gradio_pianoroll/" target="_blank"><img alt="PyPI - Version" src="https://img.shields.io/pypi/v/gradio_pianoroll"></a>  
+<a href="https://pypi.org/project/gradio_pianoroll/" target="_blank"><img alt="PyPI - Version" src="https://img.shields.io/pypi/v/gradio_pianoroll"></a>
 
 A PianoRoll Component for Gradio.
 
@@ -2736,6 +2736,3 @@ int | None
 | `pause` | This listener is triggered when the media in the PianoRoll stops for any reason. |
 | `stop` | This listener is triggered when the user reaches the end of the media playing in the PianoRoll. |
 | `clear` | This listener is triggered when the user clears the PianoRoll using the clear button for the component. |
-
-
-

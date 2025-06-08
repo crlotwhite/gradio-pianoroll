@@ -1,0 +1,85 @@
+site_name: Gradio PianoRoll Documentation
+site_description: A comprehensive guide to using the Gradio PianoRoll component
+site_url: https://crlotwhite.github.io/gradio-pianoroll/
+repo_url: https://github.com/crlotwhite/gradio-pianoroll
+repo_name: crlotwhite/gradio-pianoroll
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - include-markdown
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+
+nav:
+  - Home: index.md
+  - Quick Start:
+    - Installation: installation/index.md
+    - Basic Usage: quickstart/index.md
+  - Examples:
+    - Overview: examples/index.md
+    - Basic Demo: examples/basic-usage.md
+    - Synthesizer: examples/synthesizer.md
+    - Phoneme Processing: examples/phoneme-processing.md
+    - F0 Analysis: examples/f0-analysis.md
+    - Audio Feature Analysis: examples/audio-features.md
+  - Guides:
+    - Line Layer Usage: guides/line-layer.md
+    - Synthesizer Guide: guides/synthesizer.md
+    - Timing Conversions: guides/timing-conversions.md
+    - F0 Demo Setup: guides/f0-demo-setup.md
+  - API Reference:
+    - Components: api/components.md
+    - Events: api/events.md
+  - Development:
+    - Contributing: development/contributing.md
+    - Building: development/building.md
+
+docs_dir: docs
+site_dir: site
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/crlotwhite/gradio-pianoroll
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/gradio-pianoroll/
