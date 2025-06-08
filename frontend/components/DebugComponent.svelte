@@ -4,28 +4,25 @@
 -->
 <script lang="ts">
   import { flicksToBeats, formatFlicks } from '../utils/flicks';
+  import type { DebugComponentProps } from '../types/component';
+  type NoteType = NonNullable<DebugComponentProps['notes']>[number];
 
   // Props
-  export let currentFlicks = 0;
-  export let tempo = 120;
-  export let notes: Array<{
-    id: string,
-    start: number,
-    duration: number,
-    pitch: number,
-    velocity: number,
-    lyric?: string,
-    phoneme?: string
-  }> = [];
-  export let isPlaying = false;
-  export let isRendering = false;
+  /** @type {number} */
+  export let currentFlicks: number = 0;
+  /** @type {number} */
+  export let tempo: number = 120;
+  /** @type {Array<DebugComponentProps['notes'][0]>} */
+  export let notes: NoteType[] = [];
+  /** @type {boolean} */
+  export let isPlaying: boolean = false;
+  /** @type {boolean} */
+  export let isRendering: boolean = false;
 
-  // Calculated values
+  // 내부 계산값
   $: currentBeats = flicksToBeats(currentFlicks, tempo);
   $: currentMeasure = Math.floor(currentBeats / 4) + 1;
   $: currentBeat = (currentBeats % 4) + 1;
-
-  // Get the currently playing notes based on position
   $: playingNotes = notes.filter(note => {
     const noteStartBeats = note.start / 100;
     const noteDurationBeats = note.duration / 100;

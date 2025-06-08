@@ -3,33 +3,29 @@
 -->
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
-  // import type { Note } from '../../types/layer'; // Note 타입 등 필요시 이 경로에서 import
+  import {
+    NOTES,
+    TOTAL_KEYS,
+    calculateKeyPositions,
+    WHITE_KEY_HEIGHT,
+    BLACK_KEY_HEIGHT,
+    getBlackKeyWidth
+  } from '../utils/keyboardUtils';
+  import { KeyboardAudioEngine } from '../utils/keyboardAudioEngine';
 
   // Props
-  export let keyboardWidth = 120;  // Width of the keyboard
-  export let height = 560;  // Height of the keyboard component
-  export let verticalScroll = 0;  // Vertical scroll position synced with GridComponent
+  export let keyboardWidth = 120;
+  export let height = 560;
+  export let verticalScroll = 0;
 
   // Constants
-  const WHITE_KEY_HEIGHT = 20;  // Height of a white key
-  const BLACK_KEY_HEIGHT = 12;  // Height of a black key
-  const BLACK_KEY_WIDTH = keyboardWidth * 0.6;  // Width of black keys (60% of keyboard width)
+  const BLACK_KEY_WIDTH = getBlackKeyWidth(keyboardWidth);
 
-  // Define note names
-  const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  // Key positions (computed)
+  let keyPositions = calculateKeyPositions(keyboardWidth);
 
-  // Calculate total key range (MIDI range: 0-127)
-  const TOTAL_KEYS = 128;
-  const keyPositions: Array<{
-    note: string,
-    octave: number,
-    isBlack: boolean,
-    y: number
-  }> = [];
-
-  // Audio for note preview
-  let audioContext: AudioContext | null = null;
-  let canPlay = false;
+  // Audio engine instance
+  const audioEngine = new KeyboardAudioEngine();
 
   // DOM References
   let canvas: HTMLCanvasElement;
@@ -37,73 +33,17 @@
 
   const dispatch = createEventDispatcher();
 
-  // Initialize audio context
-  function initAudio() {
-    try {
-      audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      canPlay = true;
-    } catch (e) {
-      console.error('Web Audio API is not supported in this browser', e);
-      canPlay = false;
-    }
-  }
-
   // Play a preview note
   function playNote(midiNote: number) {
-    if (!audioContext || !canPlay) return;
-
-    const attackTime = 0.01;
-    const releaseTime = 0.5;
-    const frequency = 440 * Math.pow(2, (midiNote - 69) / 12);
-
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.type = 'sine';
-    oscillator.frequency.value = frequency;
-
-    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + attackTime);
-    gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + attackTime + releaseTime);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + attackTime + releaseTime);
-  }
-
-  // Calculate positions for all keys
-  function calculateKeyPositions() {
-    keyPositions.length = 0;
-    for (let midiNote = TOTAL_KEYS - 1; midiNote >= 0; midiNote--) {
-      const octave = Math.floor(midiNote / 12) - 1;
-      const noteIndex = midiNote % 12;
-      const note = NOTES[noteIndex];
-      const isBlack = note.includes('#');
-      const y = (TOTAL_KEYS - 1 - midiNote) * WHITE_KEY_HEIGHT;
-
-      keyPositions.push({
-        note,
-        octave,
-        isBlack,
-        y
-      });
-    }
+    audioEngine.playNote(midiNote);
   }
 
   // Draw the piano keyboard
   function drawKeyboard() {
     if (!ctx || !canvas) return;
-
-    // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Adjust based on vertical scroll
     const startIndex = Math.floor(verticalScroll / WHITE_KEY_HEIGHT);
     const visibleKeysCount = Math.ceil(height / WHITE_KEY_HEIGHT) + 1;
-
-    // Draw visible white keys first (so black keys can overlay)
     for (let i = startIndex; i < Math.min(startIndex + visibleKeysCount, keyPositions.length); i++) {
       const key = keyPositions[i];
       if (!key.isBlack) {
@@ -111,8 +51,6 @@
         drawWhiteKey(key.note, key.octave, y);
       }
     }
-
-    // Then draw black keys on top
     for (let i = startIndex; i < Math.min(startIndex + visibleKeysCount, keyPositions.length); i++) {
       const key = keyPositions[i];
       if (key.isBlack) {
@@ -124,15 +62,11 @@
 
   function drawWhiteKey(note: string, octave: number, y: number) {
     if (!ctx) return;
-
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#cccccc';
     ctx.lineWidth = 1;
-
     ctx.fillRect(0, y, keyboardWidth, WHITE_KEY_HEIGHT);
     ctx.strokeRect(0, y, keyboardWidth, WHITE_KEY_HEIGHT);
-
-    // Draw note name
     ctx.fillStyle = '#333333';
     ctx.font = '10px Arial';
     ctx.textAlign = 'right';
@@ -142,11 +76,8 @@
 
   function drawBlackKey(note: string, octave: number, y: number) {
     if (!ctx) return;
-
     ctx.fillStyle = '#333333';
     ctx.fillRect(0, y, BLACK_KEY_WIDTH, BLACK_KEY_HEIGHT);
-
-    // Draw note name on black key
     ctx.fillStyle = '#ffffff';
     ctx.font = '8px Arial';
     ctx.textAlign = 'right';
@@ -154,22 +85,16 @@
     ctx.fillText(`${note}${octave}`, BLACK_KEY_WIDTH - 6, y + BLACK_KEY_HEIGHT / 2);
   }
 
-  // Handle mouse events
   function handleMouseDown(event: MouseEvent) {
     if (!canvas) return;
-
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top + verticalScroll;
-
-    // Find which key was clicked
     for (let i = 0; i < keyPositions.length; i++) {
       const key = keyPositions[i];
       const keyHeight = key.isBlack ? BLACK_KEY_HEIGHT : WHITE_KEY_HEIGHT;
       const keyWidth = key.isBlack ? BLACK_KEY_WIDTH : keyboardWidth;
-
       if (y >= key.y && y < key.y + keyHeight && x <= keyWidth) {
-        // Calculate MIDI note number
         const midiNote = TOTAL_KEYS - 1 - i;
         playNote(midiNote);
         break;
@@ -177,38 +102,25 @@
     }
   }
 
-  // Set up the component
   onMount(() => {
-    // Get canvas context
     ctx = canvas.getContext('2d');
-
-    // Set up canvas size
     canvas.width = keyboardWidth;
     canvas.height = height;
-
-    // Calculate key positions
-    calculateKeyPositions();
-
-    // Draw initial keyboard
+    keyPositions = calculateKeyPositions(keyboardWidth);
     drawKeyboard();
-
-    // Initialize audio
-    initAudio();
-
-    // Note: We don't need to set the initial scroll position here
-    // as it will be controlled by the GridComponent through the verticalScroll prop
+    audioEngine.init();
   });
 
-  // Update when props change
+  onDestroy(() => {
+    audioEngine.dispose();
+  });
+
   $: {
     if (ctx && canvas) {
       drawKeyboard();
     }
   }
-
-  // Specifically update when vertical scroll changes
   $: if (verticalScroll !== undefined && ctx && canvas) {
-    console.log('🎹 KeyboardComponent: verticalScroll changed to', verticalScroll);
     drawKeyboard();
   }
 </script>

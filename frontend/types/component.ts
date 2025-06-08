@@ -47,3 +47,19 @@ export interface LayerControlPanelProps {
   visible?: boolean;
 }
 
+export interface DebugComponentProps {
+  currentFlicks?: number;
+  tempo?: number;
+  notes?: Array<{
+    id: string;
+    start: number;
+    duration: number;
+    pitch: number;
+    velocity: number;
+    lyric?: string;
+    phoneme?: string;
+  }>;
+  isPlaying?: boolean;
+  isRendering?: boolean;
+}
+

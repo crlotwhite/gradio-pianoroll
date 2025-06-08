@@ -12,6 +12,7 @@
   import PlayheadComponent from './PlayheadComponent.svelte';
   import DebugComponent from './DebugComponent.svelte';
   import { AudioEngineManager } from '../utils/audioEngine';
+  import { BackendAudioEngine } from '../utils/backendAudioEngine';
   import { beatsToFlicks, flicksToBeats, formatFlicks } from '../utils/flicks';
   import { createEventDispatcher } from 'svelte';
   /**
@@ -118,13 +119,8 @@
 
   // 컴포넌트별 오디오 엔진 인스턴스
   $: audioEngine = AudioEngineManager.getInstance(elem_id || 'default');
-
-  // Backend audio playback state
-  let backendAudioContext: AudioContext | null = null;
-  let backendAudioBuffer: AudioBuffer | null = null;
-  let backendAudioSource: AudioBufferSourceNode | null = null;
-  let backendPlayStartTime = 0;
-  let backendPlayheadInterval: number | null = null;
+  // Backend audio engine 인스턴스
+  const backendAudioEngine = new BackendAudioEngine();
 
   // 전체 데이터 변경 이벤트 발생
   function dispatchDataChange() {
@@ -212,251 +208,48 @@
     }
   }
 
-  async function initBackendAudio() {
-    console.log("🎵 Initializing backend audio context...");
-    if (!backendAudioContext) {
-      try {
-        backendAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        console.log("✅ Backend audio context created successfully");
-        console.log("Initial audio context state:", backendAudioContext.state);
+  // 기존 backendAudioContext, backendAudioBuffer, backendAudioSource, backendPlayStartTime, backendPlayheadInterval 등 상태 제거
 
-        // AudioContext가 suspended 상태라면 resume (사용자 상호작용 후에만 가능)
-        if (backendAudioContext.state === 'suspended') {
-          console.log("🔄 Resuming suspended audio context...");
-          await backendAudioContext.resume();
-          console.log("✅ Audio context resumed, new state:", backendAudioContext.state);
-        }
-      } catch (error) {
-        console.error("❌ Failed to create backend audio context:", error);
-        throw error;
-      }
-    } else {
-      console.log("✅ Backend audio context already exists, state:", backendAudioContext.state);
+  // 기존 initBackendAudio, decodeBackendAudio, startBackendAudioPlayback, pauseBackendAudio, stopBackendAudio, updateBackendPlayhead, downloadBackendAudio 함수 제거
 
-      // 기존 컨텍스트가 있어도 suspended 상태일 수 있음
-      if (backendAudioContext.state === 'suspended') {
-        console.log("🔄 Resuming existing suspended audio context...");
-        try {
-          await backendAudioContext.resume();
-          console.log("✅ Audio context resumed, new state:", backendAudioContext.state);
-        } catch (error) {
-          console.error("❌ Failed to resume audio context:", error);
-          throw error;
-        }
-      }
+  // 기존 함수 대체
+  async function handleBackendAudioInit() {
+    if (audio_data) {
+      await backendAudioEngine.initBackendAudio();
+      await backendAudioEngine.decodeBackendAudio(audio_data);
     }
   }
 
-  async function decodeBackendAudio() {
-    console.log("🎵 Starting backend audio decoding...");
-    console.log("Audio data length:", audio_data ? audio_data.length : 0);
-    console.log("Audio data preview:", audio_data ? audio_data.substring(0, 50) + "..." : "null");
-
-    if (!audio_data || !backendAudioContext) {
-      console.log("❌ Missing audio data or context for decoding");
-      return null;
-    }
-
-    try {
-      let arrayBuffer: ArrayBuffer;
-
-      if (audio_data.startsWith('data:')) {
-        console.log("🔄 Decoding base64 audio data...");
-        // Base64 데이터 처리
-        const base64Data = audio_data.split(',')[1];
-        if (!base64Data) {
-          throw new Error("Invalid base64 data format");
-        }
-
-        const binaryString = atob(base64Data);
-        arrayBuffer = new ArrayBuffer(binaryString.length);
-        const uint8Array = new Uint8Array(arrayBuffer);
-        for (let i = 0; i < binaryString.length; i++) {
-          uint8Array[i] = binaryString.charCodeAt(i);
-        }
-        console.log("✅ Base64 decoding complete, array buffer size:", arrayBuffer.byteLength);
-      } else {
-        console.log("🔄 Fetching audio from URL...");
-        // URL 처리
-        const response = await fetch(audio_data);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        arrayBuffer = await response.arrayBuffer();
-        console.log("✅ URL fetch complete, array buffer size:", arrayBuffer.byteLength);
-      }
-
-      if (arrayBuffer.byteLength === 0) {
-        throw new Error("Empty audio buffer received");
-      }
-
-      console.log("🔄 Decoding audio buffer...");
-      backendAudioBuffer = await backendAudioContext.decodeAudioData(arrayBuffer);
-      console.log("✅ Audio buffer decoded successfully");
-      console.log("Audio buffer duration:", backendAudioBuffer.duration, "seconds");
-      console.log("Audio buffer sample rate:", backendAudioBuffer.sampleRate);
-      console.log("Audio buffer channels:", backendAudioBuffer.numberOfChannels);
-
-      return backendAudioBuffer;
-    } catch (error: any) {
-      console.error('❌ Backend audio decoding error:', error);
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
-      backendAudioBuffer = null;
-      return null;
-    }
+  function handleBackendAudioPlay() {
+    backendAudioEngine.startBackendAudioPlayback(currentFlicks, () => {
+      isPlaying = false;
+    });
   }
 
-  function startBackendAudioPlayback() {
-    console.log("🎵 Starting backend audio playback...");
-    console.log("Backend audio context:", backendAudioContext);
-    console.log("Backend audio context state:", backendAudioContext?.state);
-    console.log("Backend audio buffer:", backendAudioBuffer);
-
-    if (!backendAudioContext || !backendAudioBuffer) {
-      console.error("❌ Missing audio context or buffer for playback");
-      return;
-    }
-
-    // 다시 한번 AudioContext 상태 확인 및 resume
-    if (backendAudioContext.state === 'suspended') {
-      console.log("🔄 AudioContext still suspended, attempting resume...");
-      backendAudioContext.resume().then(() => {
-        console.log("✅ Audio context resumed just before playback, state:", backendAudioContext!.state);
-        if (backendAudioContext!.state === 'running') {
-          actuallyStartPlayback();
-        } else {
-          console.error("❌ AudioContext still not running after resume attempt");
-        }
-      }).catch((error) => {
-        console.error("❌ Failed to resume AudioContext:", error);
-      });
-    } else {
-      actuallyStartPlayback();
-    }
-
-    function actuallyStartPlayback() {
-      try {
-        console.log("🎵 Actually starting playback now...");
-        console.log("AudioContext state before source creation:", backendAudioContext!.state);
-
-        // 이전 source가 있다면 정리
-        if (backendAudioSource) {
-          try {
-            backendAudioSource.stop();
-          } catch (e) {
-            // 이미 stop된 경우 무시
-          }
-          backendAudioSource = null;
-        }
-
-        // Create new source
-        backendAudioSource = backendAudioContext!.createBufferSource();
-        backendAudioSource.buffer = backendAudioBuffer;
-        backendAudioSource.connect(backendAudioContext!.destination);
-
-        // Calculate start position in seconds
-        const startPositionInSeconds = currentFlicks / 705600000; // Convert flicks to seconds
-        const currentTime = backendAudioContext!.currentTime;
-
-        console.log("🎵 Playback details:");
-        console.log("- Start position (flicks):", currentFlicks);
-        console.log("- Start position (seconds):", startPositionInSeconds);
-        console.log("- Current time:", currentTime);
-        console.log("- Buffer duration:", backendAudioBuffer!.duration);
-        console.log("- AudioContext state:", backendAudioContext!.state);
-
-        // Start playback
-        if (startPositionInSeconds < backendAudioBuffer!.duration) {
-          backendAudioSource.start(currentTime, startPositionInSeconds);
-          backendPlayStartTime = currentTime - startPositionInSeconds;
-          isPlaying = true;
-
-          console.log("✅ Backend audio playback started successfully!");
-
-          // Update playhead position
-          updateBackendPlayhead();
-
-          // Handle end of playback
-          backendAudioSource.onended = () => {
-            console.log("🔚 Backend audio playback ended");
-            stopBackendAudio();
-          };
-        } else {
-          console.warn("⚠️ Start position is beyond audio duration, not starting playback");
-          isPlaying = false;
-        }
-      } catch (error: any) {
-        console.error("❌ Error starting backend audio playback:", error);
-        console.error('Error details:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        });
-        isPlaying = false;
-      }
-    }
-  }
-
-  function pauseBackendAudio() {
-    console.log("⏸️ Pausing backend audio...");
-    if (backendAudioSource) {
-      // Calculate current position and store it
-      const elapsedTime = backendAudioContext!.currentTime - backendPlayStartTime;
-      currentFlicks = Math.round(elapsedTime * 705600000); // Convert to flicks
-      console.log("⏸️ Paused at position:", currentFlicks, "flicks (", elapsedTime, "seconds)");
-
-      backendAudioSource.stop();
-      backendAudioSource = null;
-    }
-
-    if (backendPlayheadInterval) {
-      clearInterval(backendPlayheadInterval);
-      backendPlayheadInterval = null;
-    }
-
+  function handleBackendAudioPause() {
+    backendAudioEngine.pauseBackendAudio({ value: currentFlicks });
     isPlaying = false;
-    console.log("✅ Backend audio paused");
   }
 
-  function stopBackendAudio() {
-    console.log("⏹️ Stopping backend audio...");
-    if (backendAudioSource) {
-      backendAudioSource.stop();
-      backendAudioSource = null;
-    }
-
-    if (backendPlayheadInterval) {
-      clearInterval(backendPlayheadInterval);
-      backendPlayheadInterval = null;
-    }
-
+  function handleBackendAudioStop() {
+    backendAudioEngine.stopBackendAudio({ value: currentFlicks });
+    isPlaying = false;
     currentFlicks = 0;
-    isPlaying = false;
-    console.log("✅ Backend audio stopped");
   }
 
-  function updateBackendPlayhead() {
-    if (!isPlaying || !backendAudioContext) return;
-
-    backendPlayheadInterval = setInterval(() => {
-      if (isPlaying && backendAudioContext) {
-        const elapsedTime = backendAudioContext.currentTime - backendPlayStartTime;
-        currentFlicks = Math.round(elapsedTime * 705600000); // Convert to flicks
-
-        // Check if playback ended
-        if (backendAudioBuffer && elapsedTime >= backendAudioBuffer.duration) {
-          console.log("🔚 Playback duration reached, stopping...");
-          stopBackendAudio();
-        }
-      }
-    }, 16); // ~60fps
+  async function handleBackendAudioDownload() {
+    if (audio_data) {
+      await backendAudioEngine.downloadBackendAudio(audio_data);
+    }
   }
 
-  function play() {
+  // Zoom level 변경 시 전체 데이터 변경 이벤트 발생
+  $: if (pixelsPerBeat) {
+    dispatchDataChange();
+  }
+
+  // Playback control functions
+  async function play() {
     if (isPlaying) {
       console.log("⚠️ Already playing, ignoring play request");
       return;
@@ -478,22 +271,8 @@
     if (use_backend_audio && audio_data) {
       console.log("🎵 Using backend audio for playback");
       // 백엔드 오디오 재생
-      initBackendAudio().then(() => {
-        if (!backendAudioBuffer) {
-          console.log("🔄 No audio buffer, decoding first...");
-          decodeBackendAudio().then(() => {
-            if (backendAudioBuffer) {
-              console.log("✅ Audio decoded, starting playback");
-              startBackendAudioPlayback();
-            } else {
-              console.error("❌ Failed to decode audio, falling back to frontend");
-              fallbackToFrontendAudio();
-            }
-          });
-        } else {
-          console.log("✅ Audio buffer ready, starting playback");
-          startBackendAudioPlayback();
-        }
+      handleBackendAudioInit().then(() => {
+        handleBackendAudioPlay();
       }).catch((error) => {
         console.error("❌ Backend audio initialization failed:", error);
         fallbackToFrontendAudio();
@@ -548,7 +327,7 @@
     });
 
     if (use_backend_audio) {
-      pauseBackendAudio();
+      handleBackendAudioPause();
       return;
     }
 
@@ -568,7 +347,7 @@
     });
 
     if (use_backend_audio) {
-      stopBackendAudio();
+      handleBackendAudioStop();
       return;
     }
 
@@ -590,73 +369,13 @@
       // 백엔드 오디오 다운로드
       isRendering = true;
       try {
-        await downloadBackendAudio();
+        await handleBackendAudioDownload();
       } finally {
         isRendering = false;
       }
     } else {
       // 프론트엔드 오디오 다운로드
       await downloadFrontendAudio();
-    }
-  }
-
-  // 백엔드 오디오 다운로드 (이미 생성된 오디오 파일)
-  async function downloadBackendAudio() {
-    console.log("💾 Downloading backend audio...");
-
-    if (!audio_data) {
-      console.error("❌ No backend audio data available for download");
-      return;
-    }
-
-    try {
-      let blob: Blob;
-      let filename = 'piano_roll_audio.wav';
-
-      if (audio_data.startsWith('data:')) {
-        // Base64 데이터의 경우 Blob으로 변환
-        const response = await fetch(audio_data);
-        blob = await response.blob();
-
-        // MIME 타입에서 확장자 추출
-        const mimeMatch = audio_data.match(/data:audio\/([^;]+)/);
-        if (mimeMatch) {
-          const format = mimeMatch[1];
-          filename = `piano_roll_audio.${format}`;
-        }
-      } else {
-        // URL의 경우 fetch로 가져와서 Blob으로 변환
-        const response = await fetch(audio_data);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        blob = await response.blob();
-
-        // URL에서 확장자 추출 시도
-        const urlMatch = audio_data.match(/\.([^.?]+)(\?|$)/);
-        if (urlMatch) {
-          const extension = urlMatch[1];
-          filename = `piano_roll_audio.${extension}`;
-        }
-      }
-
-      // Blob URL 생성 및 다운로드
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-
-      // 임시로 DOM에 추가하고 클릭하여 다운로드 시작
-      document.body.appendChild(link);
-      link.click();
-
-      // 정리
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      console.log("✅ Backend audio download initiated:", filename);
-    } catch (error) {
-      console.error("❌ Error downloading backend audio:", error);
     }
   }
 
@@ -765,15 +484,7 @@
 
   onDestroy(() => {
     // Clean up backend audio
-    if (backendPlayheadInterval) {
-      clearInterval(backendPlayheadInterval);
-    }
-    if (backendAudioSource) {
-      backendAudioSource.stop();
-    }
-    if (backendAudioContext) {
-      backendAudioContext.close();
-    }
+    // backendAudioEngine.dispose(); // 백엔드 오디오 엔진 정리
 
     // Clean up component-specific audio engine resources
     if (elem_id) {
@@ -789,9 +500,7 @@
     console.log("- audio_data present:", !!audio_data);
     console.log("- use_backend_audio:", use_backend_audio);
 
-    initBackendAudio().then(() => {
-      decodeBackendAudio();
-    }).catch((error) => {
+    handleBackendAudioInit().catch((error) => {
       console.error("❌ Failed to initialize backend audio:", error);
     });
   }
