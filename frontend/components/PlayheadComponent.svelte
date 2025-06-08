@@ -1,6 +1,16 @@
 <!--
   PlayheadComponent.svelte
-  Displays a vertical line indicating the current playback position
+  Displays a vertical line indicating the current playback position in the piano roll.
+  - Props:
+    - width: number (canvas width)
+    - height: number (canvas height)
+    - horizontalScroll: number (horizontal scroll offset)
+    - pixelsPerBeat: number (zoom level)
+    - tempo: number (BPM)
+    - currentFlicks: number (current playhead position in flicks)
+    - isPlaying: boolean (playback state)
+  - Usage:
+    <PlayheadComponent width={880} height={520} ... />
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';

@@ -89,6 +89,10 @@
   const ZOOM_STEP = 20; // Zoom step size (must be integer to avoid coordinate calculation errors)
 
   // Zoom in function
+  /**
+   * Zoom in the piano roll by increasing pixelsPerBeat.
+   * Dispatches a data change event if zoom is possible.
+   */
   function zoomIn() {
     if (pixelsPerBeat < MAX_PIXELS_PER_BEAT) {
       pixelsPerBeat += ZOOM_STEP;
@@ -97,6 +101,10 @@
   }
 
   // Zoom out function
+  /**
+   * Zoom out the piano roll by decreasing pixelsPerBeat.
+   * Dispatches a data change event if zoom is possible.
+   */
   function zoomOut() {
     if (pixelsPerBeat > MIN_PIXELS_PER_BEAT) {
       pixelsPerBeat -= ZOOM_STEP;
@@ -123,6 +131,9 @@
   const backendAudioEngine = new BackendAudioEngine();
 
   // 전체 데이터 변경 이벤트 발생
+  /**
+   * Dispatch a 'dataChange' event with the current piano roll state.
+   */
   function dispatchDataChange() {
     dispatch('dataChange', {
       notes,
@@ -136,7 +147,9 @@
     });
   }
 
-  // 노트만 변경 이벤트 발생
+  /**
+   * Dispatch a 'noteChange' event with the current notes array.
+   */
   function dispatchNoteChange() {
     dispatch('noteChange', {
       notes
@@ -144,6 +157,10 @@
   }
 
   // Sync scroll handlers
+  /**
+   * Handle scroll events from the grid and update scroll positions.
+   * @param event CustomEvent<{horizontalScroll: number, verticalScroll: number}>
+   */
   function handleGridScroll(event: CustomEvent) {
     horizontalScroll = event.detail.horizontalScroll;
     verticalScroll = event.detail.verticalScroll;
@@ -153,22 +170,37 @@
   }
 
   // Settings handlers
+  /**
+   * Handle time signature change events from the toolbar.
+   * @param event CustomEvent<{numerator: number, denominator: number}>
+   */
   function handleTimeSignatureChange(event: CustomEvent) {
     timeSignature = event.detail;
     dispatchDataChange();
   }
 
+  /**
+   * Handle edit mode change events from the toolbar.
+   * @param event CustomEvent<string>
+   */
   function handleEditModeChange(event: CustomEvent) {
     editMode = event.detail;
     dispatchDataChange();
   }
 
+  /**
+   * Handle snap setting change events from the toolbar.
+   * @param event CustomEvent<string>
+   */
   function handleSnapChange(event: CustomEvent) {
     snapSetting = event.detail;
     dispatchDataChange();
   }
 
-  // Handle zoom changes from toolbar
+  /**
+   * Handle zoom in/out actions from the toolbar.
+   * @param event CustomEvent<{action: 'zoom-in' | 'zoom-out'}>
+   */
   function handleZoomChange(event: CustomEvent) {
     const { action } = event.detail;
     if (action === 'zoom-in') {
@@ -182,6 +214,10 @@
   $: totalLengthInBeats = 32 * timeSignature.numerator; // 32 measures
 
   // Playback control functions
+  /**
+   * Render audio for the current notes and settings (frontend only).
+   * Skips rendering if backend audio is enabled.
+   */
   async function renderAudio() {
     // 백엔드 오디오를 사용하는 경우 렌더링하지 않음
     if (use_backend_audio) {
@@ -249,6 +285,10 @@
   }
 
   // Playback control functions
+  /**
+   * Play the piano roll audio (frontend or backend).
+   * Handles switching between frontend and backend audio engines.
+   */
   async function play() {
     if (isPlaying) {
       console.log("⚠️ Already playing, ignoring play request");
@@ -316,6 +356,9 @@
     isPlaying = true;
   }
 
+  /**
+   * Pause the piano roll audio (frontend or backend).
+   */
   function pause() {
     console.log("⏸️ Pause function called");
     console.log("- use_backend_audio:", use_backend_audio);
@@ -336,6 +379,9 @@
     isPlaying = false;
   }
 
+  /**
+   * Stop the piano roll audio (frontend or backend) and reset playhead.
+   */
   function stop() {
     console.log("⏹️ Stop function called");
     console.log("- use_backend_audio:", use_backend_audio);
@@ -360,6 +406,9 @@
   }
 
   // 오디오 다운로드 함수
+  /**
+   * Download the rendered audio (frontend or backend).
+   */
   async function downloadAudio() {
     console.log("💾 Download audio function called");
     console.log("- use_backend_audio:", use_backend_audio);
@@ -379,7 +428,9 @@
     }
   }
 
-  // 프론트엔드 오디오 다운로드 (렌더링 후 WAV로 변환)
+  /**
+   * Download the rendered frontend audio as a WAV file.
+   */
   async function downloadFrontendAudio() {
     console.log("💾 Downloading frontend audio...");
 
@@ -414,6 +465,9 @@
     }
   }
 
+  /**
+   * Toggle playback between play and pause.
+   */
   function togglePlayback() {
     if (isPlaying) {
       pause();
@@ -422,7 +476,10 @@
     }
   }
 
-  // Handle position updates from audio engine
+  /**
+   * Update the playhead position and auto-scroll if needed.
+   * @param flicks Current playhead position in flicks
+   */
   function updatePlayheadPosition(flicks: number) {
     currentFlicks = flicks;
 
@@ -439,7 +496,10 @@
     }
   }
 
-  // Handle note changes to re-render audio
+  /**
+   * Handle note changes from the grid and trigger audio re-rendering.
+   * @param event CustomEvent<{notes: Array<...>}>  // See PianoRollProps
+   */
   function handleNoteChange(event: CustomEvent) {
     notes = event.detail.notes;
     // Re-render audio when notes change
@@ -448,7 +508,10 @@
     dispatchNoteChange();
   }
 
-  // Handle tempo changes
+  /**
+   * Handle tempo changes from the toolbar and trigger audio re-rendering.
+   * @param event CustomEvent<number>
+   */
   function handleTempoChange(event: CustomEvent) {
     tempo = event.detail;
     // Re-render audio when tempo changes
@@ -457,7 +520,10 @@
     dispatchDataChange();
   }
 
-  // Handle position change from timeline click
+  /**
+   * Handle position changes from the timeline (seek playhead).
+   * @param event CustomEvent<{flicks: number}>
+   */
   function handlePositionChange(event: CustomEvent) {
     const { flicks } = event.detail;
     currentFlicks = flicks;
@@ -466,7 +532,10 @@
     audioEngine.seekToFlicks(flicks);
   }
 
-  // 가사 입력 이벤트 발생 (GridComponent에서 전달받은 것을 상위로 전달)
+  /**
+   * Handle lyric input events from the grid and dispatch upward.
+   * @param event CustomEvent<any>
+   */
   function handleLyricInput(event: CustomEvent) {
     dispatch('lyricInput', event.detail);
   }

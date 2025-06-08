@@ -1,4 +1,17 @@
 <!--
+  KeyboardComponent.svelte
+  Renders a vertical piano keyboard using canvas, allows users to preview notes by clicking keys.
+  - Props:
+    - keyboardWidth: number (width of the keyboard in px)
+    - height: number (height of the keyboard in px)
+    - verticalScroll: number (vertical scroll offset)
+  - Emits:
+    - (none by default, but can be extended)
+  - Usage:
+    <KeyboardComponent keyboardWidth={120} height={560} verticalScroll={0} />
+-->
+
+<!--
   KeyboardComponent that renders piano keys using canvas and allows users to preview sounds.
 -->
 <script lang="ts">

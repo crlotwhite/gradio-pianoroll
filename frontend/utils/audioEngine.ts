@@ -1,14 +1,49 @@
 /**
- * Audio Engine for rendering and playing notes
- * Uses Web Audio API to synthesize sounds based on note data
+ * Audio Engine for rendering and playing notes.
+ *
+ * This module provides the AudioEngine class, which uses the Web Audio API to synthesize
+ * and play back notes based on piano roll data. It supports rendering notes to an AudioBuffer,
+ * playback control (play, pause, stop), waveform analysis, and playhead updates.
+ *
+ * Functions:
+ *   - midiToFreq: Convert MIDI note number to frequency (Hz)
+ *
+ * Classes:
+ *   - AudioEngine: Main audio engine for note synthesis and playback
  */
-import { flicksToSeconds, beatsToFlicks, secondsToFlicks, pixelsToFlicks, roundFlicks } from './flicks';
+import {beatsToFlicks, flicksToSeconds, pixelsToFlicks, secondsToFlicks} from './flicks';
 
-// MIDI note to frequency conversion (A4 = 69 = 440Hz)
+/**
+ * Convert a MIDI note number to its frequency in Hz.
+ * @param midi MIDI note number (0-127)
+ * @returns Frequency in Hz
+ */
 function midiToFreq(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
+/**
+ * AudioEngine class for managing audio synthesis, rendering, and playback.
+ *
+ * Usage:
+ *   const engine = new AudioEngine('my-component');
+ *   engine.initialize();
+ *   await engine.renderNotes(...);
+ *   engine.play();
+ *   engine.pause();
+ *   engine.stop();
+ *
+ * Methods:
+ *   - initialize(): Set up the audio context and nodes
+ *   - dispose(): Clean up resources
+ *   - renderNotes(...): Render notes to an AudioBuffer
+ *   - play(): Start playback
+ *   - pause(): Pause playback
+ *   - stop(): Stop playback
+ *   - setPlayheadUpdateCallback(cb): Set callback for playhead updates
+ *   - getRenderedBuffer(): Get the current rendered AudioBuffer
+ *   - downloadAudio(filename): Download rendered audio as WAV
+ */
 class AudioEngine {
   private audioContext: AudioContext | null = null;
   private gainNode: GainNode | null = null;
