@@ -1,9 +1,25 @@
 <!--
+  Toolbar.svelte
+  Toolbar for controlling tempo, time signature, edit mode, snap setting, and playback.
+  - Props:
+    - tempo: number
+    - timeSignature: { numerator: number, denominator: number }
+    - editMode: string
+    - snapSetting: string
+    - isPlaying: boolean
+    - isRendering: boolean
+  - Emits:
+    - tempoChange, timeSignatureChange, editModeChange, snapChange, play, pause, stop, togglePlay, downloadAudio
+  - Usage:
+    <Toolbar tempo={120} timeSignature={{numerator:4, denominator:4}} ... />
+-->
+<!--
   Toolbar component for controlling tempo, time signature, edit mode, and playback.
 -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
 
+  /** @type {import('../types/component').ToolbarProps} */
   export let tempo = 120;
   export let timeSignature = { numerator: 4, denominator: 4 };
   export let editMode = 'select'; // 'select', 'draw', 'erase', etc.

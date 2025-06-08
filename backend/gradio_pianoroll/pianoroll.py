@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import time
-import random
-import string
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -10,116 +7,37 @@ from gradio.components.base import Component
 from gradio.events import Events
 from gradio.i18n import I18nData
 
+from .timing_utils import (
+    generate_note_id,
+    pixels_to_flicks,
+    pixels_to_seconds,
+    pixels_to_beats,
+    pixels_to_ticks,
+    pixels_to_samples,
+    calculate_all_timing_data,
+    create_note_with_timing,
+)
+
 if TYPE_CHECKING:
     from gradio.components import Timer
 
-def generate_note_id() -> str:
-    """
-    Generate a unique note ID using the same algorithm as the frontend.
-    Format: note-{timestamp}-{random_string}
-    """
-    timestamp = int(time.time() * 1000)  # Milliseconds like Date.now()
-    # Generate 5-character random string similar to Math.random().toString(36).substr(2, 5)
-    random_chars = ''.join(random.choices(string.ascii_lowercase + string.digits, k=5))
-    return f"note-{timestamp}-{random_chars}"
-
-def pixels_to_flicks(pixels: float, pixels_per_beat: float, tempo: float) -> float:
-    """
-    Convert pixels to flicks for accurate timing calculation.
-    Formula: pixels * 60 * FLICKS_PER_SECOND / (pixels_per_beat * tempo)
-    """
-    FLICKS_PER_SECOND = 705600000
-    return (pixels * 60 * FLICKS_PER_SECOND) / (pixels_per_beat * tempo)
-
-def pixels_to_seconds(pixels: float, pixels_per_beat: float, tempo: float) -> float:
-    """
-    Convert pixels to seconds for direct audio processing.
-    Formula: pixels * 60 / (pixels_per_beat * tempo)
-    """
-    return (pixels * 60) / (pixels_per_beat * tempo)
-
-def pixels_to_beats(pixels: float, pixels_per_beat: float) -> float:
-    """
-    Convert pixels to beats for musical accuracy.
-    """
-    return pixels / pixels_per_beat
-
-def pixels_to_ticks(pixels: float, pixels_per_beat: float, ppqn: int = 480) -> int:
-    """
-    Convert pixels to MIDI ticks for MIDI compatibility.
-    Default PPQN (Pulses Per Quarter Note) is 480.
-    """
-    beats = pixels_to_beats(pixels, pixels_per_beat)
-    return int(beats * ppqn)
-
-def pixels_to_samples(pixels: float, pixels_per_beat: float, tempo: float, sample_rate: int = 44100) -> int:
-    """
-    Convert pixels to audio samples for precise digital audio processing.
-    Default sample rate is 44100 Hz (CD quality).
-    """
-    seconds = pixels_to_seconds(pixels, pixels_per_beat, tempo)
-    return int(seconds * sample_rate)
-
-def calculate_all_timing_data(pixels: float, pixels_per_beat: float, tempo: float,
-                             sample_rate: int = 44100, ppqn: int = 480) -> dict:
-    """
-    Calculate all timing representations for a given pixel value.
-    Returns a dictionary with all timing formats.
-    """
-    return {
-        'seconds': pixels_to_seconds(pixels, pixels_per_beat, tempo),
-        'beats': pixels_to_beats(pixels, pixels_per_beat),
-        'flicks': pixels_to_flicks(pixels, pixels_per_beat, tempo),
-        'ticks': pixels_to_ticks(pixels, pixels_per_beat, ppqn),
-        'samples': pixels_to_samples(pixels, pixels_per_beat, tempo, sample_rate)
-    }
-
-def create_note_with_timing(note_id: str, start_pixels: float, duration_pixels: float,
-                          pitch: int, velocity: int, lyric: str,
-                          pixels_per_beat: float = 80, tempo: float = 120,
-                          sample_rate: int = 44100, ppqn: int = 480) -> dict:
-    """
-    Create a note with all timing data calculated from pixel values.
-
-    Args:
-        note_id: Unique identifier for the note
-        start_pixels: Start position in pixels
-        duration_pixels: Duration in pixels
-        pitch: MIDI pitch (0-127)
-        velocity: MIDI velocity (0-127)
-        lyric: Lyric text for the note
-        pixels_per_beat: Zoom level in pixels per beat
-        tempo: BPM tempo
-        sample_rate: Audio sample rate for sample calculations
-        ppqn: Pulses per quarter note for MIDI tick calculations
-
-    Returns:
-        Dictionary containing note data with all timing representations
-    """
-    start_timing = calculate_all_timing_data(start_pixels, pixels_per_beat, tempo, sample_rate, ppqn)
-    duration_timing = calculate_all_timing_data(duration_pixels, pixels_per_beat, tempo, sample_rate, ppqn)
-
-    return {
-        "id": note_id,
-        "start": start_pixels,
-        "duration": duration_pixels,
-        "startFlicks": start_timing['flicks'],
-        "durationFlicks": duration_timing['flicks'],
-        "startSeconds": start_timing['seconds'],
-        "durationSeconds": duration_timing['seconds'],
-        "endSeconds": start_timing['seconds'] + duration_timing['seconds'],
-        "startBeats": start_timing['beats'],
-        "durationBeats": duration_timing['beats'],
-        "startTicks": start_timing['ticks'],
-        "durationTicks": duration_timing['ticks'],
-        "startSample": start_timing['samples'],
-        "durationSamples": duration_timing['samples'],
-        "pitch": pitch,
-        "velocity": velocity,
-        "lyric": lyric
-    }
-
 class PianoRoll(Component):
+    """
+    PianoRoll custom Gradio component for MIDI note editing and playback.
+
+    This class manages the state and data for the piano roll, including note timing, audio data,
+    and backend/ frontend synchronization. It provides methods for preprocessing and postprocessing
+    data, as well as updating backend audio/curve/segment data.
+
+    Attributes:
+        width (int): Width of the piano roll component in pixels.
+        height (int): Height of the piano roll component in pixels.
+        value (dict): Current piano roll data (notes, settings, etc.).
+        audio_data (str|None): Backend audio data (base64 or URL).
+        curve_data (dict): Backend curve data (pitch, loudness, etc.).
+        segment_data (list): Backend segment data (timing, etc.).
+        use_backend_audio (bool): Whether to use backend audio engine.
+    """
 
     EVENTS = [
         Events.change,
@@ -259,21 +177,22 @@ class PianoRoll(Component):
 
     def preprocess(self, payload):
         """
-        This docstring is used to generate the docs for this custom component.
-        Parameters:
-            payload: the MIDI notes data to be preprocessed, sent from the frontend
+        Preprocess incoming MIDI notes data from the frontend before passing to user function.
+        Args:
+            payload: The MIDI notes data to preprocess.
         Returns:
-            the data after preprocessing, sent to the user's function in the backend
+            The preprocessed data (passed through).
         """
         return payload
 
     def postprocess(self, value):
         """
-        This docstring is used to generate the docs for this custom component.
-        Parameters:
-            value: the MIDI notes data to be postprocessed, sent from the user's function in the backend
+        Postprocess outgoing MIDI notes data from the user function before sending to the frontend.
+        Ensures all notes have IDs and timing values, and attaches backend data if needed.
+        Args:
+            value: The MIDI notes data to postprocess.
         Returns:
-            the data after postprocessing, sent to the frontend
+            The postprocessed data (with all required fields).
         """
         # Ensure all notes have IDs and all timing values when sending to frontend
         if value and "notes" in value and value["notes"]:
@@ -344,6 +263,11 @@ class PianoRoll(Component):
         return value
 
     def example_payload(self):
+        """
+        Example payload for the piano roll component (for documentation/testing).
+        Returns:
+            dict: Example piano roll data.
+        """
         pixels_per_beat = 80
         tempo = 120
         sample_rate = 44100
@@ -364,6 +288,11 @@ class PianoRoll(Component):
         }
 
     def example_value(self):
+        """
+        Example value for the piano roll component (for documentation/testing).
+        Returns:
+            dict: Example piano roll data.
+        """
         pixels_per_beat = 80
         tempo = 120
         sample_rate = 44100
@@ -386,6 +315,11 @@ class PianoRoll(Component):
         }
 
     def api_info(self):
+        """
+        Returns OpenAPI-style schema for the piano roll data object.
+        Returns:
+            dict: API schema for the piano roll component.
+        """
         return {
             "type": "object",
             "properties": {
@@ -511,7 +445,12 @@ class PianoRoll(Component):
 
     def update_backend_data(self, audio_data=None, curve_data=None, segment_data=None, use_backend_audio=None):
         """
-        백엔드 데이터를 업데이트하는 메서드
+        Update backend audio, curve, and segment data for this component instance.
+        Args:
+            audio_data (str|None): New audio data.
+            curve_data (dict|None): New curve data.
+            segment_data (list|None): New segment data.
+            use_backend_audio (bool|None): Whether to use backend audio.
         """
         if audio_data is not None:
             self.audio_data = audio_data
@@ -532,28 +471,36 @@ class PianoRoll(Component):
 
     def set_audio_data(self, audio_data: str):
         """
-        오디오 데이터를 설정하는 메서드
+        Set the backend audio data for this component.
+        Args:
+            audio_data (str): New audio data (base64 or URL).
         """
         self.audio_data = audio_data
         self._attrs["audio_data"] = audio_data
 
     def set_curve_data(self, curve_data: dict):
         """
-        곡선 데이터를 설정하는 메서드 (피치 곡선, loudness 곡선 등)
+        Set the backend curve data for this component.
+        Args:
+            curve_data (dict): New curve data.
         """
         self.curve_data = curve_data
         self._attrs["curve_data"] = curve_data
 
     def set_segment_data(self, segment_data: list):
         """
-        구간 데이터를 설정하는 메서드 (발음 타이밍 등)
+        Set the backend segment data for this component.
+        Args:
+            segment_data (list): New segment data.
         """
         self.segment_data = segment_data
         self._attrs["segment_data"] = segment_data
 
     def enable_backend_audio(self, enable: bool = True):
         """
-        백엔드 오디오 사용 여부를 설정하는 메서드
+        Enable or disable backend audio for this component.
+        Args:
+            enable (bool): True to enable backend audio, False to disable.
         """
         self.use_backend_audio = enable
         self._attrs["use_backend_audio"] = enable

@@ -1,10 +1,18 @@
 <!--
   LayerControlPanel.svelte
-  UI component for controlling layer visibility, opacity, and order
+  UI panel for controlling visibility, opacity, and order of piano roll layers.
+  - Props:
+    - layerManager: LayerManager | null (manages layers)
+    - visible: boolean (panel visibility)
+  - Emits:
+    - (none by default, but can be extended)
+  - Usage:
+    <LayerControlPanel layerManager={layerManager} visible={true} />
 -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { LayerManager, LineLayer } from '../utils/layers';
+  /** @type {import('../../types/component').LayerControlPanelProps} */
 
   // Props
   export let layerManager: LayerManager | null = null;

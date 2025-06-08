@@ -1,10 +1,25 @@
 <!--
+  TimeLineComponent.svelte
+  Displays a timeline above the piano roll, showing measures and beats.
+  - Props:
+    - width: number (timeline width)
+    - timelineHeight: number (height in px)
+    - timeSignature: { numerator: number, denominator: number }
+    - snapSetting: string (grid snap setting)
+    - horizontalScroll: number (scroll offset)
+    - pixelsPerBeat: number (zoom level)
+    - tempo: number (BPM)
+  - Usage:
+    <TimeLineComponent width={880} timelineHeight={40} ... />
+-->
+
+<!--
   TimeLineComponent that displays measures and beats timeline.
 -->
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import { beatsToFlicks, pixelsToFlicks } from '../utils/flicks';
-  
+
   // Props
   export let width = 880;  // Width of the timeline (same as grid width)
   export let timelineHeight = 40;  // Height of the timeline
@@ -13,10 +28,10 @@
   export let horizontalScroll = 0;  // Horizontal scroll position synced with GridComponent
   export let pixelsPerBeat = 80;  // Pixels per beat (controls zoom level)
   export let tempo = 120;  // Tempo in BPM (needed for flicks conversion)
-  
+
   // Set up event dispatcher
   const dispatch = createEventDispatcher();
-  
+
   // Calculate appropriate subdivisions based on time signature denominator
   function getSubdivisionsFromTimeSignature(denominator: number): { count: number, pixelsPerSubdivision: number } {
     // The number of subdivisions per beat depends on the denominator
@@ -33,18 +48,18 @@
         return { count: 4, pixelsPerSubdivision: pixelsPerBeat / 4 }; // Default to 16th notes
     }
   }
-  
+
   // Get subdivisions based on snap setting (음악적 의미에 맞게)
   function getSubdivisionsFromSnapSetting(): { count: number, pixelsPerSubdivision: number } {
     if (snapSetting === 'none') {
       // Default to quarter note subdivisions if snap is 'none'
       return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
     }
-    
+
     const [numerator, denominator] = snapSetting.split('/');
     if (numerator === '1' && denominator) {
       const divisionValue = parseInt(denominator);
-      
+
       switch (divisionValue) {
         case 1: // Whole note - 4 beats
           return { count: 1, pixelsPerSubdivision: pixelsPerBeat * 4 };
@@ -58,60 +73,60 @@
           return { count: 4, pixelsPerSubdivision: pixelsPerBeat / 4 };
         case 32: // Thirty-second note - 0.125 beat
           return { count: 8, pixelsPerSubdivision: pixelsPerBeat / 8 };
-        default: 
+        default:
           return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
       }
     }
-    
+
     // Default to quarter note subdivisions
     return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
   }
-  
+
   // Derived grid constants based on time signature
   $: subdivisions = getSubdivisionsFromSnapSetting();
-  
+
   // DOM References
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
-  
+
   // Calculate various dimensions
   $: beatsPerMeasure = timeSignature.numerator;
   $: pixelsPerMeasure = beatsPerMeasure * pixelsPerBeat;
   $: totalMeasures = 32;  // Should match GridComponent
   $: totalTimelineWidth = totalMeasures * pixelsPerMeasure;
-  
+
   // Draw the timeline with measure and beat divisions
   function drawTimeline() {
     if (!ctx || !canvas) return;
-    
+
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     // Draw background
     ctx.fillStyle = '#2c2c2c';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
+
     // Calculate visible area
     const startX = horizontalScroll;
     const endX = horizontalScroll + width;
-    
+
     // Calculate visible measures
     const startMeasure = Math.floor(startX / pixelsPerMeasure);
     const endMeasure = Math.ceil(endX / pixelsPerMeasure);
-    
+
     // Get current snap settings
     const subdivs = getSubdivisionsFromSnapSetting();
-    
+
     // Draw measure numbers and division lines
     for (let measure = startMeasure; measure <= endMeasure; measure++) {
       const measureX = measure * pixelsPerMeasure - horizontalScroll;
-      
+
       // Draw measure number
       ctx.fillStyle = '#FFFFFF';
       ctx.font = '10px Arial';
       ctx.textAlign = 'center';
       ctx.fillText((measure + 1).toString(), measureX + pixelsPerMeasure / 2, 12);
-      
+
       // Draw measure line
       ctx.strokeStyle = '#AAAAAA';
       ctx.lineWidth = 2;
@@ -119,7 +134,7 @@
       ctx.moveTo(measureX, 0);
       ctx.lineTo(measureX, timelineHeight);
       ctx.stroke();
-      
+
       // Draw beat lines within measure
       if (snapSetting === '1/1') {
         // No beat lines for whole notes
@@ -139,7 +154,7 @@
         // Show all beat lines for other snap settings
         for (let beat = 1; beat < beatsPerMeasure; beat++) {
           const beatX = measureX + beat * pixelsPerBeat;
-          
+
           ctx.strokeStyle = '#777777';
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -148,17 +163,17 @@
           ctx.stroke();
         }
       }
-      
+
       // For 1/1 snap setting, don't show additional subdivision lines
       if (snapSetting === '1/1') {
         // Just draw beat lines, no subdivisions
         continue;
       }
-      
+
       // Calculate the number of divisions per measure based on snap setting (음악적 의미에 맞게)
       let divisionsPerMeasure = 0;
       let pixelsPerDivision = 0;
-      
+
       switch (snapSetting) {
         case '1/1':
           divisionsPerMeasure = beatsPerMeasure / 4; // 온음표: 4/4에서는 1개
@@ -189,16 +204,16 @@
           divisionsPerMeasure = beatsPerMeasure; // Default to quarter notes
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
       }
-      
+
       // Draw subdivision lines
       for (let division = 1; division < divisionsPerMeasure; division++) {
         // Skip if this is already a beat line
         if (division % (divisionsPerMeasure / beatsPerMeasure) === 0) {
           continue; // This is a beat line, already drawn
         }
-        
+
         const divisionX = measureX + division * pixelsPerDivision;
-        
+
         ctx.strokeStyle = '#555555';
         ctx.lineWidth = 0.5;
         ctx.beginPath();
@@ -207,38 +222,38 @@
         ctx.stroke();
       }
     }
-    
+
     // Draw playhead or other markers if needed
     // (Playback functionality could be added here)
   }
-  
+
   // Handle timeline click to seek
   function handleTimelineClick(event: MouseEvent) {
     if (!canvas) return;
-    
+
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left + horizontalScroll;
-    
+
     // Convert x position to flicks using direct conversion for higher precision
     const flicks = pixelsToFlicks(x, pixelsPerBeat, tempo);
-    
+
     // Dispatch position change event
     dispatch('positionChange', { flicks });
   }
-  
+
   // Set up the component
   onMount(() => {
     // Get canvas context
     ctx = canvas.getContext('2d');
-    
+
     // Set up canvas size
     canvas.width = width;
     canvas.height = timelineHeight;
-    
+
     // Draw initial timeline
     drawTimeline();
   });
-  
+
   // Update when props change (width, height, etc.)
   $: {
     if (ctx && canvas) {
@@ -247,18 +262,18 @@
       drawTimeline();
     }
   }
-  
+
   // Redraw when time signature changes
   $: if (timeSignature && ctx && canvas) {
     // This will reactively update when timeSignature.numerator or denominator changes
     drawTimeline();
   }
-  
+
   // Specifically redraw when horizontal scroll changes
   $: if (horizontalScroll !== undefined && ctx && canvas) {
     drawTimeline();
   }
-  
+
   // Redraw when zoom level (pixelsPerBeat) changes
   $: if (pixelsPerBeat && ctx && canvas) {
     // This will reactively update when pixelsPerBeat changes
@@ -280,10 +295,10 @@
       </svg>
     </button>
   </div>
-  
-  <canvas 
-    bind:this={canvas} 
-    width={width} 
+
+  <canvas
+    bind:this={canvas}
+    width={width}
     height={timelineHeight}
     on:click={handleTimelineClick}
     style="cursor: pointer;"
@@ -296,7 +311,7 @@
     overflow: hidden;
     background-color: #2a2a2a;
   }
-  
+
   .zoom-controls {
     position: absolute;
     right: 10px;
@@ -305,7 +320,7 @@
     gap: 5px;
     z-index: 10;
   }
-  
+
   .zoom-button {
     width: 24px;
     height: 24px;
@@ -319,11 +334,11 @@
     cursor: pointer;
     transition: background-color 0.2s;
   }
-  
+
   .zoom-button:hover {
     background-color: rgba(0, 0, 0, 0.5);
   }
-  
+
   .zoom-button:active {
     background-color: rgba(0, 0, 0, 0.7);
   }

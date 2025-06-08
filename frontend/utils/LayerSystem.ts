@@ -1,3 +1,5 @@
+import type { LayerRenderContext, LayerProps } from '../types/layer';
+
 /**
  * Layer System for Piano Roll Canvas Rendering
  *
@@ -5,29 +7,6 @@
  * to be rendered as separate layers with independent properties like opacity,
  * visibility, and z-order.
  */
-
-export interface LayerRenderContext {
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
-  width: number;
-  height: number;
-  horizontalScroll: number;
-  verticalScroll: number;
-  pixelsPerBeat: number;
-  tempo: number;
-  currentFlicks: number;
-  isPlaying: boolean;
-  timeSignature: { numerator: number; denominator: number };
-  snapSetting: string;
-  [key: string]: any; // 추가적인 컨텍스트 데이터
-}
-
-export interface LayerProps {
-  opacity: number;
-  visible: boolean;
-  zIndex: number;
-  name: string;
-}
 
 export abstract class BaseLayer {
   protected props: LayerProps;
@@ -205,3 +184,5 @@ export const LayerZIndex = {
   PLAYHEAD: 50,
   UI_OVERLAY: 60
 } as const;
+
+export type { LayerRenderContext, LayerProps };

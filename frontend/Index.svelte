@@ -192,7 +192,6 @@
 		ppqn={value.ppqn || 480}
 		{audio_data}
 		{curve_data}
-		{segment_data}
 		{line_data}
 		{use_backend_audio}
 		{elem_id}

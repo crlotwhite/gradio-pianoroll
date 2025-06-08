@@ -3,38 +3,8 @@
  */
 
 import { BaseLayer, LayerZIndex } from '../LayerSystem';
-import type { LayerRenderContext } from '../LayerSystem';
-
-export interface LineDataPoint {
-  x: number;  // X coordinate in pixels
-  y: number;  // Y value (will be mapped to canvas coordinates)
-}
-
-export interface LineLayerConfig {
-  name: string;
-  color: string;
-  lineWidth: number;
-  yMin: number;
-  yMax: number;
-  height?: number;  // Optional: height of the line area (default: 1/4 of canvas height)
-  position?: 'top' | 'center' | 'bottom' | 'overlay';  // Position in the canvas
-  renderMode?: 'default' | 'piano_grid' | 'independent_range';  // Rendering mode for special cases like F0 or independent range
-  visible?: boolean;
-  opacity?: number;
-  dataType?: string;  // Type of data (e.g., 'f0', 'loudness')
-  unit?: string;      // Unit of measurement (e.g., 'Hz', 'dB')
-  originalRange?: {   // Original data range before coordinate conversion
-    minHz?: number;
-    maxHz?: number;
-    minMidi?: number;
-    maxMidi?: number;
-    min?: number;      // Generic min value for non-F0 data
-    max?: number;      // Generic max value for non-F0 data
-    voiced_ratio?: number;  // For voice/unvoice data
-    y_min?: number;    // Configured Y range min
-    y_max?: number;    // Configured Y range max
-  };
-}
+import type { LayerRenderContext } from '../../types/layer';
+import type { LineDataPoint, LineLayerConfig } from '../../types/layer';
 
 export class LineLayer extends BaseLayer {
   private data: LineDataPoint[] = [];
