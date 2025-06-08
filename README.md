@@ -674,7 +674,7 @@ def auto_generate_all_phonemes(piano_roll):
 
     return updated_piano_roll, f"{updated_count}개 노트의 phoneme이 자동 생성되었습니다."
 
-# F0 분석 함수들
+# F0 및 오디오 특성 분석 함수들
 def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
     """
     오디오 파일에서 F0(기본 주파수)를 추출합니다.
@@ -695,6 +695,7 @@ def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
             # PYIN 알고리즘 사용 (더 정확하지만 느림)
             f0, voiced_flag, voiced_probs = librosa.pyin(
                 y,
+                sr=sr,
                 fmin=librosa.note_to_hz('C2'),  # 약 65Hz
                 fmax=librosa.note_to_hz('C7')   # 약 2093Hz
             )
@@ -724,16 +725,188 @@ def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
         print(f"   - 추출된 F0 포인트: {len(valid_f0)}개")
         print(f"   - F0 범위: {np.min(valid_f0):.1f}Hz ~ {np.max(valid_f0):.1f}Hz")
 
-        return {
-            'times': valid_times,
-            'f0_values': valid_f0,
+        # voiced/unvoiced 정보도 함께 반환
+        result_data = {
+            'times': frame_times,  # 전체 시간 축
+            'f0_values': f0,  # 전체 F0 (NaN 포함)
+            'valid_times': valid_times,  # 유효한 시간만
+            'valid_f0_values': valid_f0,  # 유효한 F0만
             'sample_rate': sr,
-            'duration': len(y) / sr
-        }, "F0 추출 완료"
+            'duration': len(y) / sr,
+            'hop_length': hop_length
+        }
+
+        # PYIN에서 voiced 정보 추가
+        if f0_method == "pyin" and 'voiced_flag' in locals() and 'voiced_probs' in locals():
+            result_data['voiced_flag'] = voiced_flag
+            result_data['voiced_probs'] = voiced_probs
+        else:
+            # 다른 방법의 경우 F0 존재 여부로 voiced 추정
+            voiced_flag = ~np.isnan(f0)
+            voiced_probs = voiced_flag.astype(float)
+            result_data['voiced_flag'] = voiced_flag
+            result_data['voiced_probs'] = voiced_probs
+
+        return result_data, "F0 추출 완료"
 
     except Exception as e:
         print(f"❌ F0 추출 오류: {e}")
         return None, f"F0 추출 오류: {str(e)}"
+
+def extract_loudness_from_audio(audio_file_path):
+    """
+    오디오 파일에서 loudness(음량)를 추출합니다.
+    """
+    if not LIBROSA_AVAILABLE:
+        return None, "librosa가 설치되지 않아 loudness 분석을 수행할 수 없습니다."
+
+    try:
+        print(f"🔊 Loudness 추출 시작: {audio_file_path}")
+
+        # 오디오 로드
+        y, sr = librosa.load(audio_file_path, sr=None)
+        print(f"   - 샘플레이트: {sr}Hz")
+        print(f"   - 길이: {len(y)/sr:.2f}초")
+
+        # RMS 에너지 계산
+        hop_length = 512
+        rms_energy = librosa.feature.rms(y=y, hop_length=hop_length)[0]
+
+        # 시간 축 계산
+        frame_times = librosa.frames_to_time(np.arange(len(rms_energy)), sr=sr, hop_length=hop_length)
+
+        # dB로 변환 (참조값: 최대 RMS)
+        max_rms = np.max(rms_energy)
+        if max_rms > 0:
+            loudness_db = 20 * np.log10(rms_energy / max_rms)
+            # -60dB 이하는 무음으로 처리
+            loudness_db = np.maximum(loudness_db, -60)
+        else:
+            loudness_db = np.full_like(rms_energy, -60)
+
+        # 0-1 범위로 정규화 (-60dB ~ 0dB -> 0 ~ 1)
+        loudness_normalized = (loudness_db + 60) / 60
+
+        print(f"   - 추출된 Loudness 포인트: {len(loudness_normalized)}개")
+        print(f"   - RMS 범위: {np.min(rms_energy):.6f} ~ {np.max(rms_energy):.6f}")
+        print(f"   - dB 범위: {np.min(loudness_db):.1f}dB ~ {np.max(loudness_db):.1f}dB")
+
+        return {
+            'times': frame_times,
+            'rms_values': rms_energy,
+            'loudness_db': loudness_db,
+            'loudness_normalized': loudness_normalized,
+            'sample_rate': sr,
+            'duration': len(y) / sr,
+            'hop_length': hop_length
+        }, "Loudness 추출 완료"
+
+    except Exception as e:
+        print(f"❌ Loudness 추출 오류: {e}")
+        return None, f"Loudness 추출 오류: {str(e)}"
+
+def extract_voicing_from_audio(audio_file_path, f0_method="pyin"):
+    """
+    오디오 파일에서 voice/unvoice 정보를 추출합니다.
+    """
+    if not LIBROSA_AVAILABLE:
+        return None, "librosa가 설치되지 않아 voice/unvoice 분석을 수행할 수 없습니다."
+
+    try:
+        print(f"🗣️ Voice/Unvoice 추출 시작: {audio_file_path}")
+
+        # F0 분석에서 voiced 정보를 함께 얻음
+        f0_data, f0_status = extract_f0_from_audio(audio_file_path, f0_method)
+
+        if f0_data is None:
+            return None, f"F0 분석 실패로 voice/unvoice 추출 불가: {f0_status}"
+
+        # voiced 정보 추출
+        times = f0_data['times']
+        voiced_flag = f0_data['voiced_flag']
+        voiced_probs = f0_data['voiced_probs']
+
+        print(f"   - 추출된 Voice/Unvoice 포인트: {len(voiced_flag)}개")
+
+        # voiced 구간 통계
+        voiced_frames = np.sum(voiced_flag)
+        voiced_ratio = voiced_frames / len(voiced_flag) if len(voiced_flag) > 0 else 0
+        print(f"   - Voiced 구간: {voiced_frames}프레임 ({voiced_ratio:.1%})")
+        print(f"   - Unvoiced 구간: {len(voiced_flag) - voiced_frames}프레임 ({1-voiced_ratio:.1%})")
+
+        return {
+            'times': times,
+            'voiced_flag': voiced_flag,
+            'voiced_probs': voiced_probs,
+            'sample_rate': f0_data['sample_rate'],
+            'duration': f0_data['duration'],
+            'hop_length': f0_data['hop_length'],
+            'voiced_ratio': voiced_ratio
+        }, "Voice/Unvoice 추출 완료"
+
+    except Exception as e:
+        print(f"❌ Voice/Unvoice 추출 오류: {e}")
+        return None, f"Voice/Unvoice 추출 오류: {str(e)}"
+
+def extract_audio_features(audio_file_path, f0_method="pyin", include_f0=True, include_loudness=True, include_voicing=True):
+    """
+    오디오 파일에서 F0, loudness, voice/unvoice를 모두 추출합니다.
+    """
+    if not LIBROSA_AVAILABLE:
+        return None, "librosa가 설치되지 않아 오디오 특성 분석을 수행할 수 없습니다."
+
+    features = {}
+    status_messages = []
+
+    try:
+        print(f"🎵 오디오 특성 분석 시작: {audio_file_path}")
+
+        # F0 추출
+        if include_f0:
+            f0_data, f0_status = extract_f0_from_audio(audio_file_path, f0_method)
+            if f0_data:
+                features['f0'] = f0_data
+                status_messages.append(f0_status)
+            else:
+                status_messages.append(f"F0 추출 실패: {f0_status}")
+
+        # Loudness 추출
+        if include_loudness:
+            loudness_data, loudness_status = extract_loudness_from_audio(audio_file_path)
+            if loudness_data:
+                features['loudness'] = loudness_data
+                status_messages.append(loudness_status)
+            else:
+                status_messages.append(f"Loudness 추출 실패: {loudness_status}")
+
+        # Voice/Unvoice 추출
+        if include_voicing:
+            voicing_data, voicing_status = extract_voicing_from_audio(audio_file_path, f0_method)
+            if voicing_data:
+                features['voicing'] = voicing_data
+                status_messages.append(voicing_status)
+            else:
+                status_messages.append(f"Voice/Unvoice 추출 실패: {voicing_status}")
+
+        if features:
+            # 공통 정보 추가
+            if 'f0' in features:
+                features['duration'] = features['f0']['duration']
+                features['sample_rate'] = features['f0']['sample_rate']
+            elif 'loudness' in features:
+                features['duration'] = features['loudness']['duration']
+                features['sample_rate'] = features['loudness']['sample_rate']
+            elif 'voicing' in features:
+                features['duration'] = features['voicing']['duration']
+                features['sample_rate'] = features['voicing']['sample_rate']
+
+            return features, " | ".join(status_messages)
+        else:
+            return None, "모든 특성 추출에 실패했습니다."
+
+    except Exception as e:
+        print(f"❌ 오디오 특성 분석 오류: {e}")
+        return None, f"오디오 특성 분석 오류: {str(e)}"
 
 def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
     """
@@ -829,35 +1002,338 @@ def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
         return line_data
 
     except Exception as e:
-        print(f"❌ LineData 생성 오류: {e}")
+        print(f"❌ F0 LineData 생성 오류: {e}")
         return None
 
-def analyze_audio_f0(piano_roll, audio_file, f0_method="pyin"):
+def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=None, y_max=None, use_db=True):
     """
-    업로드된 오디오 파일에서 F0를 추출하고 피아노롤에 표시합니다.
+    Loudness 데이터를 LineLayer용 line_data 형식으로 변환합니다.
+    독립적인 Y축 범위를 가지며 피아노롤 그리드와 별도로 표시됩니다.
     """
-    print("=== F0 Analysis ===")
+    if not loudness_data:
+        return None
+
+    try:
+        times = loudness_data['times']
+
+        # 사용할 loudness 값 선택 (dB 또는 정규화된 값)
+        if use_db:
+            values = loudness_data['loudness_db']
+            unit = "dB"
+            default_y_min = -60
+            default_y_max = 0
+        else:
+            values = loudness_data['loudness_normalized']
+            unit = "normalized"
+            default_y_min = 0
+            default_y_max = 1
+
+        # Y축 범위 설정
+        actual_y_min = y_min if y_min is not None else default_y_min
+        actual_y_max = y_max if y_max is not None else default_y_max
+        y_range = actual_y_max - actual_y_min
+
+        # 데이터 포인트 생성
+        data_points = []
+        for time, value in zip(times, values):
+            if not np.isnan(value):
+                # 시간(초)을 픽셀 X 좌표로 변환
+                x_pixel = time * (tempo / 60) * pixelsPerBeat
+
+                # Loudness 값을 0-2560 픽셀 범위로 변환 (전체 grid canvas 높이 사용)
+                normalized_value = (value - actual_y_min) / y_range
+                y_pixel = normalized_value * 2560  # 0-2560 픽셀 범위 (128개 노트 * 20픽셀 높이)
+
+                data_points.append({
+                    "x": float(x_pixel),
+                    "y": float(max(0, min(2560, y_pixel)))  # 범위 제한
+                })
+
+        if not data_points:
+            print("⚠️ 유효한 Loudness 데이터 포인트가 없습니다.")
+            return None
+
+        # 실제 값 범위
+        min_value = float(np.min(values))
+        max_value = float(np.max(values))
+
+        line_data = {
+            "loudness_curve": {
+                "color": "#4ECDC4",  # 청록색
+                "lineWidth": 2,
+                "yMin": 0,
+                "yMax": 2560,  # 전체 grid canvas 높이 (128개 노트 * 20픽셀)
+                "position": "overlay",  # 전체 영역에 오버레이로 표시
+                "renderMode": "independent_range",  # 독립적인 Y축 범위
+                "visible": True,
+                "opacity": 0.6,
+                "data": data_points,
+                # 메타데이터
+                "dataType": "loudness",
+                "unit": unit,
+                "originalRange": {
+                    "min": min_value,
+                    "max": max_value,
+                    "y_min": actual_y_min,
+                    "y_max": actual_y_max
+                }
+            }
+        }
+
+        print(f"📊 Loudness LineData 생성 완료: {len(data_points)}개 포인트")
+        print(f"   - Loudness 범위: {min_value:.1f}{unit} ~ {max_value:.1f}{unit}")
+        print(f"   - Y축 범위: {actual_y_min} ~ {actual_y_max}")
+        print(f"   - 렌더링 모드: 전체 grid canvas 높이 (independent_range)")
+
+        return line_data
+
+    except Exception as e:
+        print(f"❌ Loudness LineData 생성 오류: {e}")
+        return None
+
+def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_probs=True):
+    """
+    Voice/Unvoice 데이터를 LineLayer용 line_data 형식으로 변환합니다.
+    독립적인 Y축 범위를 가지며 0(unvoiced) ~ 1(voiced) 범위로 표시됩니다.
+    """
+    if not voicing_data:
+        return None
+
+    try:
+        times = voicing_data['times']
+
+        # 사용할 voicing 값 선택 (확률값 또는 이진값)
+        if use_probs and 'voiced_probs' in voicing_data:
+            values = voicing_data['voiced_probs']
+            unit = "probability"
+        else:
+            values = voicing_data['voiced_flag'].astype(float)
+            unit = "binary"
+
+        # 데이터 포인트 생성
+        data_points = []
+        for time, value in zip(times, values):
+            if not np.isnan(value):
+                # 시간(초)을 픽셀 X 좌표로 변환
+                x_pixel = time * (tempo / 60) * pixelsPerBeat
+
+                # Voice/Unvoice 값을 0-2560 픽셀 범위로 변환 (전체 grid canvas 높이 사용)
+                y_pixel = value * 2560  # 0-1 범위를 0-2560 픽셀로
+
+                data_points.append({
+                    "x": float(x_pixel),
+                    "y": float(max(0, min(2560, y_pixel)))  # 범위 제한
+                })
+
+        if not data_points:
+            print("⚠️ 유효한 Voice/Unvoice 데이터 포인트가 없습니다.")
+            return None
+
+        # 실제 값 범위
+        min_value = float(np.min(values))
+        max_value = float(np.max(values))
+        voiced_ratio = voicing_data.get('voiced_ratio', 0.0)
+
+        line_data = {
+            "voicing_curve": {
+                "color": "#9B59B6",  # 보라색
+                "lineWidth": 2,
+                "yMin": 0,
+                "yMax": 2560,  # 전체 grid canvas 높이 (128개 노트 * 20픽셀)
+                "position": "overlay",  # 전체 영역에 오버레이로 표시
+                "renderMode": "independent_range",  # 독립적인 Y축 범위
+                "visible": True,
+                "opacity": 0.6,
+                "data": data_points,
+                # 메타데이터
+                "dataType": "voicing",
+                "unit": unit,
+                "originalRange": {
+                    "min": min_value,
+                    "max": max_value,
+                    "voiced_ratio": voiced_ratio,
+                    "y_min": 0,
+                    "y_max": 1
+                }
+            }
+        }
+
+        print(f"📊 Voice/Unvoice LineData 생성 완료: {len(data_points)}개 포인트")
+        print(f"   - Voice/Unvoice 범위: {min_value:.3f} ~ {max_value:.3f} ({unit})")
+        print(f"   - Voiced 비율: {voiced_ratio:.1%}")
+        print(f"   - 렌더링 모드: 전체 grid canvas 높이 (independent_range)")
+
+        return line_data
+
+    except Exception as e:
+        print(f"❌ Voice/Unvoice LineData 생성 오류: {e}")
+        return None
+
+def create_multi_feature_line_data(features, tempo=120, pixelsPerBeat=80,
+                                   loudness_y_min=None, loudness_y_max=None,
+                                   loudness_use_db=True, voicing_use_probs=True):
+    """
+    여러 오디오 특성(F0, Loudness, Voice/Unvoice 등)을 하나의 line_data로 결합합니다.
+    """
+    combined_line_data = {}
+
+    try:
+        # F0 곡선 추가
+        if 'f0' in features:
+            f0_line_data = create_f0_line_data(features['f0'], tempo, pixelsPerBeat)
+            if f0_line_data:
+                combined_line_data.update(f0_line_data)
+
+        # Loudness 곡선 추가
+        if 'loudness' in features:
+            loudness_line_data = create_loudness_line_data(
+                features['loudness'], tempo, pixelsPerBeat,
+                loudness_y_min, loudness_y_max, loudness_use_db
+            )
+            if loudness_line_data:
+                combined_line_data.update(loudness_line_data)
+
+        # Voice/Unvoice 곡선 추가
+        if 'voicing' in features:
+            voicing_line_data = create_voicing_line_data(
+                features['voicing'], tempo, pixelsPerBeat, voicing_use_probs
+            )
+            if voicing_line_data:
+                combined_line_data.update(voicing_line_data)
+
+        if combined_line_data:
+            print(f"📊 통합 LineData 생성 완료: {len(combined_line_data)}개 곡선")
+            return combined_line_data
+        else:
+            print("⚠️ 생성된 곡선 데이터가 없습니다.")
+            return None
+
+    except Exception as e:
+        print(f"❌ 통합 LineData 생성 오류: {e}")
+        return None
+
+def synthesize_and_analyze_features(piano_roll, attack, decay, sustain, release, wave_type='complex',
+                                  include_f0=True, include_loudness=True, include_voicing=True, f0_method="pyin",
+                                  loudness_y_min=None, loudness_y_max=None, loudness_use_db=True, voicing_use_probs=True):
+    """
+    피아노롤에서 오디오를 생성하고, 생성된 오디오에서 F0, loudness, voice/unvoice를 분석하여 시각화합니다.
+    """
+    print("=== Synthesize and Analyze Features ===")
+    print(f"ADSR: A={attack}, D={decay}, S={sustain}, R={release}")
+    print(f"Wave Type: {wave_type}")
+    print(f"Include F0: {include_f0}, Include Loudness: {include_loudness}, Include Voicing: {include_voicing}")
+
+    # 먼저 오디오 합성
+    audio_data = synthesize_audio(piano_roll, attack, decay, sustain, release, wave_type)
+
+    if audio_data is None:
+        return piano_roll, "오디오 생성 실패", None
+
+    # 임시 WAV 파일 생성
+    temp_audio_path = create_temp_wav_file(audio_data, SAMPLE_RATE)
+    if temp_audio_path is None:
+        return piano_roll, "임시 오디오 파일 생성 실패", None
+
+    try:
+        # 오디오 특성 분석
+        features, analysis_status = extract_audio_features(
+            temp_audio_path, f0_method, include_f0, include_loudness, include_voicing
+        )
+
+        if features is None:
+            return piano_roll, f"오디오 특성 분석 실패: {analysis_status}", temp_audio_path
+
+        # 피아노롤 업데이트
+        updated_piano_roll = piano_roll.copy() if piano_roll else {}
+
+        # 백엔드 오디오 데이터 추가
+        audio_base64 = audio_to_base64_wav(audio_data, SAMPLE_RATE)
+        updated_piano_roll['audio_data'] = audio_base64
+        updated_piano_roll['use_backend_audio'] = True
+
+        # 템포와 픽셀당 비트 정보
+        tempo = updated_piano_roll.get('tempo', 120)
+        pixels_per_beat = updated_piano_roll.get('pixelsPerBeat', 80)
+
+        # 웨이브폼 데이터 계산 (백엔드 오디오용)
+        waveform_data = calculate_waveform_data(audio_data, pixels_per_beat, tempo)
+
+        # 곡선 데이터 생성 (오디오 특성 분석 결과)
+        line_data = create_multi_feature_line_data(
+            features, tempo, pixels_per_beat,
+            loudness_y_min, loudness_y_max, loudness_use_db, voicing_use_probs
+        )
+
+        # 통합 곡선 데이터 설정 (오디오 특성 + 웨이브폼)
+        curve_data = {}
+
+        # 오디오 특성 곡선 추가
+        if line_data:
+            curve_data.update(line_data)
+
+        # 웨이브폼 데이터 추가
+        if waveform_data:
+            curve_data['waveform_data'] = waveform_data
+            print(f"웨이브폼 데이터 생성: {len(waveform_data)} 포인트")
+
+        # 피아노롤에 곡선 데이터 설정
+        if curve_data:
+            updated_piano_roll['curve_data'] = curve_data
+
+        # line_data도 별도로 설정 (LineLayer용)
+        if line_data:
+            updated_piano_roll['line_data'] = line_data
+
+        print(f"🔊 [synthesize_and_analyze_features] Setting backend audio data:")
+        print(f"   - audio_data length: {len(audio_base64) if audio_base64 else 0}")
+        print(f"   - use_backend_audio: {updated_piano_roll['use_backend_audio']}")
+        print(f"   - waveform points: {len(waveform_data) if waveform_data else 0}")
+        print(f"   - feature curves: {len(line_data) if line_data else 0}")
+
+        # 상태 메시지 생성
+        status_parts = [f"오디오 합성 완료 ({wave_type} 파형)", analysis_status]
+
+        if waveform_data:
+            status_parts.append(f"웨이브폼 시각화 완료 ({len(waveform_data)}개 포인트)")
+
+        if line_data:
+            curve_count = len(line_data)
+            status_parts.append(f"{curve_count}개 특성 곡선 시각화 완료")
+
+        status_message = " | ".join(status_parts)
+
+        return updated_piano_roll, status_message, temp_audio_path
+
+    except Exception as e:
+        error_message = f"특성 분석 중 오류: {str(e)}"
+        print(f"❌ {error_message}")
+        return piano_roll, error_message, temp_audio_path
+    # 임시 파일은 사용 후 별도로 정리 (gradio가 자동 관리)
+
+def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, include_loudness=True, include_voicing=True,
+                                  f0_method="pyin", loudness_y_min=None, loudness_y_max=None,
+                                  loudness_use_db=True, voicing_use_probs=True):
+    """
+    업로드된 오디오 파일에서 F0, loudness, voice/unvoice를 분석하고 피아노롤에 표시합니다.
+    """
+    print("=== Analyze Uploaded Audio Features ===")
     print(f"Audio file: {audio_file}")
-    print(f"F0 method: {f0_method}")
+    print(f"Include F0: {include_f0}, Include Loudness: {include_loudness}, Include Voicing: {include_voicing}")
 
     if not audio_file:
         return piano_roll, "오디오 파일을 업로드해주세요.", None
 
     if not LIBROSA_AVAILABLE:
-        return piano_roll, "librosa가 설치되지 않아 F0 분석을 수행할 수 없습니다. 'pip install librosa'로 설치해주세요.", None
+        return piano_roll, "librosa가 설치되지 않아 오디오 특성 분석을 수행할 수 없습니다. 'pip install librosa'로 설치해주세요.", None
 
     try:
-        # F0 추출
-        f0_data, status = extract_f0_from_audio(audio_file, f0_method)
+        # 오디오 특성 분석
+        features, analysis_status = extract_audio_features(
+            audio_file, f0_method, include_f0, include_loudness, include_voicing
+        )
 
-        if f0_data is None:
-            return piano_roll, f"F0 추출 실패: {status}", None
-
-        # LineLayer용 데이터 생성
-        line_data = create_f0_line_data(f0_data, piano_roll.get('tempo', 120), piano_roll.get('pixelsPerBeat', 80))
-
-        if line_data is None:
-            return piano_roll, "LineLayer 데이터 생성에 실패했습니다.", None
+        if features is None:
+            return piano_roll, f"오디오 특성 분석 실패: {analysis_status}", audio_file
 
         # 피아노롤 데이터 업데이트
         updated_piano_roll = piano_roll.copy() if piano_roll else {
@@ -869,26 +1345,59 @@ def analyze_audio_f0(piano_roll, audio_file, f0_method="pyin"):
             "pixelsPerBeat": 80
         }
 
-        updated_piano_roll['line_data'] = line_data
+        # 곡선 데이터 생성
+        tempo = updated_piano_roll.get('tempo', 120)
+        pixels_per_beat = updated_piano_roll.get('pixelsPerBeat', 80)
 
-        # 분석 결과 정보
-        f0_points = len(line_data['f0_curve']['data'])
-        f0_min = line_data['f0_curve']['yMin']
-        f0_max = line_data['f0_curve']['yMax']
-        duration = f0_data['duration']
+        line_data = create_multi_feature_line_data(
+            features, tempo, pixels_per_beat,
+            loudness_y_min, loudness_y_max, loudness_use_db, voicing_use_probs
+        )
 
-        success_message = f"""F0 분석 완료!
-📊 데이터 포인트: {f0_points}개
-📈 F0 범위: {f0_min:.1f}Hz ~ {f0_max:.1f}Hz
-⏱️ 오디오 길이: {duration:.2f}초
-🎵 방법: {f0_method.upper()}"""
+        if line_data:
+            updated_piano_roll['line_data'] = line_data
 
-        return updated_piano_roll, success_message, audio_file
+        # 상태 메시지 생성
+        status_parts = [analysis_status]
+
+        if line_data:
+            curve_count = len(line_data)
+            curve_types = list(line_data.keys())
+            status_parts.append(f"{curve_count}개 곡선 ({', '.join(curve_types)}) 시각화 완료")
+
+            # 각 특성의 범위 정보 추가
+            for curve_name, curve_info in line_data.items():
+                if 'originalRange' in curve_info:
+                    range_info = curve_info['originalRange']
+                    if 'minHz' in range_info:  # F0
+                        status_parts.append(f"F0: {range_info['minHz']:.1f}~{range_info['maxHz']:.1f}Hz")
+                    elif 'min' in range_info and 'voiced_ratio' not in range_info:  # Loudness
+                        unit = curve_info.get('unit', '')
+                        status_parts.append(f"Loudness: {range_info['min']:.1f}~{range_info['max']:.1f}{unit}")
+                    elif 'voiced_ratio' in range_info:  # Voice/Unvoice
+                        unit = curve_info.get('unit', '')
+                        voiced_ratio = range_info['voiced_ratio']
+                        status_parts.append(f"Voicing: {voiced_ratio:.1%} voiced ({unit})")
+
+        duration = features.get('duration', 0)
+        status_parts.append(f"⏱️ {duration:.2f}초")
+
+        status_message = " | ".join(status_parts)
+
+        return updated_piano_roll, status_message, audio_file
 
     except Exception as e:
-        error_message = f"F0 분석 중 오류 발생: {str(e)}"
+        error_message = f"업로드된 오디오 분석 중 오류: {str(e)}"
         print(f"❌ {error_message}")
-        return piano_roll, error_message, None
+        return piano_roll, error_message, audio_file
+
+def analyze_audio_f0(piano_roll, audio_file, f0_method="pyin"):
+    """
+    업로드된 오디오 파일에서 F0를 추출하고 피아노롤에 표시합니다. (기존 호환성 유지)
+    """
+    return analyze_uploaded_audio_features(
+        piano_roll, audio_file, include_f0=True, include_loudness=False, include_voicing=False, f0_method=f0_method
+    )
 
 def generate_f0_demo_audio():
     """
@@ -929,6 +1438,75 @@ def generate_f0_demo_audio():
     except Exception as e:
         os.close(temp_fd)
         print(f"❌ 데모 오디오 생성 실패: {e}")
+        return None
+
+def generate_feature_demo_audio():
+    """
+    오디오 특성 분석 데모용 다양한 특성을 가진 오디오를 생성합니다.
+    F0 변화와 loudness 변화를 모두 포함합니다.
+    """
+    print("🎵 오디오 특성 분석 데모 오디오 생성 중...")
+
+    duration = 4.0  # 4초
+    sample_rate = 44100
+    t = np.linspace(0, duration, int(duration * sample_rate), False)
+
+    # 구간별로 다른 특성을 가진 오디오 생성
+    audio = np.zeros_like(t)
+
+    # 구간 1 (0-1초): C4에서 C5로 상승 + 볼륨 증가
+    mask1 = (t >= 0) & (t < 1)
+    t1 = t[mask1]
+    f1_start, f1_end = 261.63, 523.25  # C4 to C5
+    freq1 = f1_start + (f1_end - f1_start) * (t1 / 1.0)
+    phase1 = 2 * np.pi * np.cumsum(freq1) / sample_rate
+    vol1 = 0.1 + 0.4 * (t1 / 1.0)  # 0.1에서 0.5로 증가
+    audio[mask1] = vol1 * np.sin(phase1)
+
+    # 구간 2 (1-2초): C5에서 G4로 하강 + 일정한 볼륨
+    mask2 = (t >= 1) & (t < 2)
+    t2 = t[mask2] - 1
+    f2_start, f2_end = 523.25, 392.00  # C5 to G4
+    freq2 = f2_start + (f2_end - f2_start) * (t2 / 1.0)
+    phase2 = 2 * np.pi * np.cumsum(freq2) / sample_rate
+    audio[mask2] = 0.5 * np.sin(phase2)
+
+    # 구간 3 (2-3초): A4 고정 + 볼륨 감소 (트레몰로 효과)
+    mask3 = (t >= 2) & (t < 3)
+    t3 = t[mask3] - 2
+    freq3 = 440.0  # A4 고정
+    phase3 = 2 * np.pi * freq3 * t3
+    vol3 = 0.5 * (1 - t3 / 1.0) * (1 + 0.3 * np.sin(2 * np.pi * 6 * t3))  # 트레몰로
+    audio[mask3] = vol3 * np.sin(phase3)
+
+    # 구간 4 (3-4초): 복합음 (A4 + E5) + 페이드아웃
+    mask4 = (t >= 3) & (t < 4)
+    t4 = t[mask4] - 3
+    freq4a, freq4b = 440.0, 659.25  # A4 + E5
+    phase4a = 2 * np.pi * freq4a * t4
+    phase4b = 2 * np.pi * freq4b * t4
+    vol4 = 0.4 * (1 - t4 / 1.0)  # 페이드아웃
+    audio[mask4] = vol4 * (0.6 * np.sin(phase4a) + 0.4 * np.sin(phase4b))
+
+    # WAV 파일로 저장
+    temp_fd, temp_path = tempfile.mkstemp(suffix='.wav')
+    try:
+        with wave.open(temp_path, 'wb') as wav_file:
+            wav_file.setnchannels(1)  # 모노
+            wav_file.setsampwidth(2)  # 16비트
+            wav_file.setframerate(sample_rate)
+
+            # 16비트 PCM으로 변환
+            audio_16bit = (audio * 32767).astype(np.int16)
+            wav_file.writeframes(audio_16bit.tobytes())
+
+        os.close(temp_fd)
+        print(f"✅ 오디오 특성 분석 데모 오디오 생성 완료: {temp_path}")
+        return temp_path
+
+    except Exception as e:
+        os.close(temp_fd)
+        print(f"❌ 오디오 특성 분석 데모 오디오 생성 실패: {e}")
         return None
 
 # Gradio 인터페이스
@@ -1558,6 +2136,310 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
             piano_roll_f0.play(log_f0_play_event, outputs=f0_status_text)
             piano_roll_f0.pause(log_f0_pause_event, outputs=f0_status_text)
             piano_roll_f0.stop(log_f0_stop_event, outputs=f0_status_text)
+
+        # 다섯 번째 탭: 오디오 특성 분석 데모
+        with gr.TabItem("🔊 Audio Feature Analysis"):
+            gr.Markdown("## 🎵 오디오 특성 분석 데모")
+            if LIBROSA_AVAILABLE:
+                gr.Markdown("피아노롤 노트에서 오디오를 생성하고 F0와 loudness를 분석하거나, 직접 오디오를 업로드해서 분석해보세요!")
+            else:
+                gr.Markdown("⚠️ **librosa가 설치되지 않음**: 오디오 특성 분석을 위해 `pip install librosa`를 실행해주세요.")
+
+            with gr.Row():
+                with gr.Column(scale=3):
+                    # 오디오 특성 분석용 초기값
+                    initial_value_features = {
+                        "notes": [
+                            {
+                                "start": 0,
+                                "duration": 320,
+                                "pitch": 60,  # C4
+                                "velocity": 100,
+                                "lyric": "도"
+                            },
+                            {
+                                "start": 320,
+                                "duration": 320,
+                                "pitch": 64,  # E4
+                                "velocity": 90,
+                                "lyric": "미"
+                            },
+                            {
+                                "start": 640,
+                                "duration": 320,
+                                "pitch": 67,  # G4
+                                "velocity": 95,
+                                "lyric": "솔"
+                            }
+                        ],
+                        "tempo": 120,
+                        "timeSignature": {"numerator": 4, "denominator": 4},
+                        "editMode": "select",
+                        "snapSetting": "1/4",
+                        "pixelsPerBeat": 80
+                    }
+                    piano_roll_features = PianoRoll(
+                        height=600,
+                        width=1000,
+                        value=initial_value_features,
+                        elem_id="piano_roll_features",  # 고유 ID 부여
+                        use_backend_audio=True  # 백엔드 오디오 엔진 사용
+                    )
+            with gr.Row():
+                with gr.Column():
+                    btn_analyze_generated = gr.Button(
+                        "🎶 노트에서 오디오 생성 & 분석",
+                        variant="primary",
+                        size="lg",
+                        interactive=LIBROSA_AVAILABLE
+                    )
+
+            with gr.Row():
+                with gr.Column():
+                    btn_analyze_uploaded = gr.Button(
+                        "📤 업로드된 오디오 분석",
+                        variant="secondary",
+                        size="lg",
+                        interactive=LIBROSA_AVAILABLE
+                    )
+
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### 🎛️ 신디사이저 설정")
+
+                    # ADSR 설정
+                    attack_features = gr.Slider(
+                        minimum=0.001,
+                        maximum=1.0,
+                        value=0.01,
+                        step=0.001,
+                        label="Attack (초)"
+                    )
+                    decay_features = gr.Slider(
+                        minimum=0.001,
+                        maximum=1.0,
+                        value=0.1,
+                        step=0.001,
+                        label="Decay (초)"
+                    )
+                    sustain_features = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.7,
+                        step=0.01,
+                        label="Sustain (레벨)"
+                    )
+                    release_features = gr.Slider(
+                        minimum=0.001,
+                        maximum=2.0,
+                        value=0.3,
+                        step=0.001,
+                        label="Release (초)"
+                    )
+
+                    # 파형 설정
+                    wave_type_features = gr.Dropdown(
+                        choices=[
+                            ("복합 파형 (Complex)", "complex"),
+                            ("하모닉 합성 (Harmonic)", "harmonic"),
+                            ("FM 합성 (FM)", "fm"),
+                            ("톱니파 (Sawtooth)", "sawtooth"),
+                            ("사각파 (Square)", "square"),
+                            ("삼각파 (Triangle)", "triangle"),
+                            ("사인파 (Sine)", "sine")
+                        ],
+                        value="complex",
+                        label="파형 타입"
+                    )
+                with gr.Column():
+                    gr.Markdown("### 📊 분석 설정")
+
+                    # 분석할 특성 선택
+                    include_f0_features = gr.Checkbox(
+                        label="F0 (기본 주파수) 분석",
+                        value=True
+                    )
+                    include_loudness_features = gr.Checkbox(
+                        label="Loudness (음량) 분석",
+                        value=True
+                    )
+                    include_voicing_features = gr.Checkbox(
+                        label="Voice/Unvoice (유성음/무성음) 분석",
+                        value=True
+                    )
+
+                    # F0 분석 방법
+                    f0_method_features = gr.Dropdown(
+                        choices=[
+                            ("PYIN (정확함, 느림)", "pyin"),
+                            ("PipTrack (빠름, 덜 정확)", "piptrack")
+                        ],
+                        value="pyin",
+                        label="F0 추출 방법"
+                    )
+
+                    # Loudness 설정
+                    loudness_use_db_features = gr.Checkbox(
+                        label="Loudness를 dB 단위로 표시",
+                        value=True
+                    )
+                    with gr.Row():
+                        loudness_y_min_features = gr.Number(
+                            label="Loudness 최소값 (비워두면 자동)",
+                            value=None
+                        )
+                        loudness_y_max_features = gr.Number(
+                            label="Loudness 최대값 (비워두면 자동)",
+                            value=None
+                        )
+
+                    # Voice/Unvoice 설정
+                    voicing_use_probs_features = gr.Checkbox(
+                        label="Voice/Unvoice를 확률값으로 표시",
+                        value=True,
+                        info="체크 해제 시 이진값(0/1)으로 표시"
+                    )
+                with gr.Column():
+                    gr.Markdown("### 🎤 오디오 업로드")
+                    audio_upload_features = gr.Audio(
+                        label="직접 분석할 오디오 파일",
+                        type="filepath",
+                        interactive=True
+                    )
+
+                    btn_generate_feature_demo = gr.Button(
+                        "🎵 특성 분석용 데모 오디오 생성",
+                        variant="secondary"
+                    )
+                    gr.Markdown("📄 F0 변화와 loudness 변화를 모두 포함하는 테스트 오디오를 생성합니다.")
+
+            with gr.Row():
+                with gr.Column():
+                    features_status_text = gr.Textbox(
+                        label="분석 상태",
+                        interactive=False,
+                        lines=4
+                    )
+
+            with gr.Row():
+                with gr.Column():
+                    # 비교용 오디오 재생
+                    reference_audio_features = gr.Audio(
+                        label="분석된 오디오 (참고용)",
+                        type="filepath",
+                        interactive=False
+                    )
+
+            with gr.Row():
+                with gr.Column():
+                    output_json_features = gr.JSON(label="오디오 특성 분석 결과")
+
+            # 오디오 특성 분석 탭 이벤트 처리
+
+            # 생성된 오디오 분석 버튼
+            btn_analyze_generated.click(
+                fn=synthesize_and_analyze_features,
+                inputs=[
+                    piano_roll_features,
+                    attack_features,
+                    decay_features,
+                    sustain_features,
+                    release_features,
+                    wave_type_features,
+                    include_f0_features,
+                    include_loudness_features,
+                    include_voicing_features,
+                    f0_method_features,
+                    loudness_y_min_features,
+                    loudness_y_max_features,
+                    loudness_use_db_features,
+                    voicing_use_probs_features
+                ],
+                outputs=[piano_roll_features, features_status_text, reference_audio_features],
+                show_progress=True
+            )
+
+            # 업로드된 오디오 분석 버튼
+            btn_analyze_uploaded.click(
+                fn=analyze_uploaded_audio_features,
+                inputs=[
+                    piano_roll_features,
+                    audio_upload_features,
+                    include_f0_features,
+                    include_loudness_features,
+                    include_voicing_features,
+                    f0_method_features,
+                    loudness_y_min_features,
+                    loudness_y_max_features,
+                    loudness_use_db_features,
+                    voicing_use_probs_features
+                ],
+                outputs=[piano_roll_features, features_status_text, reference_audio_features],
+                show_progress=True
+            )
+
+            # 데모 오디오 생성 및 분석 버튼
+            def create_and_analyze_feature_demo():
+                """특성 분석용 데모 오디오를 생성하고 자동으로 분석을 수행합니다."""
+                demo_audio_path = generate_feature_demo_audio()
+                if demo_audio_path:
+                    # 초기 피아노롤 데이터
+                    initial_piano_roll = {
+                        "notes": [],
+                        "tempo": 120,
+                        "timeSignature": {"numerator": 4, "denominator": 4},
+                        "editMode": "select",
+                        "snapSetting": "1/4",
+                        "pixelsPerBeat": 80
+                    }
+
+                                        # 오디오 특성 분석 수행 (F0, loudness, voice/unvoice 모두)
+                    updated_piano_roll, status, _ = analyze_uploaded_audio_features(
+                        initial_piano_roll, demo_audio_path,
+                        include_f0=True, include_loudness=True, include_voicing=True, f0_method="pyin",
+                        loudness_y_min=None, loudness_y_max=None, loudness_use_db=True, voicing_use_probs=True
+                    )
+
+                    return updated_piano_roll, status, demo_audio_path, demo_audio_path
+                else:
+                    return initial_value_features, "데모 오디오 생성에 실패했습니다.", None, None
+
+            btn_generate_feature_demo.click(
+                fn=create_and_analyze_feature_demo,
+                outputs=[piano_roll_features, features_status_text, audio_upload_features, reference_audio_features],
+                show_progress=True
+            )
+
+            # 노트 변경 시 JSON 출력 업데이트
+            def update_features_json_output(piano_roll_data):
+                return piano_roll_data
+
+            piano_roll_features.change(
+                fn=update_features_json_output,
+                inputs=[piano_roll_features],
+                outputs=[output_json_features],
+                show_progress=False
+            )
+
+            # 재생 이벤트 로깅
+            def log_features_play_event(event_data=None):
+                print("🔊 Features Play event triggered:", event_data)
+                return f"재생 시작: {event_data if event_data else '재생 중'}"
+
+            def log_features_pause_event(event_data=None):
+                print("🔊 Features Pause event triggered:", event_data)
+                return f"일시정지: {event_data if event_data else '일시정지'}"
+
+            def log_features_stop_event(event_data=None):
+                print("🔊 Features Stop event triggered:", event_data)
+                return f"정지: {event_data if event_data else '정지'}"
+
+            piano_roll_features.play(log_features_play_event, outputs=features_status_text)
+            piano_roll_features.pause(log_features_pause_event, outputs=features_status_text)
+            piano_roll_features.stop(log_features_stop_event, outputs=features_status_text)
+
+            if not LIBROSA_AVAILABLE:
+                gr.Markdown("⚠️ librosa가 필요합니다")
 
 if __name__ == "__main__":
     demo.launch()
