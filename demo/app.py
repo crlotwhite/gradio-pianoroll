@@ -7,24 +7,24 @@ import tempfile
 import os
 from gradio_pianoroll import PianoRoll
 
-# F0 분석을 위한 추가 import
+# Additional imports for F0 analysis
 try:
     import librosa
     LIBROSA_AVAILABLE = True
-    print("✅ librosa 사용 가능")
+    print("✅ librosa available")
 except ImportError:
     LIBROSA_AVAILABLE = False
-    print("⚠️ librosa가 설치되지 않음. F0 분석 기능이 제한됩니다.")
+    print("⚠️ librosa not installed. F0 analysis functionality is limited.")
 
-# 신디사이저 설정
+# Synthesizer settings
 SAMPLE_RATE = 44100
-MAX_DURATION = 10.0  # 최대 10초
+MAX_DURATION = 10.0  # Maximum 10 seconds
 
-# 사용자 정의 phoneme 매핑 (전역 상태)
+# User-defined phoneme mapping (global state)
 user_phoneme_map = {}
 
 def initialize_phoneme_map():
-    """기본 한국어 phoneme 매핑으로 초기화"""
+    """Initialize with default Korean phoneme mapping"""
     global user_phoneme_map
     user_phoneme_map = {
         '가': 'g a',
@@ -57,64 +57,64 @@ def initialize_phoneme_map():
         '피아노': 'p i a n o'
     }
 
-# 프로그램 시작 시 phoneme 매핑 초기화
+# Initialize phoneme mapping at program start
 initialize_phoneme_map()
 
 def get_phoneme_mapping_list():
-    """현재 phoneme 매핑 리스트 반환 (UI 표시용)"""
+    """Return current phoneme mapping list (for UI display)"""
     global user_phoneme_map
     return [{"lyric": k, "phoneme": v} for k, v in user_phoneme_map.items()]
 
 def get_phoneme_mapping_for_dataframe():
-    """Dataframe용 phoneme 매핑 리스트 반환"""
+    """Return phoneme mapping list for DataFrame"""
     global user_phoneme_map
     return [[k, v] for k, v in user_phoneme_map.items()]
 
 def add_phoneme_mapping(lyric: str, phoneme: str):
-    """새로운 phoneme 매핑 추가"""
+    """Add new phoneme mapping"""
     global user_phoneme_map
     user_phoneme_map[lyric.strip()] = phoneme.strip()
-    return get_phoneme_mapping_for_dataframe(), f"'{lyric}' → '{phoneme}' 매핑이 추가되었습니다."
+    return get_phoneme_mapping_for_dataframe(), f"'{lyric}' → '{phoneme}' mapping added."
 
 def update_phoneme_mapping(old_lyric: str, new_lyric: str, new_phoneme: str):
-    """기존 phoneme 매핑 수정"""
+    """Update existing phoneme mapping"""
     global user_phoneme_map
 
-    # 기존 매핑 삭제
+    # Delete existing mapping
     if old_lyric in user_phoneme_map:
         del user_phoneme_map[old_lyric]
 
-    # 새 매핑 추가
+    # Add new mapping
     user_phoneme_map[new_lyric.strip()] = new_phoneme.strip()
-    return get_phoneme_mapping_for_dataframe(), f"매핑이 '{new_lyric}' → '{new_phoneme}'로 수정되었습니다."
+    return get_phoneme_mapping_for_dataframe(), f"Mapping updated to '{new_lyric}' → '{new_phoneme}'."
 
 def delete_phoneme_mapping(lyric: str):
-    """phoneme 매핑 삭제"""
+    """Delete phoneme mapping"""
     global user_phoneme_map
     if lyric in user_phoneme_map:
         del user_phoneme_map[lyric]
-        return get_phoneme_mapping_for_dataframe(), f"'{lyric}' 매핑이 삭제되었습니다."
+        return get_phoneme_mapping_for_dataframe(), f"'{lyric}' mapping deleted."
     else:
-        return get_phoneme_mapping_for_dataframe(), f"'{lyric}' 매핑을 찾을 수 없습니다."
+        return get_phoneme_mapping_for_dataframe(), f"'{lyric}' mapping not found."
 
 def reset_phoneme_mapping():
-    """phoneme 매핑을 기본값으로 리셋"""
+    """Reset phoneme mapping to default values"""
     initialize_phoneme_map()
-    return get_phoneme_mapping_for_dataframe(), "Phoneme 매핑이 기본값으로 리셋되었습니다."
+    return get_phoneme_mapping_for_dataframe(), "Phoneme mapping reset to default values."
 
 def midi_to_frequency(midi_note):
-    """MIDI 노트 번호를 주파수로 변환 (A4 = 440Hz)"""
+    """Convert MIDI note number to frequency (A4 = 440Hz)"""
     return 440.0 * (2.0 ** ((midi_note - 69) / 12.0))
 
 def create_adsr_envelope(attack, decay, sustain, release, duration, sample_rate):
-    """ADSR 엔벨로프를 생성"""
+    """Generate ADSR envelope"""
     total_samples = int(duration * sample_rate)
     attack_samples = int(attack * sample_rate)
     decay_samples = int(decay * sample_rate)
     release_samples = int(release * sample_rate)
     sustain_samples = total_samples - attack_samples - decay_samples - release_samples
 
-    # 지속 구간이 음수가 되지 않도록 조정
+    # Adjust sustain section to avoid negative values
     if sustain_samples < 0:
         sustain_samples = 0
         total_samples = attack_samples + decay_samples + release_samples
@@ -145,45 +145,45 @@ def create_adsr_envelope(attack, decay, sustain, release, duration, sample_rate)
     return envelope
 
 def generate_sine_wave(frequency, duration, sample_rate):
-    """사인파 생성"""
+    """Generate sine wave"""
     t = np.linspace(0, duration, int(duration * sample_rate), False)
     return np.sin(2 * np.pi * frequency * t)
 
 def generate_sawtooth_wave(frequency, duration, sample_rate):
-    """톱니파 생성"""
+    """Generate sawtooth wave"""
     t = np.linspace(0, duration, int(duration * sample_rate), False)
     # 2 * (t * frequency - np.floor(0.5 + t * frequency))
     return 2 * (t * frequency % 1) - 1
 
 def generate_square_wave(frequency, duration, sample_rate):
-    """사각파 생성"""
+    """Generate square wave"""
     t = np.linspace(0, duration, int(duration * sample_rate), False)
     return np.sign(np.sin(2 * np.pi * frequency * t))
 
 def generate_triangle_wave(frequency, duration, sample_rate):
-    """삼각파 생성"""
+    """Generate triangle wave"""
     t = np.linspace(0, duration, int(duration * sample_rate), False)
     return 2 * np.abs(2 * (t * frequency % 1) - 1) - 1
 
 def generate_harmonic_wave(frequency, duration, sample_rate, harmonics=5):
-    """하모닉을 포함한 복합 파형 생성"""
+    """Generate complex waveform with harmonics"""
     t = np.linspace(0, duration, int(duration * sample_rate), False)
     wave = np.zeros_like(t)
 
-    # 기본 주파수
+    # Fundamental frequency
     wave += np.sin(2 * np.pi * frequency * t)
 
-    # 하모닉 추가 (각 하모닉의 진폭은 1/n로 감소)
+    # Add harmonics (amplitude decreases by 1/n)
     for n in range(2, harmonics + 1):
         amplitude = 1.0 / n
         wave += amplitude * np.sin(2 * np.pi * frequency * n * t)
 
-    # 정규화
+    # Normalize
     wave = wave / np.max(np.abs(wave))
     return wave
 
 def generate_fm_wave(frequency, duration, sample_rate, mod_freq=5.0, mod_depth=2.0):
-    """FM 합성 파형 생성"""
+    """Generate FM waveform"""
     t = np.linspace(0, duration, int(duration * sample_rate), False)
 
     # Modulator
@@ -195,7 +195,7 @@ def generate_fm_wave(frequency, duration, sample_rate, mod_freq=5.0, mod_depth=2
     return carrier
 
 def generate_complex_wave(frequency, duration, sample_rate, wave_type='complex'):
-    """복합적인 파형 생성 (여러 기법 조합)"""
+    """Generate complex waveform (combination of multiple techniques)"""
     if wave_type == 'sine':
         return generate_sine_wave(frequency, duration, sample_rate)
     elif wave_type == 'sawtooth':
@@ -208,8 +208,8 @@ def generate_complex_wave(frequency, duration, sample_rate, wave_type='complex')
         return generate_harmonic_wave(frequency, duration, sample_rate, harmonics=7)
     elif wave_type == 'fm':
         return generate_fm_wave(frequency, duration, sample_rate, mod_freq=frequency * 0.1, mod_depth=3.0)
-    else:  # 'complex' - 여러 파형 조합
-        # 기본 sawtooth + 하모닉 + 약간의 FM
+    else:  # 'complex' - combination of multiple waveforms
+        # Basic sawtooth + harmonics + some FM
         base = generate_sawtooth_wave(frequency, duration, sample_rate) * 0.6
         harmonic = generate_harmonic_wave(frequency, duration, sample_rate, harmonics=4) * 0.3
         fm = generate_fm_wave(frequency, duration, sample_rate, mod_freq=frequency * 0.05, mod_depth=1.0) * 0.1
@@ -217,7 +217,7 @@ def generate_complex_wave(frequency, duration, sample_rate, wave_type='complex')
         return base + harmonic + fm
 
 def synthesize_audio(piano_roll_data, attack=0.01, decay=0.1, sustain=0.7, release=0.3, wave_type='complex'):
-    """피아노롤 데이터로부터 오디오를 합성"""
+    """Synthesize audio from PianoRoll data"""
     if not piano_roll_data or 'notes' not in piano_roll_data or not piano_roll_data['notes']:
         return None
 
@@ -225,83 +225,83 @@ def synthesize_audio(piano_roll_data, attack=0.01, decay=0.1, sustain=0.7, relea
     tempo = piano_roll_data.get('tempo', 120)
     pixels_per_beat = piano_roll_data.get('pixelsPerBeat', 80)
 
-    # 전체 길이 계산 (마지막 노트의 끝까지)
+    # Calculate total length (up to the end of the last note)
     max_end_time = 0
     for note in notes:
-        # 픽셀을 초로 변환 (템포와 픽셀당 비트 수 고려)
+        # Convert pixels to seconds (considering tempo and pixels per beat)
         start_seconds = (note['start'] / pixels_per_beat) * (60.0 / tempo)
         duration_seconds = (note['duration'] / pixels_per_beat) * (60.0 / tempo)
         end_time = start_seconds + duration_seconds
         max_end_time = max(max_end_time, end_time)
 
-    # 최대 길이 제한
-    total_duration = min(max_end_time + 1.0, MAX_DURATION)  # 1초 여유 추가
+    # Limit maximum length
+    total_duration = min(max_end_time + 1.0, MAX_DURATION)  # Add 1 second buffer
     total_samples = int(total_duration * SAMPLE_RATE)
 
-    # 최종 오디오 버퍼
+    # Final audio buffer
     audio_buffer = np.zeros(total_samples)
 
-    # 각 노트 처리
+    # Process each note
     for i, note in enumerate(notes):
         try:
-            # 노트 속성
+            # Note properties
             pitch = note['pitch']
             velocity = note.get('velocity', 100)
 
-            # 시간 계산
+            # Calculate time
             start_seconds = (note['start'] / pixels_per_beat) * (60.0 / tempo)
             duration_seconds = (note['duration'] / pixels_per_beat) * (60.0 / tempo)
 
-            # 범위 체크
+            # Check range
             if start_seconds >= total_duration:
                 continue
 
-            # 지속 시간이 전체 길이를 초과하지 않도록 조정
+            # Adjust duration to not exceed total length
             if start_seconds + duration_seconds > total_duration:
                 duration_seconds = total_duration - start_seconds
 
             if duration_seconds <= 0:
                 continue
 
-            # 주파수 계산
+            # Calculate frequency
             frequency = midi_to_frequency(pitch)
 
-            # 볼륨 계산 (velocity를 0-1로 정규화)
+            # Calculate volume (normalize velocity to 0-1)
             volume = velocity / 127.0
 
-            # 모든 노트에 동일한 파형 타입 사용 (일관성 유지)
-            # 복합 파형 생성
+            # Use same waveform type for all notes (consistency)
+            # Generate complex waveform
             base_wave = generate_complex_wave(frequency, duration_seconds, SAMPLE_RATE, wave_type)
 
-            # 추가 효과: 비브라토 (주파수 변조)
+            # Additional effect: Vibrato (frequency modulation)
             t = np.linspace(0, duration_seconds, len(base_wave), False)
-            vibrato_freq = 4.5  # 4.5Hz 비브라토
-            vibrato_depth = 0.02  # 2% 주파수 변조
+            vibrato_freq = 4.5  # 4.5Hz Vibrato
+            vibrato_depth = 0.02  # 2% frequency modulation
             vibrato = 1 + vibrato_depth * np.sin(2 * np.pi * vibrato_freq * t)
 
-            # 비브라토를 파형에 적용 (간단한 근사)
+            # Apply vibrato to waveform (simple approximation)
             vibrato_wave = base_wave * vibrato
 
-            # 추가 효과: 트레몰로 (진폭 변조)
-            tremolo_freq = 3.0  # 3Hz 트레몰로
-            tremolo_depth = 0.1  # 10% 진폭 변조
+            # Additional effect: Tremolo (amplitude modulation)
+            tremolo_freq = 3.0  # 3Hz Tremolo
+            tremolo_depth = 0.1  # 10% amplitude modulation
             tremolo = 1 + tremolo_depth * np.sin(2 * np.pi * tremolo_freq * t)
 
-            # 트레몰로 적용
+            # Apply tremolo to waveform
             final_wave = vibrato_wave * tremolo
 
-            # ADSR 엔벨로프 적용
+            # Apply ADSR envelope
             envelope = create_adsr_envelope(attack, decay, sustain, release, duration_seconds, SAMPLE_RATE)
 
-            # 엔벨로프와 파형 길이 맞춤
+            # Adjust envelope and waveform length
             min_length = min(len(final_wave), len(envelope))
-            note_audio = final_wave[:min_length] * envelope[:min_length] * volume * 0.25  # 볼륨 조절
+            note_audio = final_wave[:min_length] * envelope[:min_length] * volume * 0.25  # Adjust volume
 
-            # 오디오 버퍼에 추가
+            # Add to audio buffer
             start_sample = int(start_seconds * SAMPLE_RATE)
             end_sample = start_sample + len(note_audio)
 
-            # 버퍼 범위 내에서만 추가
+            # Add only within buffer range
             if start_sample < total_samples:
                 end_sample = min(end_sample, total_samples)
                 audio_length = end_sample - start_sample
@@ -309,33 +309,33 @@ def synthesize_audio(piano_roll_data, attack=0.01, decay=0.1, sustain=0.7, relea
                     audio_buffer[start_sample:end_sample] += note_audio[:audio_length]
 
         except Exception as e:
-            print(f"노트 처리 중 오류: {e}")
+            print(f"Error processing note: {e}")
             continue
 
-    # 클리핑 방지 (normalize)
+    # Prevent clipping (normalize)
     max_amplitude = np.max(np.abs(audio_buffer))
     if max_amplitude > 0:
-        audio_buffer = audio_buffer / max_amplitude * 0.9  # 90%로 제한
+        audio_buffer = audio_buffer / max_amplitude * 0.9  # Limit to 90%
 
     return audio_buffer
 
 def audio_to_base64_wav(audio_data, sample_rate):
-    """오디오 데이터를 base64 인코딩된 WAV로 변환"""
+    """Convert audio data to base64 encoded WAV"""
     if audio_data is None or len(audio_data) == 0:
         return None
 
-    # 16비트 PCM으로 변환
+    # Convert to 16-bit PCM
     audio_16bit = (audio_data * 32767).astype(np.int16)
 
-    # WAV 파일을 메모리에 생성
+    # Create WAV file in memory
     buffer = io.BytesIO()
     with wave.open(buffer, 'wb') as wav_file:
-        wav_file.setnchannels(1)  # 모노
-        wav_file.setsampwidth(2)  # 16비트
+        wav_file.setnchannels(1)  # Mono
+        wav_file.setsampwidth(2)  # 16-bit
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(audio_16bit.tobytes())
 
-    # base64 인코딩
+    # base64 encoding
     buffer.seek(0)
     wav_data = buffer.read()
     base64_data = base64.b64encode(wav_data).decode('utf-8')
@@ -343,22 +343,22 @@ def audio_to_base64_wav(audio_data, sample_rate):
     return f"data:audio/wav;base64,{base64_data}"
 
 def calculate_waveform_data(audio_data, pixels_per_beat, tempo, target_width=1000):
-    """오디오 데이터로부터 웨이브폼 시각화 데이터를 계산"""
+    """Calculate waveform visualization data from audio data"""
     if audio_data is None or len(audio_data) == 0:
         return None
 
-    # 오디오 총 길이 (초)
+    # Calculate total audio duration (seconds)
     audio_duration = len(audio_data) / SAMPLE_RATE
 
-    # 총 픽셀 길이 계산 (템포와 픽셀당 비트 기반)
+    # Calculate total pixel length (based on tempo and pixels per beat)
     total_pixels = (tempo / 60) * pixels_per_beat * audio_duration
 
-    # 각 픽셀당 샘플 수 계산
+    # Calculate samples per pixel
     samples_per_pixel = len(audio_data) / total_pixels
 
     waveform_points = []
 
-    # 각 픽셀에 대해 min/max 값 계산
+    # Calculate min/max values for each pixel
     for pixel in range(int(total_pixels)):
         start_sample = int(pixel * samples_per_pixel)
         end_sample = int((pixel + 1) * samples_per_pixel)
@@ -368,14 +368,14 @@ def calculate_waveform_data(audio_data, pixels_per_beat, tempo, target_width=100
             break
 
         if start_sample < end_sample:
-            # 해당 픽셀 범위의 오디오 데이터
+            # Audio data for the pixel range
             pixel_data = audio_data[start_sample:end_sample]
 
-            # min, max 값 계산
+            # Calculate min, max values
             min_val = float(np.min(pixel_data))
             max_val = float(np.max(pixel_data))
 
-            # 시간 정보 (픽셀 위치)
+            # Time information (pixel position)
             time_position = pixel
 
             waveform_points.append({
@@ -387,7 +387,7 @@ def calculate_waveform_data(audio_data, pixels_per_beat, tempo, target_width=100
     return waveform_points
 
 def convert_basic(piano_roll):
-    """기본 변환 함수 (첫 번째 탭용)"""
+    """Basic conversion function (first tab)"""
     print("=== Basic Convert function called ===")
     print("Received piano_roll:")
     print(piano_roll)
@@ -395,26 +395,26 @@ def convert_basic(piano_roll):
     return piano_roll
 
 def synthesize_and_play(piano_roll, attack, decay, sustain, release, wave_type='complex'):
-    """신디사이저로 오디오를 생성하고 피아노롤에 전달"""
+    """Synthesize audio and pass it to the piano roll"""
     print("=== Synthesize function called ===")
     print("Piano roll data:", piano_roll)
     print(f"ADSR: A={attack}, D={decay}, S={sustain}, R={release}")
     print(f"Wave Type: {wave_type}")
 
-    # 오디오 합성
+    # Synthesize audio
     audio_data = synthesize_audio(piano_roll, attack, decay, sustain, release, wave_type)
 
     if audio_data is None:
-        print("오디오 생성 실패")
-        return piano_roll, "오디오 생성 실패", None
+        print("Audio synthesis failed")
+        return piano_roll, "Audio synthesis failed", None
 
-    # base64로 변환 (피아노롤용)
+    # Convert to base64 (for piano roll)
     audio_base64 = audio_to_base64_wav(audio_data, SAMPLE_RATE)
 
-    # gradio Audio 컴포넌트용 WAV 파일 생성
+    # Create WAV file for gradio Audio component
     gradio_audio_path = create_temp_wav_file(audio_data, SAMPLE_RATE)
 
-    # 피아노롤 데이터에 오디오 추가
+    # Add audio data to piano roll data
     updated_piano_roll = piano_roll.copy() if piano_roll else {}
     updated_piano_roll['audio_data'] = audio_base64
     updated_piano_roll['use_backend_audio'] = True
@@ -424,34 +424,34 @@ def synthesize_and_play(piano_roll, attack, decay, sustain, release, wave_type='
     print(f"   - use_backend_audio: {updated_piano_roll['use_backend_audio']}")
     print(f"   - audio_base64 preview: {audio_base64[:50] + '...' if audio_base64 else 'None'}")
 
-    # 웨이브폼 데이터 계산
+    # Calculate waveform data
     pixels_per_beat = updated_piano_roll.get('pixelsPerBeat', 80)
     tempo = updated_piano_roll.get('tempo', 120)
     waveform_data = calculate_waveform_data(audio_data, pixels_per_beat, tempo)
 
-    # 곡선 데이터 예시 (피치 곡선 + 웨이브폼 데이터)
+    # Example curve data (pitch curve + waveform data)
     curve_data = {}
 
-    # 웨이브폼 데이터 추가
+    # Add waveform data
     if waveform_data:
         curve_data['waveform_data'] = waveform_data
-        print(f"웨이브폼 데이터 생성: {len(waveform_data)} 포인트")
+        print(f"Waveform data created: {len(waveform_data)} points")
 
-    # 피치 곡선 데이터 (기존)
+    # Pitch curve data (existing)
     if 'notes' in updated_piano_roll and updated_piano_roll['notes']:
         pitch_curve = []
         for note in updated_piano_roll['notes']:
-            # 간단한 예시: 노트의 피치를 기반으로 곡선 생성
+            # Simple example: create curve based on note pitch
             base_pitch = note['pitch']
-            # 약간의 비브라토 효과
+            # Slightly vibrato effect
             curve_points = [base_pitch + 0.5 * np.sin(i * 0.5) for i in range(10)]
             pitch_curve.extend(curve_points)
 
-        curve_data['pitch_curve'] = pitch_curve[:100]  # 최대 100개 포인트로 제한
+        curve_data['pitch_curve'] = pitch_curve[:100]  # Limit to 100 points
 
     updated_piano_roll['curve_data'] = curve_data
 
-    # 세그먼트 데이터 예시 (발음 타이밍)
+    # Example segment data (phoneme timing)
     if 'notes' in updated_piano_roll and updated_piano_roll['notes']:
         segment_data = []
 
@@ -469,128 +469,128 @@ def synthesize_and_play(piano_roll, attack, decay, sustain, release, wave_type='
 
         updated_piano_roll['segment_data'] = segment_data
 
-    print(f"오디오 생성 완료: {len(audio_data)} 샘플")
+    print(f"Audio synthesis completed: {len(audio_data)} samples")
     if waveform_data:
-        print(f"웨이브폼 포인트: {len(waveform_data)}개")
+        print(f"Waveform points: {len(waveform_data)}")
 
-    status_message = f"오디오 생성 완료 ({wave_type} 파형): {len(audio_data)} 샘플, 길이: {len(audio_data)/SAMPLE_RATE:.2f}초"
+    status_message = f"Audio synthesis completed ({wave_type} waveform): {len(audio_data)} samples, duration: {len(audio_data)/SAMPLE_RATE:.2f} seconds"
 
     return updated_piano_roll, status_message, gradio_audio_path
 
 def create_temp_wav_file(audio_data, sample_rate):
-    """gradio Audio 컴포넌트용 임시 WAV 파일 생성"""
+    """Create temporary WAV file for gradio Audio component"""
     if audio_data is None or len(audio_data) == 0:
         return None
 
     try:
-        # 16비트 PCM으로 변환
+        # Convert to 16-bit PCM
         audio_16bit = (audio_data * 32767).astype(np.int16)
 
-        # 임시 파일 생성
+        # Create temporary file
         temp_fd, temp_path = tempfile.mkstemp(suffix='.wav')
 
         with wave.open(temp_path, 'wb') as wav_file:
-            wav_file.setnchannels(1)  # 모노
-            wav_file.setsampwidth(2)  # 16비트
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
             wav_file.setframerate(sample_rate)
             wav_file.writeframes(audio_16bit.tobytes())
 
-        # 파일 디스크립터 닫기
+        # Close file descriptor
         os.close(temp_fd)
 
         return temp_path
     except Exception as e:
-        print(f"임시 WAV 파일 생성 오류: {e}")
+        print(f"Error creating temporary WAV file: {e}")
         return None
 
 def clear_and_regenerate_waveform(piano_roll, attack, decay, sustain, release, wave_type='complex'):
-    """웨이브폼을 지우고 다시 생성"""
+    """Clear and regenerate waveform"""
     print("=== Clear and Regenerate Waveform ===")
 
-    # 먼저 웨이브폼 데이터를 지움
+    # First clear waveform data
     cleared_piano_roll = piano_roll.copy() if piano_roll else {}
-    cleared_piano_roll['curve_data'] = {}  # 곡선 데이터 초기화
-    cleared_piano_roll['audio_data'] = None  # 오디오 데이터 초기화
-    cleared_piano_roll['use_backend_audio'] = False  # 백엔드 오디오 비활성화
+    cleared_piano_roll['curve_data'] = {}  # Initialize curve data
+    cleared_piano_roll['audio_data'] = None  # Initialize audio data
+    cleared_piano_roll['use_backend_audio'] = False  # Disable backend audio
 
-    # 잠시 대기를 위한 메시지
-    yield cleared_piano_roll, "웨이브폼을 지우는 중...", None
+    # Message for waiting
+    yield cleared_piano_roll, "Clearing waveform...", None
 
-    # 그 다음 새로운 웨이브폼 생성
+    # Then regenerate new waveform
     result_piano_roll, status_message, gradio_audio_path = synthesize_and_play(piano_roll, attack, decay, sustain, release, wave_type)
 
-    yield result_piano_roll, f"재생성 완료! {status_message}", gradio_audio_path
+    yield result_piano_roll, f"Regeneration completed! {status_message}", gradio_audio_path
 
-# G2P (Grapheme-to-Phoneme) 함수 (사용자 정의 매핑 사용)
+# G2P (Grapheme-to-Phoneme) function (using custom mapping)
 def mock_g2p(text: str) -> str:
     """
-    사용자 정의 매핑을 사용하는 한국어 G2P 함수
+    Korean G2P function using custom mapping
     """
     global user_phoneme_map
 
-    # 텍스트를 소문자로 변환하고 공백 제거
+    # Convert text to lowercase and remove whitespace
     text = text.strip()
 
-    # 사용자 정의 매핑에서 찾기
+    # Find in custom mapping
     if text in user_phoneme_map:
         return user_phoneme_map[text]
 
-    # 매핑에 없으면 글자별로 처리
+    # If not found, process each character
     result = []
     for char in text:
         if char in user_phoneme_map:
             result.append(user_phoneme_map[char])
         else:
-            # 알 수 없는 글자는 그대로 반환
+            # Unknown characters are returned as is
             result.append(char)
 
     return ' '.join(result)
 
 def process_lyric_input(piano_roll, lyric_data):
     """
-    가사 입력 이벤트를 처리하고 G2P를 실행하여 phoneme을 생성
+    Process lyric input event and run G2P to create phoneme
     """
     print("=== G2P Processing ===")
     print("Piano roll data:", piano_roll)
     print("Lyric data:", lyric_data)
 
     if not piano_roll or not lyric_data:
-        return piano_roll, "가사 데이터가 없습니다."
+        return piano_roll, "Lyric data is missing."
 
-    # 새로운 가사에 대해 G2P 실행
+    # Run G2P for new lyric
     new_lyric = lyric_data.get('newLyric', '')
     if new_lyric:
-        # G2P 실행 (모킹 함수 사용)
+        # Run G2P (using mock function)
         phoneme = mock_g2p(new_lyric)
-        print(f"G2P 결과: '{new_lyric}' -> '{phoneme}'")
+        print(f"G2P result: '{new_lyric}' -> '{phoneme}'")
 
-        # 해당 노트의 phoneme 업데이트
+        # Update phoneme for the corresponding note
         note_id = lyric_data.get('noteId')
         if note_id and 'notes' in piano_roll:
             notes = piano_roll['notes'].copy()
             for note in notes:
                 if note.get('id') == note_id:
                     note['phoneme'] = phoneme
-                    print(f"노트 {note_id}의 phoneme 업데이트: {phoneme}")
+                    print(f"Note {note_id} phoneme updated: {phoneme}")
                     break
 
-            # 업데이트된 피아노롤 데이터 반환
+            # Return updated piano roll data
             updated_piano_roll = piano_roll.copy()
             updated_piano_roll['notes'] = notes
 
-            return updated_piano_roll, f"G2P 완료: '{new_lyric}' -> [{phoneme}]"
+            return updated_piano_roll, f"G2P completed: '{new_lyric}' -> [{phoneme}]"
 
-    return piano_roll, "G2P 처리 완료"
+    return piano_roll, "G2P processing completed"
 
 def manual_phoneme_update(piano_roll, note_index, phoneme_text):
     """
-    수동으로 특정 노트의 phoneme을 업데이트
+    Manually update phoneme for a specific note
     """
     print(f"=== Manual Phoneme Update ===")
     print(f"Note index: {note_index}, Phoneme: '{phoneme_text}'")
 
     if not piano_roll or 'notes' not in piano_roll:
-        return piano_roll, "피아노롤 데이터가 없습니다."
+        return piano_roll, "Piano roll data is missing."
 
     notes = piano_roll['notes'].copy()
 
@@ -601,18 +601,18 @@ def manual_phoneme_update(piano_roll, note_index, phoneme_text):
         updated_piano_roll['notes'] = notes
 
         lyric = notes[note_index].get('lyric', '?')
-        return updated_piano_roll, f"노트 {note_index + 1} ('{lyric}')의 phoneme을 '{phoneme_text}'로 설정했습니다."
+        return updated_piano_roll, f"Note {note_index + 1} ('{lyric}') phoneme set to '{phoneme_text}'"
     else:
-        return piano_roll, f"잘못된 노트 인덱스: {note_index}"
+        return piano_roll, f"Invalid note index: {note_index}"
 
 def clear_all_phonemes(piano_roll):
     """
-    모든 노트의 phoneme을 지우기
+    Clear all phonemes for all notes
     """
     print("=== Clear All Phonemes ===")
 
     if not piano_roll or 'notes' not in piano_roll:
-        return piano_roll, "피아노롤 데이터가 없습니다."
+        return piano_roll, "Piano roll data is missing."
 
     notes = piano_roll['notes'].copy()
 
@@ -622,16 +622,16 @@ def clear_all_phonemes(piano_roll):
     updated_piano_roll = piano_roll.copy()
     updated_piano_roll['notes'] = notes
 
-    return updated_piano_roll, "모든 phoneme이 지워졌습니다."
+    return updated_piano_roll, "All phonemes cleared."
 
 def auto_generate_all_phonemes(piano_roll):
     """
-    모든 노트의 가사에 대해 자동으로 phoneme 생성
+    Automatically generate phoneme for all lyrics
     """
     print("=== Auto Generate All Phonemes ===")
 
     if not piano_roll or 'notes' not in piano_roll:
-        return piano_roll, "피아노롤 데이터가 없습니다."
+        return piano_roll, "Piano roll data is missing."
 
     notes = piano_roll['notes'].copy()
 
@@ -642,40 +642,40 @@ def auto_generate_all_phonemes(piano_roll):
             phoneme = mock_g2p(lyric)
             note['phoneme'] = phoneme
             updated_count += 1
-            print(f"자동 생성: '{lyric}' -> '{phoneme}'")
+            print(f"Auto-generated: '{lyric}' -> '{phoneme}'")
 
     updated_piano_roll = piano_roll.copy()
     updated_piano_roll['notes'] = notes
 
-    return updated_piano_roll, f"{updated_count}개 노트의 phoneme이 자동 생성되었습니다."
+    return updated_piano_roll, f"{updated_count} notes' phoneme auto-generated"
 
-# F0 및 오디오 특성 분석 함수들
+# Functions for analyzing F0 and audio features
 def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
     """
-    오디오 파일에서 F0(기본 주파수)를 추출합니다.
+    Extract F0 (fundamental frequency) from audio file
     """
     if not LIBROSA_AVAILABLE:
-        return None, "librosa가 설치되지 않아 F0 분석을 수행할 수 없습니다."
+        return None, "librosa is not installed, so F0 analysis cannot be performed"
 
     try:
-        print(f"🎵 F0 추출 시작: {audio_file_path}")
+        print(f"🎵 F0 extraction started: {audio_file_path}")
 
-        # 오디오 로드
+        # Load audio
         y, sr = librosa.load(audio_file_path, sr=None)
-        print(f"   - 샘플레이트: {sr}Hz")
-        print(f"   - 길이: {len(y)/sr:.2f}초")
+        print(f"   - Sample rate: {sr}Hz")
+        print(f"   - Length: {len(y)/sr:.2f} seconds")
 
-        # F0 추출 방법 선택
+        # Select F0 extraction method
         if f0_method == "pyin":
-            # PYIN 알고리즘 사용 (더 정확하지만 느림)
+            # Use PYIN algorithm (more accurate but slower)
             f0, voiced_flag, voiced_probs = librosa.pyin(
                 y,
                 sr=sr,
-                fmin=librosa.note_to_hz('C2'),  # 약 65Hz
-                fmax=librosa.note_to_hz('C7')   # 약 2093Hz
+                fmin=librosa.note_to_hz('C2'),  # Approx. 65Hz
+                fmax=librosa.note_to_hz('C7')   # Approx. 2093Hz
             )
         else:
-            # 기본 피치 추출
+            # Fundamental pitch extraction
             pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
             f0 = []
             for t in range(pitches.shape[1]):
@@ -684,87 +684,87 @@ def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
                 f0.append(pitch if pitch > 0 else np.nan)
             f0 = np.array(f0)
 
-        # 시간 축 계산
-        hop_length = 512  # librosa 기본값
+        # Calculate time axis
+        hop_length = 512  # librosa default
         frame_times = librosa.frames_to_time(np.arange(len(f0)), sr=sr, hop_length=hop_length)
 
-        # NaN 값 처리 및 스무딩
+        # Handle NaN values and smoothing
         valid_indices = ~np.isnan(f0)
         if np.sum(valid_indices) == 0:
-            return None, "유효한 F0 값을 찾을 수 없습니다."
+            return None, "Valid F0 values not found"
 
-        # 유효한 F0 값만 사용
+        # Use only valid F0 values
         valid_f0 = f0[valid_indices]
         valid_times = frame_times[valid_indices]
 
-        print(f"   - 추출된 F0 포인트: {len(valid_f0)}개")
-        print(f"   - F0 범위: {np.min(valid_f0):.1f}Hz ~ {np.max(valid_f0):.1f}Hz")
+        print(f"   - Extracted F0 points: {len(valid_f0)}")
+        print(f"   - F0 range: {np.min(valid_f0):.1f}Hz ~ {np.max(valid_f0):.1f}Hz")
 
-        # voiced/unvoiced 정보도 함께 반환
+        # Return voiced/unvoiced information as well
         result_data = {
-            'times': frame_times,  # 전체 시간 축
-            'f0_values': f0,  # 전체 F0 (NaN 포함)
-            'valid_times': valid_times,  # 유효한 시간만
-            'valid_f0_values': valid_f0,  # 유효한 F0만
+            'times': frame_times,  # Full time axis
+            'f0_values': f0,  # Full F0 (includes NaN)
+            'valid_times': valid_times,  # Only valid times
+            'valid_f0_values': valid_f0,  # Only valid F0
             'sample_rate': sr,
             'duration': len(y) / sr,
             'hop_length': hop_length
         }
 
-        # PYIN에서 voiced 정보 추가
+        # Add voiced information from PYIN
         if f0_method == "pyin" and 'voiced_flag' in locals() and 'voiced_probs' in locals():
             result_data['voiced_flag'] = voiced_flag
             result_data['voiced_probs'] = voiced_probs
         else:
-            # 다른 방법의 경우 F0 존재 여부로 voiced 추정
+            # For other methods, estimate voiced based on F0 existence
             voiced_flag = ~np.isnan(f0)
             voiced_probs = voiced_flag.astype(float)
             result_data['voiced_flag'] = voiced_flag
             result_data['voiced_probs'] = voiced_probs
 
-        return result_data, "F0 추출 완료"
+        return result_data, "F0 extraction completed"
 
     except Exception as e:
-        print(f"❌ F0 추출 오류: {e}")
-        return None, f"F0 추출 오류: {str(e)}"
+        print(f"❌ F0 extraction error: {e}")
+        return None, f"F0 extraction error: {str(e)}"
 
 def extract_loudness_from_audio(audio_file_path):
     """
-    오디오 파일에서 loudness(음량)를 추출합니다.
+    Extract loudness (volume) from audio file
     """
     if not LIBROSA_AVAILABLE:
-        return None, "librosa가 설치되지 않아 loudness 분석을 수행할 수 없습니다."
+        return None, "librosa is not installed, so loudness analysis cannot be performed"
 
     try:
-        print(f"🔊 Loudness 추출 시작: {audio_file_path}")
+        print(f"🔊 Loudness extraction started: {audio_file_path}")
 
-        # 오디오 로드
+        # Load audio
         y, sr = librosa.load(audio_file_path, sr=None)
-        print(f"   - 샘플레이트: {sr}Hz")
-        print(f"   - 길이: {len(y)/sr:.2f}초")
+        print(f"   - Sample rate: {sr}Hz")
+        print(f"   - Length: {len(y)/sr:.2f} seconds")
 
-        # RMS 에너지 계산
+        # Calculate RMS energy
         hop_length = 512
         rms_energy = librosa.feature.rms(y=y, hop_length=hop_length)[0]
 
-        # 시간 축 계산
+        # Calculate time axis
         frame_times = librosa.frames_to_time(np.arange(len(rms_energy)), sr=sr, hop_length=hop_length)
 
-        # dB로 변환 (참조값: 최대 RMS)
+        # Convert to dB (reference value: maximum RMS)
         max_rms = np.max(rms_energy)
         if max_rms > 0:
             loudness_db = 20 * np.log10(rms_energy / max_rms)
-            # -60dB 이하는 무음으로 처리
+            # Below -60dB is treated as silence
             loudness_db = np.maximum(loudness_db, -60)
         else:
             loudness_db = np.full_like(rms_energy, -60)
 
-        # 0-1 범위로 정규화 (-60dB ~ 0dB -> 0 ~ 1)
+        # Normalize to 0-1 range (-60dB ~ 0dB -> 0 ~ 1)
         loudness_normalized = (loudness_db + 60) / 60
 
-        print(f"   - 추출된 Loudness 포인트: {len(loudness_normalized)}개")
-        print(f"   - RMS 범위: {np.min(rms_energy):.6f} ~ {np.max(rms_energy):.6f}")
-        print(f"   - dB 범위: {np.min(loudness_db):.1f}dB ~ {np.max(loudness_db):.1f}dB")
+        print(f"   - Extracted Loudness points: {len(loudness_normalized)}")
+        print(f"   - RMS range: {np.min(rms_energy):.6f} ~ {np.max(rms_energy):.6f}")
+        print(f"   - dB range: {np.min(loudness_db):.1f}dB ~ {np.max(loudness_db):.1f}dB")
 
         return {
             'times': frame_times,
@@ -774,40 +774,40 @@ def extract_loudness_from_audio(audio_file_path):
             'sample_rate': sr,
             'duration': len(y) / sr,
             'hop_length': hop_length
-        }, "Loudness 추출 완료"
+        }, "Loudness extraction completed"
 
     except Exception as e:
-        print(f"❌ Loudness 추출 오류: {e}")
-        return None, f"Loudness 추출 오류: {str(e)}"
+        print(f"❌ Loudness extraction error: {e}")
+        return None, f"Loudness extraction error: {str(e)}"
 
 def extract_voicing_from_audio(audio_file_path, f0_method="pyin"):
     """
-    오디오 파일에서 voice/unvoice 정보를 추출합니다.
+    Extract voice/unvoice information from audio file
     """
     if not LIBROSA_AVAILABLE:
-        return None, "librosa가 설치되지 않아 voice/unvoice 분석을 수행할 수 없습니다."
+        return None, "librosa is not installed, so voice/unvoice analysis cannot be performed"
 
     try:
-        print(f"🗣️ Voice/Unvoice 추출 시작: {audio_file_path}")
+        print(f"🗣️ Voice/Unvoice extraction started: {audio_file_path}")
 
-        # F0 분석에서 voiced 정보를 함께 얻음
+        # Get voiced information from F0 analysis
         f0_data, f0_status = extract_f0_from_audio(audio_file_path, f0_method)
 
         if f0_data is None:
-            return None, f"F0 분석 실패로 voice/unvoice 추출 불가: {f0_status}"
+            return None, f"F0 analysis failed, so voice/unvoice extraction is not possible: {f0_status}"
 
-        # voiced 정보 추출
+        # Extract voiced information
         times = f0_data['times']
         voiced_flag = f0_data['voiced_flag']
         voiced_probs = f0_data['voiced_probs']
 
-        print(f"   - 추출된 Voice/Unvoice 포인트: {len(voiced_flag)}개")
+        print(f"   - Extracted Voice/Unvoice points: {len(voiced_flag)}")
 
-        # voiced 구간 통계
+        # voiced section statistics
         voiced_frames = np.sum(voiced_flag)
         voiced_ratio = voiced_frames / len(voiced_flag) if len(voiced_flag) > 0 else 0
-        print(f"   - Voiced 구간: {voiced_frames}프레임 ({voiced_ratio:.1%})")
-        print(f"   - Unvoiced 구간: {len(voiced_flag) - voiced_frames}프레임 ({1-voiced_ratio:.1%})")
+        print(f"   - Voiced section: {voiced_frames} frames ({voiced_ratio:.1%})")
+        print(f"   - Unvoiced section: {len(voiced_flag) - voiced_frames} frames ({1-voiced_ratio:.1%})")
 
         return {
             'times': times,
@@ -817,54 +817,54 @@ def extract_voicing_from_audio(audio_file_path, f0_method="pyin"):
             'duration': f0_data['duration'],
             'hop_length': f0_data['hop_length'],
             'voiced_ratio': voiced_ratio
-        }, "Voice/Unvoice 추출 완료"
+        }, "Voice/Unvoice extraction completed"
 
     except Exception as e:
-        print(f"❌ Voice/Unvoice 추출 오류: {e}")
-        return None, f"Voice/Unvoice 추출 오류: {str(e)}"
+        print(f"❌ Voice/Unvoice extraction error: {e}")
+        return None, f"Voice/Unvoice extraction error: {str(e)}"
 
 def extract_audio_features(audio_file_path, f0_method="pyin", include_f0=True, include_loudness=True, include_voicing=True):
     """
-    오디오 파일에서 F0, loudness, voice/unvoice를 모두 추출합니다.
+    Extract F0, loudness, and voice/unvoice from audio file
     """
     if not LIBROSA_AVAILABLE:
-        return None, "librosa가 설치되지 않아 오디오 특성 분석을 수행할 수 없습니다."
+        return None, "librosa is not installed, so audio feature analysis cannot be performed"
 
     features = {}
     status_messages = []
 
     try:
-        print(f"🎵 오디오 특성 분석 시작: {audio_file_path}")
+        print(f"🎵 Audio feature analysis started: {audio_file_path}")
 
-        # F0 추출
+        # Extract F0
         if include_f0:
             f0_data, f0_status = extract_f0_from_audio(audio_file_path, f0_method)
             if f0_data:
                 features['f0'] = f0_data
                 status_messages.append(f0_status)
             else:
-                status_messages.append(f"F0 추출 실패: {f0_status}")
+                status_messages.append(f"F0 extraction failed: {f0_status}")
 
-        # Loudness 추출
+        # Extract Loudness
         if include_loudness:
             loudness_data, loudness_status = extract_loudness_from_audio(audio_file_path)
             if loudness_data:
                 features['loudness'] = loudness_data
                 status_messages.append(loudness_status)
             else:
-                status_messages.append(f"Loudness 추출 실패: {loudness_status}")
+                status_messages.append(f"Loudness extraction failed: {loudness_status}")
 
-        # Voice/Unvoice 추출
+        # Extract Voice/Unvoice
         if include_voicing:
             voicing_data, voicing_status = extract_voicing_from_audio(audio_file_path, f0_method)
             if voicing_data:
                 features['voicing'] = voicing_data
                 status_messages.append(voicing_status)
             else:
-                status_messages.append(f"Voice/Unvoice 추출 실패: {voicing_status}")
+                status_messages.append(f"Voice/Unvoice extraction failed: {voicing_status}")
 
         if features:
-            # 공통 정보 추가
+            # Add common information
             if 'f0' in features:
                 features['duration'] = features['f0']['duration']
                 features['sample_rate'] = features['f0']['sample_rate']
@@ -877,16 +877,16 @@ def extract_audio_features(audio_file_path, f0_method="pyin", include_f0=True, i
 
             return features, " | ".join(status_messages)
         else:
-            return None, "모든 특성 추출에 실패했습니다."
+            return None, "All feature extraction failed"
 
     except Exception as e:
-        print(f"❌ 오디오 특성 분석 오류: {e}")
-        return None, f"오디오 특성 분석 오류: {str(e)}"
+        print(f"❌ Audio feature analysis error: {e}")
+        return None, f"Audio feature analysis error: {str(e)}"
 
 def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
     """
-    F0 데이터를 LineLayer용 line_data 형식으로 변환합니다.
-    F0 곡선이 피아노롤 그리드의 정확한 피치 위치에 표시되도록 변환합니다.
+    Convert F0 data to line_data format for LineLayer
+    Ensure F0 curve is displayed at the exact pitch positions of the piano roll grid
     """
     if not f0_data:
         return None
@@ -895,35 +895,35 @@ def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
         times = f0_data['times']
         f0_values = f0_data['f0_values']
 
-        # 피아노롤 상수들 (GridComponent와 동일)
+        # Piano roll constants (same as GridComponent)
         NOTE_HEIGHT = 20
         TOTAL_NOTES = 128
 
         def hz_to_midi(frequency):
-            """주파수(Hz)를 MIDI 노트 번호로 변환"""
+            """Convert frequency (Hz) to MIDI note number"""
             if frequency <= 0:
                 return 0
             return 69 + 12 * np.log2(frequency / 440.0)
 
         def midi_to_y_coordinate(midi_note):
-            """MIDI 노트 번호를 피아노롤 Y 좌표로 변환 (GridComponent와 동일한 방식)"""
+            """Convert MIDI note number to piano roll Y coordinate (same as GridComponent)"""
             return (TOTAL_NOTES - 1 - midi_note) * NOTE_HEIGHT + NOTE_HEIGHT/2
 
-        # 데이터 포인트 생성 (피아노롤 좌표계 사용)
+        # Create data points (using piano roll coordinate system)
         data_points = []
         valid_f0_values = []
 
         for time, f0 in zip(times, f0_values):
             if not np.isnan(f0) and f0 > 0:
-                # Hz를 MIDI로 변환
+                # Convert Hz to MIDI
                 midi_note = hz_to_midi(f0)
 
-                # MIDI 범위 체크 (0-127)
+                # Check MIDI range (0-127)
                 if 0 <= midi_note <= 127:
-                    # 시간(초)을 픽셀 X 좌표로 변환
+                    # Convert time (seconds) to pixel X coordinate
                     x_pixel = time * (tempo / 60) * pixelsPerBeat
 
-                    # MIDI를 피아노롤 Y 좌표로 변환
+                    # Convert MIDI to piano roll Y coordinate
                     y_pixel = midi_to_y_coordinate(midi_note)
 
                     data_points.append({
@@ -933,31 +933,31 @@ def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
                     valid_f0_values.append(f0)
 
         if not data_points:
-            print("⚠️ 유효한 F0 데이터 포인트가 없습니다.")
+            print("⚠️ No valid F0 data points")
             return None
 
-        # F0 값 범위 정보 (표시용)
+        # F0 value range information (for display)
         min_f0 = float(np.min(valid_f0_values))
         max_f0 = float(np.max(valid_f0_values))
         min_midi = hz_to_midi(min_f0)
         max_midi = hz_to_midi(max_f0)
 
-        # Y 범위를 전체 피아노롤 범위로 설정
+        # Set Y range to full piano roll range
         y_min = 0
         y_max = TOTAL_NOTES * NOTE_HEIGHT
 
         line_data = {
             "f0_curve": {
-                "color": "#FF6B6B",  # 빨간색
+                "color": "#FF6B6B",  # Red
                 "lineWidth": 3,
                 "yMin": y_min,
                 "yMax": y_max,
-                "position": "overlay",  # 그리드 위에 오버레이
-                "renderMode": "piano_grid",  # F0 전용 렌더링 모드
+                "position": "overlay",  # Overlay on grid
+                "renderMode": "piano_grid",  # F0-specific rendering mode
                 "visible": True,
                 "opacity": 0.8,
                 "data": data_points,
-                # 메타데이터
+                # Metadata
                 "dataType": "f0",
                 "unit": "Hz",
                 "originalRange": {
@@ -969,21 +969,21 @@ def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
             }
         }
 
-        print(f"📊 F0 LineData 생성 완료: {len(data_points)}개 포인트")
-        print(f"   - F0 범위: {min_f0:.1f}Hz ~ {max_f0:.1f}Hz")
-        print(f"   - MIDI 범위: {min_midi:.1f} ~ {max_midi:.1f}")
-        print(f"   - 렌더링 모드: 피아노롤 그리드 정렬")
+        print(f"📊 F0 LineData created: {len(data_points)} points")
+        print(f"   - F0 range: {min_f0:.1f}Hz ~ {max_f0:.1f}Hz")
+        print(f"   - MIDI range: {min_midi:.1f} ~ {max_midi:.1f}")
+        print(f"   - Rendering mode: Piano roll grid alignment")
 
         return line_data
 
     except Exception as e:
-        print(f"❌ F0 LineData 생성 오류: {e}")
+        print(f"❌ F0 LineData creation error: {e}")
         return None
 
 def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=None, y_max=None, use_db=True):
     """
-    Loudness 데이터를 LineLayer용 line_data 형식으로 변환합니다.
-    독립적인 Y축 범위를 가지며 피아노롤 그리드와 별도로 표시됩니다.
+    Convert Loudness data to line_data format for LineLayer
+    Has independent Y range and is displayed separately from the piano roll grid
     """
     if not loudness_data:
         return None
@@ -991,7 +991,7 @@ def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=
     try:
         times = loudness_data['times']
 
-        # 사용할 loudness 값 선택 (dB 또는 정규화된 값)
+        # Select loudness value to use (dB or normalized)
         if use_db:
             values = loudness_data['loudness_db']
             unit = "dB"
@@ -1003,47 +1003,47 @@ def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=
             default_y_min = 0
             default_y_max = 1
 
-        # Y축 범위 설정
+        # Set Y range
         actual_y_min = y_min if y_min is not None else default_y_min
         actual_y_max = y_max if y_max is not None else default_y_max
         y_range = actual_y_max - actual_y_min
 
-        # 데이터 포인트 생성
+        # Create data points
         data_points = []
         for time, value in zip(times, values):
             if not np.isnan(value):
-                # 시간(초)을 픽셀 X 좌표로 변환
+                # Convert time (seconds) to pixel X coordinate
                 x_pixel = time * (tempo / 60) * pixelsPerBeat
 
-                # Loudness 값을 0-2560 픽셀 범위로 변환 (전체 grid canvas 높이 사용)
+                # Convert Loudness value to 0-2560 pixel range (using full grid canvas height)
                 normalized_value = (value - actual_y_min) / y_range
-                y_pixel = normalized_value * 2560  # 0-2560 픽셀 범위 (128개 노트 * 20픽셀 높이)
+                y_pixel = normalized_value * 2560  # 0-2560 pixel range (128 notes * 20 pixels height)
 
                 data_points.append({
                     "x": float(x_pixel),
-                    "y": float(max(0, min(2560, y_pixel)))  # 범위 제한
+                    "y": float(max(0, min(2560, y_pixel)))  # Range limit
                 })
 
         if not data_points:
-            print("⚠️ 유효한 Loudness 데이터 포인트가 없습니다.")
+            print("⚠️ No valid Loudness data points")
             return None
 
-        # 실제 값 범위
+        # Actual value range
         min_value = float(np.min(values))
         max_value = float(np.max(values))
 
         line_data = {
             "loudness_curve": {
-                "color": "#4ECDC4",  # 청록색
+                "color": "#4ECDC4",  # Cyan
                 "lineWidth": 2,
                 "yMin": 0,
-                "yMax": 2560,  # 전체 grid canvas 높이 (128개 노트 * 20픽셀)
-                "position": "overlay",  # 전체 영역에 오버레이로 표시
-                "renderMode": "independent_range",  # 독립적인 Y축 범위
+                "yMax": 2560,  # Full grid canvas height (128 notes * 20 pixels)
+                "position": "overlay",  # Display on entire area as overlay
+                "renderMode": "independent_range",  # Independent Y range
                 "visible": True,
                 "opacity": 0.6,
                 "data": data_points,
-                # 메타데이터
+                # Metadata
                 "dataType": "loudness",
                 "unit": unit,
                 "originalRange": {
@@ -1055,21 +1055,21 @@ def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=
             }
         }
 
-        print(f"📊 Loudness LineData 생성 완료: {len(data_points)}개 포인트")
-        print(f"   - Loudness 범위: {min_value:.1f}{unit} ~ {max_value:.1f}{unit}")
-        print(f"   - Y축 범위: {actual_y_min} ~ {actual_y_max}")
-        print(f"   - 렌더링 모드: 전체 grid canvas 높이 (independent_range)")
+        print(f"📊 Loudness LineData created: {len(data_points)} points")
+        print(f"   - Loudness range: {min_value:.1f}{unit} ~ {max_value:.1f}{unit}")
+        print(f"   - Y range: {actual_y_min} ~ {actual_y_max}")
+        print(f"   - Rendering mode: Full grid canvas height (independent_range)")
 
         return line_data
 
     except Exception as e:
-        print(f"❌ Loudness LineData 생성 오류: {e}")
+        print(f"❌ Loudness LineData creation error: {e}")
         return None
 
 def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_probs=True):
     """
-    Voice/Unvoice 데이터를 LineLayer용 line_data 형식으로 변환합니다.
-    독립적인 Y축 범위를 가지며 0(unvoiced) ~ 1(voiced) 범위로 표시됩니다.
+    Convert Voice/Unvoice data to line_data format for LineLayer
+    Has independent Y range and is displayed as 0(unvoiced) ~ 1(voiced) range
     """
     if not voicing_data:
         return None
@@ -1077,7 +1077,7 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
     try:
         times = voicing_data['times']
 
-        # 사용할 voicing 값 선택 (확률값 또는 이진값)
+        # Select voicing value to use (probability or binary)
         if use_probs and 'voiced_probs' in voicing_data:
             values = voicing_data['voiced_probs']
             unit = "probability"
@@ -1085,42 +1085,42 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
             values = voicing_data['voiced_flag'].astype(float)
             unit = "binary"
 
-        # 데이터 포인트 생성
+        # Create data points
         data_points = []
         for time, value in zip(times, values):
             if not np.isnan(value):
-                # 시간(초)을 픽셀 X 좌표로 변환
+                # Convert time (seconds) to pixel X coordinate
                 x_pixel = time * (tempo / 60) * pixelsPerBeat
 
-                # Voice/Unvoice 값을 0-2560 픽셀 범위로 변환 (전체 grid canvas 높이 사용)
-                y_pixel = value * 2560  # 0-1 범위를 0-2560 픽셀로
+                # Convert Voice/Unvoice value to 0-2560 pixel range (using full grid canvas height)
+                y_pixel = value * 2560  # Convert 0-1 range to 0-2560 pixels
 
                 data_points.append({
                     "x": float(x_pixel),
-                    "y": float(max(0, min(2560, y_pixel)))  # 범위 제한
+                    "y": float(max(0, min(2560, y_pixel)))  # Range limit
                 })
 
         if not data_points:
-            print("⚠️ 유효한 Voice/Unvoice 데이터 포인트가 없습니다.")
+            print("⚠️ No valid Voice/Unvoice data points")
             return None
 
-        # 실제 값 범위
+        # Actual value range
         min_value = float(np.min(values))
         max_value = float(np.max(values))
         voiced_ratio = voicing_data.get('voiced_ratio', 0.0)
 
         line_data = {
             "voicing_curve": {
-                "color": "#9B59B6",  # 보라색
+                "color": "#9B59B6",  # Purple
                 "lineWidth": 2,
                 "yMin": 0,
-                "yMax": 2560,  # 전체 grid canvas 높이 (128개 노트 * 20픽셀)
-                "position": "overlay",  # 전체 영역에 오버레이로 표시
-                "renderMode": "independent_range",  # 독립적인 Y축 범위
+                "yMax": 2560,  # Full grid canvas height (128 notes * 20 pixels)
+                "position": "overlay",  # Display on entire area as overlay
+                "renderMode": "independent_range",  # Independent Y range
                 "visible": True,
                 "opacity": 0.6,
                 "data": data_points,
-                # 메타데이터
+                # Metadata
                 "dataType": "voicing",
                 "unit": unit,
                 "originalRange": {
@@ -1133,33 +1133,33 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
             }
         }
 
-        print(f"📊 Voice/Unvoice LineData 생성 완료: {len(data_points)}개 포인트")
-        print(f"   - Voice/Unvoice 범위: {min_value:.3f} ~ {max_value:.3f} ({unit})")
-        print(f"   - Voiced 비율: {voiced_ratio:.1%}")
-        print(f"   - 렌더링 모드: 전체 grid canvas 높이 (independent_range)")
+        print(f"📊 Voice/Unvoice LineData created: {len(data_points)} points")
+        print(f"   - Voice/Unvoice range: {min_value:.3f} ~ {max_value:.3f} ({unit})")
+        print(f"   - Voiced ratio: {voiced_ratio:.1%}")
+        print(f"   - Rendering mode: Full grid canvas height (independent_range)")
 
         return line_data
 
     except Exception as e:
-        print(f"❌ Voice/Unvoice LineData 생성 오류: {e}")
+        print(f"❌ Voice/Unvoice LineData creation error: {e}")
         return None
 
 def create_multi_feature_line_data(features, tempo=120, pixelsPerBeat=80,
                                    loudness_y_min=None, loudness_y_max=None,
                                    loudness_use_db=True, voicing_use_probs=True):
     """
-    여러 오디오 특성(F0, Loudness, Voice/Unvoice 등)을 하나의 line_data로 결합합니다.
+    Combine multiple audio features (F0, Loudness, Voice/Unvoice) into a single line_data
     """
     combined_line_data = {}
 
     try:
-        # F0 곡선 추가
+        # Add F0 curve
         if 'f0' in features:
             f0_line_data = create_f0_line_data(features['f0'], tempo, pixelsPerBeat)
             if f0_line_data:
                 combined_line_data.update(f0_line_data)
 
-        # Loudness 곡선 추가
+        # Add Loudness curve
         if 'loudness' in features:
             loudness_line_data = create_loudness_line_data(
                 features['loudness'], tempo, pixelsPerBeat,
@@ -1168,7 +1168,7 @@ def create_multi_feature_line_data(features, tempo=120, pixelsPerBeat=80,
             if loudness_line_data:
                 combined_line_data.update(loudness_line_data)
 
-        # Voice/Unvoice 곡선 추가
+        # Add Voice/Unvoice curve
         if 'voicing' in features:
             voicing_line_data = create_voicing_line_data(
                 features['voicing'], tempo, pixelsPerBeat, voicing_use_probs
@@ -1177,85 +1177,85 @@ def create_multi_feature_line_data(features, tempo=120, pixelsPerBeat=80,
                 combined_line_data.update(voicing_line_data)
 
         if combined_line_data:
-            print(f"📊 통합 LineData 생성 완료: {len(combined_line_data)}개 곡선")
+            print(f"📊 Combined LineData created: {len(combined_line_data)} curves")
             return combined_line_data
         else:
-            print("⚠️ 생성된 곡선 데이터가 없습니다.")
+            print("⚠️ No curves data created")
             return None
 
     except Exception as e:
-        print(f"❌ 통합 LineData 생성 오류: {e}")
+        print(f"❌ Combined LineData creation error: {e}")
         return None
 
 def synthesize_and_analyze_features(piano_roll, attack, decay, sustain, release, wave_type='complex',
                                   include_f0=True, include_loudness=True, include_voicing=True, f0_method="pyin",
                                   loudness_y_min=None, loudness_y_max=None, loudness_use_db=True, voicing_use_probs=True):
     """
-    피아노롤에서 오디오를 생성하고, 생성된 오디오에서 F0, loudness, voice/unvoice를 분석하여 시각화합니다.
+    Synthesize audio from piano roll, analyze F0, loudness, and voice/unvoice from synthesized audio, and visualize the results
     """
     print("=== Synthesize and Analyze Features ===")
     print(f"ADSR: A={attack}, D={decay}, S={sustain}, R={release}")
     print(f"Wave Type: {wave_type}")
     print(f"Include F0: {include_f0}, Include Loudness: {include_loudness}, Include Voicing: {include_voicing}")
 
-    # 먼저 오디오 합성
+    # First synthesize audio
     audio_data = synthesize_audio(piano_roll, attack, decay, sustain, release, wave_type)
 
     if audio_data is None:
-        return piano_roll, "오디오 생성 실패", None
+        return piano_roll, "Audio synthesis failed", None
 
-    # 임시 WAV 파일 생성
+    # Create temporary WAV file
     temp_audio_path = create_temp_wav_file(audio_data, SAMPLE_RATE)
     if temp_audio_path is None:
-        return piano_roll, "임시 오디오 파일 생성 실패", None
+        return piano_roll, "Failed to create temporary audio file", None
 
     try:
-        # 오디오 특성 분석
+        # Analyze audio features
         features, analysis_status = extract_audio_features(
             temp_audio_path, f0_method, include_f0, include_loudness, include_voicing
         )
 
         if features is None:
-            return piano_roll, f"오디오 특성 분석 실패: {analysis_status}", temp_audio_path
+            return piano_roll, f"Audio feature analysis failed: {analysis_status}", temp_audio_path
 
-        # 피아노롤 업데이트
+        # Update piano roll
         updated_piano_roll = piano_roll.copy() if piano_roll else {}
 
-        # 백엔드 오디오 데이터 추가
+        # Add backend audio data
         audio_base64 = audio_to_base64_wav(audio_data, SAMPLE_RATE)
         updated_piano_roll['audio_data'] = audio_base64
         updated_piano_roll['use_backend_audio'] = True
 
-        # 템포와 픽셀당 비트 정보
+        # Add tempo and pixels per beat information
         tempo = updated_piano_roll.get('tempo', 120)
         pixels_per_beat = updated_piano_roll.get('pixelsPerBeat', 80)
 
-        # 웨이브폼 데이터 계산 (백엔드 오디오용)
+        # Calculate waveform data (for backend audio)
         waveform_data = calculate_waveform_data(audio_data, pixels_per_beat, tempo)
 
-        # 곡선 데이터 생성 (오디오 특성 분석 결과)
+        # Create curve data (audio feature analysis results)
         line_data = create_multi_feature_line_data(
             features, tempo, pixels_per_beat,
             loudness_y_min, loudness_y_max, loudness_use_db, voicing_use_probs
         )
 
-        # 통합 곡선 데이터 설정 (오디오 특성 + 웨이브폼)
+        # Set combined curve data (audio features + waveform)
         curve_data = {}
 
-        # 오디오 특성 곡선 추가
+        # Add audio feature curves
         if line_data:
             curve_data.update(line_data)
 
-        # 웨이브폼 데이터 추가
+        # Add waveform data
         if waveform_data:
             curve_data['waveform_data'] = waveform_data
-            print(f"웨이브폼 데이터 생성: {len(waveform_data)} 포인트")
+            print(f"Waveform data created: {len(waveform_data)} points")
 
-        # 피아노롤에 곡선 데이터 설정
+        # Set curve data for piano roll
         if curve_data:
             updated_piano_roll['curve_data'] = curve_data
 
-        # line_data도 별도로 설정 (LineLayer용)
+        # Set line_data separately (for LineLayer)
         if line_data:
             updated_piano_roll['line_data'] = line_data
 
@@ -1265,52 +1265,52 @@ def synthesize_and_analyze_features(piano_roll, attack, decay, sustain, release,
         print(f"   - waveform points: {len(waveform_data) if waveform_data else 0}")
         print(f"   - feature curves: {len(line_data) if line_data else 0}")
 
-        # 상태 메시지 생성
-        status_parts = [f"오디오 합성 완료 ({wave_type} 파형)", analysis_status]
+        # Create status message
+        status_parts = [f"Audio synthesis completed ({wave_type} waveform)", analysis_status]
 
         if waveform_data:
-            status_parts.append(f"웨이브폼 시각화 완료 ({len(waveform_data)}개 포인트)")
+            status_parts.append(f"Waveform visualization completed ({len(waveform_data)} points)")
 
         if line_data:
             curve_count = len(line_data)
-            status_parts.append(f"{curve_count}개 특성 곡선 시각화 완료")
+            status_parts.append(f"{curve_count} feature curves visualization completed")
 
         status_message = " | ".join(status_parts)
 
         return updated_piano_roll, status_message, temp_audio_path
 
     except Exception as e:
-        error_message = f"특성 분석 중 오류: {str(e)}"
+        error_message = f"Error during feature analysis: {str(e)}"
         print(f"❌ {error_message}")
         return piano_roll, error_message, temp_audio_path
-    # 임시 파일은 사용 후 별도로 정리 (gradio가 자동 관리)
+    # Temporary file is cleaned up after use (gradio automatically manages)
 
 def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, include_loudness=True, include_voicing=True,
                                   f0_method="pyin", loudness_y_min=None, loudness_y_max=None,
                                   loudness_use_db=True, voicing_use_probs=True):
     """
-    업로드된 오디오 파일에서 F0, loudness, voice/unvoice를 분석하고 피아노롤에 표시합니다.
+    Analyze F0, loudness, and voice/unvoice from uploaded audio file and display on piano roll
     """
     print("=== Analyze Uploaded Audio Features ===")
     print(f"Audio file: {audio_file}")
     print(f"Include F0: {include_f0}, Include Loudness: {include_loudness}, Include Voicing: {include_voicing}")
 
     if not audio_file:
-        return piano_roll, "오디오 파일을 업로드해주세요.", None
+        return piano_roll, "Please upload an audio file.", None
 
     if not LIBROSA_AVAILABLE:
-        return piano_roll, "librosa가 설치되지 않아 오디오 특성 분석을 수행할 수 없습니다. 'pip install librosa'로 설치해주세요.", None
+        return piano_roll, "librosa is not installed, so audio feature analysis cannot be performed. Please install it with 'pip install librosa'.", None
 
     try:
-        # 오디오 특성 분석
+        # Analyze audio features
         features, analysis_status = extract_audio_features(
             audio_file, f0_method, include_f0, include_loudness, include_voicing
         )
 
         if features is None:
-            return piano_roll, f"오디오 특성 분석 실패: {analysis_status}", audio_file
+            return piano_roll, f"Audio feature analysis failed: {analysis_status}", audio_file
 
-        # 피아노롤 데이터 업데이트
+        # Update piano roll data
         updated_piano_roll = piano_roll.copy() if piano_roll else {
             "notes": [],
             "tempo": 120,
@@ -1320,7 +1320,7 @@ def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, inc
             "pixelsPerBeat": 80
         }
 
-        # 곡선 데이터 생성
+        # Create curve data
         tempo = updated_piano_roll.get('tempo', 120)
         pixels_per_beat = updated_piano_roll.get('pixelsPerBeat', 80)
 
@@ -1332,15 +1332,15 @@ def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, inc
         if line_data:
             updated_piano_roll['line_data'] = line_data
 
-        # 상태 메시지 생성
+        # Create status message
         status_parts = [analysis_status]
 
         if line_data:
             curve_count = len(line_data)
             curve_types = list(line_data.keys())
-            status_parts.append(f"{curve_count}개 곡선 ({', '.join(curve_types)}) 시각화 완료")
+            status_parts.append(f"{curve_count} curves ({', '.join(curve_types)}) visualization completed")
 
-            # 각 특성의 범위 정보 추가
+            # Add range information for each feature
             for curve_name, curve_info in line_data.items():
                 if 'originalRange' in curve_info:
                     range_info = curve_info['originalRange']
@@ -1355,20 +1355,20 @@ def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, inc
                         status_parts.append(f"Voicing: {voiced_ratio:.1%} voiced ({unit})")
 
         duration = features.get('duration', 0)
-        status_parts.append(f"⏱️ {duration:.2f}초")
+        status_parts.append(f"⏱️ {duration:.2f} seconds")
 
         status_message = " | ".join(status_parts)
 
         return updated_piano_roll, status_message, audio_file
 
     except Exception as e:
-        error_message = f"업로드된 오디오 분석 중 오류: {str(e)}"
+        error_message = f"Error during uploaded audio analysis: {str(e)}"
         print(f"❌ {error_message}")
         return piano_roll, error_message, audio_file
 
 def analyze_audio_f0(piano_roll, audio_file, f0_method="pyin"):
     """
-    업로드된 오디오 파일에서 F0를 추출하고 피아노롤에 표시합니다. (기존 호환성 유지)
+    Extract F0 from uploaded audio file and display on piano roll (for backward compatibility)
     """
     return analyze_uploaded_audio_features(
         piano_roll, audio_file, include_f0=True, include_loudness=False, include_voicing=False, f0_method=f0_method
@@ -1376,69 +1376,69 @@ def analyze_audio_f0(piano_roll, audio_file, f0_method="pyin"):
 
 def generate_f0_demo_audio():
     """
-    F0 분석 데모용 간단한 오디오를 생성합니다.
+    Create a simple audio for F0 analysis demo
     """
-    print("🎵 F0 데모 오디오 생성 중...")
+    print("🎵 Creating F0 analysis demo audio...")
 
-    # 간단한 스위프 톤 생성 (100Hz에서 400Hz까지)
-    duration = 3.0  # 3초
+    # Create a simple sawtooth tone (100Hz to 400Hz)
+    duration = 3.0  # 3 seconds
     sample_rate = 44100
     t = np.linspace(0, duration, int(duration * sample_rate), False)
 
-    # 주파수가 시간에 따라 변하는 사인파 (100Hz -> 400Hz)
+    # Create a sine wave with frequency changing over time (100Hz -> 400Hz)
     start_freq = 100
     end_freq = 400
     instantaneous_freq = start_freq + (end_freq - start_freq) * (t / duration)
 
-    # 주파수 변조된 사인파 생성
+    # Create a frequency-modulated sine wave
     phase = 2 * np.pi * np.cumsum(instantaneous_freq) / sample_rate
-    audio = 0.3 * np.sin(phase)  # 볼륨 조절
+    audio = 0.3 * np.sin(phase)  # Volume adjustment
 
-    # WAV 파일로 저장
+    # Save as WAV file
     temp_fd, temp_path = tempfile.mkstemp(suffix='.wav')
     try:
         with wave.open(temp_path, 'wb') as wav_file:
-            wav_file.setnchannels(1)  # 모노
-            wav_file.setsampwidth(2)  # 16비트
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
             wav_file.setframerate(sample_rate)
 
-            # 16비트 PCM으로 변환
+            # Convert to 16-bit PCM
             audio_16bit = (audio * 32767).astype(np.int16)
             wav_file.writeframes(audio_16bit.tobytes())
 
         os.close(temp_fd)
-        print(f"✅ 데모 오디오 생성 완료: {temp_path}")
+        print(f"✅ Demo audio created: {temp_path}")
         return temp_path
 
     except Exception as e:
         os.close(temp_fd)
-        print(f"❌ 데모 오디오 생성 실패: {e}")
+        print(f"❌ Failed to create demo audio: {e}")
         return None
 
 def generate_feature_demo_audio():
     """
-    오디오 특성 분석 데모용 다양한 특성을 가진 오디오를 생성합니다.
-    F0 변화와 loudness 변화를 모두 포함합니다.
+    Create an audio with various features for audio feature analysis demo
+    Includes F0 and loudness changes
     """
-    print("🎵 오디오 특성 분석 데모 오디오 생성 중...")
+    print("🎵 Creating audio with various features for audio feature analysis demo...")
 
-    duration = 4.0  # 4초
+    duration = 4.0  # 4 seconds
     sample_rate = 44100
     t = np.linspace(0, duration, int(duration * sample_rate), False)
 
-    # 구간별로 다른 특성을 가진 오디오 생성
+    # Create audio with different features for each section
     audio = np.zeros_like(t)
 
-    # 구간 1 (0-1초): C4에서 C5로 상승 + 볼륨 증가
+    # Section 1 (0-1 second): C4 to C5 + volume increase
     mask1 = (t >= 0) & (t < 1)
     t1 = t[mask1]
     f1_start, f1_end = 261.63, 523.25  # C4 to C5
     freq1 = f1_start + (f1_end - f1_start) * (t1 / 1.0)
     phase1 = 2 * np.pi * np.cumsum(freq1) / sample_rate
-    vol1 = 0.1 + 0.4 * (t1 / 1.0)  # 0.1에서 0.5로 증가
+    vol1 = 0.1 + 0.4 * (t1 / 1.0)  # Increase from 0.1 to 0.5
     audio[mask1] = vol1 * np.sin(phase1)
 
-    # 구간 2 (1-2초): C5에서 G4로 하강 + 일정한 볼륨
+    # Section 2 (1-2 seconds): C5 to G4 + constant volume
     mask2 = (t >= 1) & (t < 2)
     t2 = t[mask2] - 1
     f2_start, f2_end = 523.25, 392.00  # C5 to G4
@@ -1446,57 +1446,57 @@ def generate_feature_demo_audio():
     phase2 = 2 * np.pi * np.cumsum(freq2) / sample_rate
     audio[mask2] = 0.5 * np.sin(phase2)
 
-    # 구간 3 (2-3초): A4 고정 + 볼륨 감소 (트레몰로 효과)
+    # Section 3 (2-3 seconds): A4 fixed + volume decrease (tremolo effect)
     mask3 = (t >= 2) & (t < 3)
     t3 = t[mask3] - 2
-    freq3 = 440.0  # A4 고정
+    freq3 = 440.0  # A4 fixed
     phase3 = 2 * np.pi * freq3 * t3
-    vol3 = 0.5 * (1 - t3 / 1.0) * (1 + 0.3 * np.sin(2 * np.pi * 6 * t3))  # 트레몰로
+    vol3 = 0.5 * (1 - t3 / 1.0) * (1 + 0.3 * np.sin(2 * np.pi * 6 * t3))  # Tremolo
     audio[mask3] = vol3 * np.sin(phase3)
 
-    # 구간 4 (3-4초): 복합음 (A4 + E5) + 페이드아웃
+    # Section 4 (3-4 seconds): Complex sound (A4 + E5) + fade out
     mask4 = (t >= 3) & (t < 4)
     t4 = t[mask4] - 3
     freq4a, freq4b = 440.0, 659.25  # A4 + E5
     phase4a = 2 * np.pi * freq4a * t4
     phase4b = 2 * np.pi * freq4b * t4
-    vol4 = 0.4 * (1 - t4 / 1.0)  # 페이드아웃
+    vol4 = 0.4 * (1 - t4 / 1.0)  # Fade out
     audio[mask4] = vol4 * (0.6 * np.sin(phase4a) + 0.4 * np.sin(phase4b))
 
-    # WAV 파일로 저장
+    # Save as WAV file
     temp_fd, temp_path = tempfile.mkstemp(suffix='.wav')
     try:
         with wave.open(temp_path, 'wb') as wav_file:
-            wav_file.setnchannels(1)  # 모노
-            wav_file.setsampwidth(2)  # 16비트
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
             wav_file.setframerate(sample_rate)
 
-            # 16비트 PCM으로 변환
+            # Convert to 16-bit PCM
             audio_16bit = (audio * 32767).astype(np.int16)
             wav_file.writeframes(audio_16bit.tobytes())
 
         os.close(temp_fd)
-        print(f"✅ 오디오 특성 분석 데모 오디오 생성 완료: {temp_path}")
+        print(f"✅ Audio feature analysis demo audio generated: {temp_path}")
         return temp_path
 
     except Exception as e:
         os.close(temp_fd)
-        print(f"❌ 오디오 특성 분석 데모 오디오 생성 실패: {e}")
+        print(f"❌ Failed to generate audio feature analysis demo audio: {e}")
         return None
 
-# Gradio 인터페이스
+# Gradio interface
 with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
     gr.Markdown("# 🎹 Gradio PianoRoll with Synthesizer")
-    gr.Markdown("피아노롤 컴포넌트와 신디사이저 기능을 테스트해보세요!")
+    gr.Markdown("Test PianoRoll component and synthesizer functionality!")
 
     with gr.Tabs():
-        # 첫 번째 탭: 기본 데모
+        # First tab: Basic demo
         with gr.TabItem("🎼 Basic Demo"):
-            gr.Markdown("## 기본 피아노롤 데모")
+            gr.Markdown("## Basic PianoRoll Demo")
 
             with gr.Row():
                 with gr.Column():
-                    # 초기값 설정
+                    # Set initial value
                     initial_value_basic = {
                         "notes": [
                             {
@@ -1523,8 +1523,8 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         height=600,
                         width=1000,
                         value=initial_value_basic,
-                        elem_id="piano_roll_basic",  # 고유 ID 부여
-                        use_backend_audio=False  # 프론트엔드 오디오 엔진 사용
+                        elem_id="piano_roll_basic",  # Unique ID
+                        use_backend_audio=False  # Use frontend audio engine
                     )
 
             with gr.Row():
@@ -1535,7 +1535,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 with gr.Column():
                     btn_basic = gr.Button("🔄 Convert & Debug", variant="primary")
 
-            # 기본 탭 이벤트
+            # Basic tab events
             btn_basic.click(
                 fn=convert_basic,
                 inputs=piano_roll_basic,
@@ -1543,14 +1543,14 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=True
             )
 
-        # 두 번째 탭: 신디사이저 데모
+        # Second tab: Synthesizer demo
         with gr.TabItem("🎵 Synthesizer Demo"):
-            gr.Markdown("## 신디사이저가 포함된 피아노롤 데모")
-            gr.Markdown("노트를 편집한 후 '🎶 Synthesize Audio' 버튼을 클릭하면 오디오가 생성되어 재생됩니다!")
+            gr.Markdown("## 🎹 PianoRoll with Synthesizer Demo")
+            gr.Markdown("Edit notes and click '🎶 Synthesize Audio' to generate audio and play it!")
 
             with gr.Row():
                 with gr.Column(scale=3):
-                    # 신디사이저용 초기값
+                    # Synthesizer initial value
                     initial_value_synth = {
                         "notes": [
                             {
@@ -1586,88 +1586,88 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         "timeSignature": {"numerator": 4, "denominator": 4},
                         "editMode": "select",
                         "snapSetting": "1/4",
-                        "curve_data": {},  # 초기에는 빈 곡선 데이터
-                        "use_backend_audio": False  # 초기에는 백엔드 오디오 비활성화
+                        "curve_data": {},  # Initial empty curve data
+                        "use_backend_audio": False  # Initially disable backend audio
                     }
                     piano_roll_synth = PianoRoll(
                         height=600,
                         width=1000,
                         value=initial_value_synth,
-                        elem_id="piano_roll_synth",  # 고유 ID 부여
-                        use_backend_audio=False  # 초기에는 프론트엔드 엔진 사용, synthesize 시 백엔드로 전환
+                        elem_id="piano_roll_synth",  # Unique ID
+                        use_backend_audio=False  # Initially use frontend engine, switch to backend for synthesize
                     )
 
                 with gr.Column(scale=1):
-                    gr.Markdown("### 🎛️ ADSR 설정")
+                    gr.Markdown("### 🎛️ ADSR Settings")
                     attack_slider = gr.Slider(
                         minimum=0.001,
                         maximum=1.0,
                         value=0.01,
                         step=0.001,
-                        label="Attack (초)"
+                        label="Attack (seconds)"
                     )
                     decay_slider = gr.Slider(
                         minimum=0.001,
                         maximum=1.0,
                         value=0.1,
                         step=0.001,
-                        label="Decay (초)"
+                        label="Decay (seconds)"
                     )
                     sustain_slider = gr.Slider(
                         minimum=0.0,
                         maximum=1.0,
                         value=0.7,
                         step=0.01,
-                        label="Sustain (레벨)"
+                        label="Sustain (level)"
                     )
                     release_slider = gr.Slider(
                         minimum=0.001,
                         maximum=2.0,
                         value=0.3,
                         step=0.001,
-                        label="Release (초)"
+                        label="Release (seconds)"
                     )
 
-                    gr.Markdown("### 🎵 파형 설정")
+                    gr.Markdown("### 🎵 Waveform Settings")
                     wave_type_dropdown = gr.Dropdown(
                         choices=[
-                            ("복합 파형 (Complex)", "complex"),
-                            ("하모닉 합성 (Harmonic)", "harmonic"),
-                            ("FM 합성 (FM)", "fm"),
-                            ("톱니파 (Sawtooth)", "sawtooth"),
-                            ("사각파 (Square)", "square"),
-                            ("삼각파 (Triangle)", "triangle"),
-                            ("사인파 (Sine)", "sine")
+                            ("Complex Waveform (Complex)", "complex"),
+                            ("Harmonic Synthesis (Harmonic)", "harmonic"),
+                            ("FM Synthesis (FM)", "fm"),
+                            ("Sawtooth Wave (Sawtooth)", "sawtooth"),
+                            ("Square Wave (Square)", "square"),
+                            ("Triangle Wave (Triangle)", "triangle"),
+                            ("Sine Wave (Sine)", "sine")
                         ],
                         value="complex",
-                        label="파형 타입",
-                        info="각 노트는 순환적으로 다른 파형을 사용합니다"
+                        label="Waveform Type",
+                        info="Each note uses different waveforms cyclically"
                     )
 
             with gr.Row():
                 with gr.Column():
                     btn_synthesize = gr.Button("🎶 Synthesize Audio", variant="primary", size="lg")
-                    status_text = gr.Textbox(label="상태", interactive=False)
+                    status_text = gr.Textbox(label="Status", interactive=False)
 
             with gr.Row():
                 with gr.Column():
-                    btn_regenerate = gr.Button("🔄 웨이브폼 재생성", variant="secondary", size="lg")
+                    btn_regenerate = gr.Button("🔄 Regenerate Waveform", variant="secondary", size="lg")
 
-            # 비교용 gradio Audio 컴포넌트 추가
+            # Add gradio Audio component for comparison
             with gr.Row():
                 with gr.Column():
-                    gr.Markdown("### 🔊 비교용 Gradio Audio 재생")
+                    gr.Markdown("### 🔊 Gradio Audio Comparison")
                     gradio_audio_output = gr.Audio(
-                        label="백엔드에서 생성된 오디오 (비교용)",
+                        label="Backend-generated audio (comparison)",
                         type="filepath",
                         interactive=False
                     )
 
             with gr.Row():
                 with gr.Column():
-                    output_json_synth = gr.JSON(label="결과 데이터")
+                    output_json_synth = gr.JSON(label="Result Data")
 
-            # 신디사이저 탭 이벤트
+            # Synthesizer tab events
             btn_synthesize.click(
                 fn=synthesize_and_play,
                 inputs=[
@@ -1682,7 +1682,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=True
             )
 
-            # 웨이브폼 재생성 버튼 이벤트
+            # Waveform regeneration button event
             btn_regenerate.click(
                 fn=clear_and_regenerate_waveform,
                 inputs=[
@@ -1697,41 +1697,41 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=True
             )
 
-            # 이벤트 리스너 설정
+            # Event listener settings
             def log_play_event(event_data=None):
                 print("🎵 Play event triggered:", event_data)
-                return f"재생 시작됨: {event_data if event_data else '재생 중'}"
+                return f"Play started: {event_data if event_data else 'Playing'}"
 
             def log_pause_event(event_data=None):
                 print("⏸️ Pause event triggered:", event_data)
-                return f"일시정지됨: {event_data if event_data else '일시정지'}"
+                return f"Paused: {event_data if event_data else 'Paused'}"
 
             def log_stop_event(event_data=None):
                 print("⏹️ Stop event triggered:", event_data)
-                return f"정지됨: {event_data if event_data else '정지'}"
+                return f"Stopped: {event_data if event_data else 'Stopped'}"
 
             piano_roll_synth.play(log_play_event, outputs=status_text)
             piano_roll_synth.pause(log_pause_event, outputs=status_text)
             piano_roll_synth.stop(log_stop_event, outputs=status_text)
 
-            # input 이벤트 처리 추가 (G2P 처리)
+            # Add input event processing (G2P processing)
             def handle_synth_input(lyric_data):
                 print("🎵 Synthesizer tab - Input event triggered:", lyric_data)
-                return f"가사 입력 감지: {lyric_data if lyric_data else '입력됨'}"
+                return f"Lyric input detected: {lyric_data if lyric_data else 'Input detected'}"
 
             piano_roll_synth.input(handle_synth_input, outputs=status_text)
 
-            # 노트 변경 시 JSON 출력 업데이트
+            # Update JSON output when note changes
             piano_roll_synth.change(lambda x: x, inputs=piano_roll_synth, outputs=output_json_synth)
 
-        # 세 번째 탭: Phoneme 데모
+        # Third tab: Phoneme demo
         with gr.TabItem("🗣️ Phoneme Demo"):
-            gr.Markdown("## 📢 음소(Phoneme) 기능 데모")
-            gr.Markdown("가사를 수정하면 자동으로 G2P(Grapheme-to-Phoneme)가 실행되어 음소가 표시됩니다. 또한 수동으로 음소를 편집할 수도 있습니다.")
+            gr.Markdown("## 📢 Phoneme Feature Demo")
+            gr.Markdown("When you modify lyrics, G2P (Grapheme-to-Phoneme) is automatically executed to display phonemes. You can also manually edit phonemes.")
 
             with gr.Row():
                 with gr.Column(scale=3):
-                    # Phoneme용 초기값
+                    # Phoneme initial value
                     initial_value_phoneme = {
                         "notes": [
                             {
@@ -1741,7 +1741,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                                 "pitch": 60,  # C4
                                 "velocity": 100,
                                 "lyric": "안녕",
-                                "phoneme": "aa n ny eo ng"  # 미리 설정된 음소
+                                "phoneme": "aa n ny eo ng"  # Pre-set phoneme
                             },
                             {
                                 "id": "note_1",
@@ -1779,89 +1779,89 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         height=600,
                         width=1000,
                         value=initial_value_phoneme,
-                        elem_id="piano_roll_phoneme",  # 고유 ID 부여
-                        use_backend_audio=False  # 프론트엔드 오디오 엔진 사용
+                        elem_id="piano_roll_phoneme",  # Unique ID
+                        use_backend_audio=False  # Use frontend audio engine
                     )
 
                 with gr.Column(scale=1):
-                    gr.Markdown("### 📝 Phoneme 매핑 관리")
+                    gr.Markdown("### 📝 Phoneme Mapping Management")
 
-                    # 현재 매핑 리스트 표시
+                    # Display current mapping list
                     phoneme_mapping_dataframe = gr.Dataframe(
-                        headers=["가사", "Phoneme"],
+                        headers=["Lyric", "Phoneme"],
                         datatype=["str", "str"],
                         value=get_phoneme_mapping_for_dataframe(),
-                        label="현재 Phoneme 매핑",
+                        label="Current Phoneme Mapping",
                         interactive=True,
                         wrap=True
                     )
 
-                    gr.Markdown("#### ➕ 새 매핑 추가")
+                    gr.Markdown("#### ➕ Add New Mapping")
                     with gr.Row():
                         add_lyric_input = gr.Textbox(
-                            label="가사",
-                            placeholder="예: 라",
+                            label="Lyric",
+                            placeholder="Example: 라",
                             scale=1
                         )
                         add_phoneme_input = gr.Textbox(
                             label="Phoneme",
-                            placeholder="예: l aa",
+                            placeholder="Example: l aa",
                             scale=1
                         )
-                    btn_add_mapping = gr.Button("➕ 매핑 추가", variant="primary", size="sm")
+                    btn_add_mapping = gr.Button("➕ Add Mapping", variant="primary", size="sm")
 
-                    gr.Markdown("### 🔧 일괄 작업")
+                    gr.Markdown("### 🔧 Batch Operations")
                     with gr.Row():
-                        btn_auto_generate = gr.Button("🤖 모든 Phoneme 자동 생성", variant="primary")
-                        btn_clear_phonemes = gr.Button("🗑️ 모든 Phoneme 지우기", variant="secondary")
+                        btn_auto_generate = gr.Button("🤖 Auto-generate All Phonemes", variant="primary")
+                        btn_clear_phonemes = gr.Button("🗑️ Clear All Phonemes", variant="secondary")
 
-                    btn_reset_mapping = gr.Button("🔄 매핑 기본값으로 리셋", variant="secondary")
-
-            with gr.Row():
-                with gr.Column():
-                    phoneme_status_text = gr.Textbox(label="상태", interactive=False)
+                    btn_reset_mapping = gr.Button("🔄 Reset Mapping to Default", variant="secondary")
 
             with gr.Row():
                 with gr.Column():
-                    output_json_phoneme = gr.JSON(label="Phoneme 데이터")
+                    phoneme_status_text = gr.Textbox(label="Status", interactive=False)
 
-            # Phoneme 탭 이벤트 처리
+            with gr.Row():
+                with gr.Column():
+                    output_json_phoneme = gr.JSON(label="Phoneme Data")
 
-            # 매핑 추가
+            # Phoneme tab event processing
+
+            # Add mapping
             btn_add_mapping.click(
                 fn=add_phoneme_mapping,
                 inputs=[add_lyric_input, add_phoneme_input],
                 outputs=[phoneme_mapping_dataframe, phoneme_status_text],
                 show_progress=False
             ).then(
-                fn=lambda: ["", ""],  # 입력 필드 초기화
+                fn=lambda: ["", ""],  # Reset input fields
                 outputs=[add_lyric_input, add_phoneme_input]
             )
 
-            # 매핑 리셋
+            # Reset
             btn_reset_mapping.click(
                 fn=reset_phoneme_mapping,
                 outputs=[phoneme_mapping_dataframe, phoneme_status_text],
                 show_progress=False
             )
 
-            # 가사 입력 시 자동 G2P 처리
+            # Automatic G2P processing when lyric is input
             def handle_phoneme_input_event(piano_roll_data):
-                """가사 입력 이벤트 처리 - 피아노롤 변경사항을 감지하여 phoneme 생성"""
+                """Process lyric input event - detect piano roll changes and generate phoneme"""
                 print("🗣️ Phoneme tab - Input event triggered")
                 print(f"   - Piano roll data: {type(piano_roll_data)}")
 
                 if not piano_roll_data or 'notes' not in piano_roll_data:
-                    return piano_roll_data, "피아노롤 데이터가 없습니다."
+                    return piano_roll_data, "Piano roll data is missing."
 
                 return auto_generate_missing_phonemes(piano_roll_data)
 
             def auto_generate_missing_phonemes(piano_roll_data):
-                """가사가 있지만 phoneme이 없는 노트들에 대해 자동으로 phoneme 생성"""
+                """Automatically generate phoneme for notes with lyrics but no phoneme"""
                 if not piano_roll_data or 'notes' not in piano_roll_data:
-                    return piano_roll_data, "피아노롤 데이터가 없습니다."
+                    return piano_roll_data, "Piano roll data is missing."
 
-                # 현재 notes를 복사
+                # Copy current notes
                 notes = piano_roll_data['notes'].copy()
                 updated_notes = []
                 changes_made = 0
@@ -1869,35 +1869,35 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 for note in notes:
                     note_copy = note.copy()
 
-                    # 가사가 있는 경우 처리
+                    # Process if lyric exists
                     lyric = note.get('lyric', '').strip()
                     current_phoneme = note.get('phoneme', '').strip()
 
                     if lyric:
-                        # G2P 실행하여 새로운 phoneme 생성
+                        # Run G2P to create new phoneme
                         new_phoneme = mock_g2p(lyric)
 
-                        # 기존 phoneme과 다르거나 없으면 업데이트
+                        # Update if different from existing phoneme or missing
                         if not current_phoneme or current_phoneme != new_phoneme:
                             note_copy['phoneme'] = new_phoneme
                             changes_made += 1
-                            print(f"   - G2P 적용: '{lyric}' -> '{new_phoneme}'")
+                            print(f"   - G2P applied: '{lyric}' -> '{new_phoneme}'")
                     else:
-                        # 가사가 없으면 phoneme도 제거
+                        # Remove phoneme if lyric is missing
                         if current_phoneme:
                             note_copy['phoneme'] = None
                             changes_made += 1
-                            print(f"   - Phoneme 제거 (가사 없음)")
+                            print(f"   - Phoneme removed (no lyric)")
 
                     updated_notes.append(note_copy)
 
                 if changes_made > 0:
-                    # 업데이트된 피아노롤 데이터 반환
+                    # Return updated piano roll data
                     updated_piano_roll = piano_roll_data.copy()
                     updated_piano_roll['notes'] = updated_notes
-                    return updated_piano_roll, f"자동 G2P 완료: {changes_made}개 노트 업데이트"
+                    return updated_piano_roll, f"Automatic G2P completed: {changes_made} notes updated"
                 else:
-                    return piano_roll_data, "G2P 적용할 변경사항이 없습니다."
+                    return piano_roll_data, "No changes to apply G2P."
 
             piano_roll_phoneme.input(
                 fn=handle_phoneme_input_event,
@@ -1906,9 +1906,9 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=False
             )
 
-            # 노트 변경 시에도 자동 phoneme 생성
+            # Automatic phoneme generation when note changes
             def handle_phoneme_change_event(piano_roll_data):
-                """피아노롤 변경 시 자동 phoneme 처리"""
+                """Handle automatic phoneme generation when note changes"""
                 return auto_generate_missing_phonemes(piano_roll_data)
 
             piano_roll_phoneme.change(
@@ -1918,7 +1918,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=False
             )
 
-            # 자동 phoneme 생성 (수동 버튼)
+            # Automatic phoneme generation (manual button)
             btn_auto_generate.click(
                 fn=auto_generate_all_phonemes,
                 inputs=[piano_roll_phoneme],
@@ -1926,7 +1926,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=True
             )
 
-            # 모든 phoneme 지우기
+            # Clear all phonemes
             btn_clear_phonemes.click(
                 fn=clear_all_phonemes,
                 inputs=[piano_roll_phoneme],
@@ -1934,7 +1934,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=False
             )
 
-            # 노트 변경 시 JSON 출력 업데이트 (자동 phoneme 처리와 별도로)
+            # Update JSON output when note changes (separate from automatic phoneme processing)
             def update_json_output(piano_roll_data):
                 return piano_roll_data
 
@@ -1945,34 +1945,34 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=False
             )
 
-            # 재생 이벤트 로깅
+            # Log play event
             def log_phoneme_play_event(event_data=None):
                 print("🗣️ Phoneme Play event triggered:", event_data)
-                return f"재생 시작: {event_data if event_data else '재생 중'}"
+                return f"Play started: {event_data if event_data else 'Playing'}"
 
             def log_phoneme_pause_event(event_data=None):
                 print("🗣️ Phoneme Pause event triggered:", event_data)
-                return f"일시정지: {event_data if event_data else '일시정지'}"
+                return f"Paused: {event_data if event_data else 'Paused'}"
 
             def log_phoneme_stop_event(event_data=None):
                 print("🗣️ Phoneme Stop event triggered:", event_data)
-                return f"정지: {event_data if event_data else '정지'}"
+                return f"Stopped: {event_data if event_data else 'Stopped'}"
 
             piano_roll_phoneme.play(log_phoneme_play_event, outputs=phoneme_status_text)
             piano_roll_phoneme.pause(log_phoneme_pause_event, outputs=phoneme_status_text)
             piano_roll_phoneme.stop(log_phoneme_stop_event, outputs=phoneme_status_text)
 
-        # 네 번째 탭: F0 분석 데모
+        # Fourth tab: F0 analysis demo
         with gr.TabItem("📊 F0 Analysis Demo"):
-            gr.Markdown("## 🎵 F0 (Fundamental Frequency) 분석 데모")
+            gr.Markdown("## 🎵 F0 (Fundamental Frequency) Analysis Demo")
             if LIBROSA_AVAILABLE:
-                gr.Markdown("오디오 파일을 업로드하고 F0를 추출하여 피아노롤에서 시각화해보세요!")
+                gr.Markdown("Upload an audio file and extract F0 to visualize in PianoRoll!")
             else:
-                gr.Markdown("⚠️ **librosa가 설치되지 않음**: F0 분석을 위해 `pip install librosa`를 실행해주세요.")
+                gr.Markdown("⚠️ **librosa is not installed**: Run `pip install librosa` to install it.")
 
             with gr.Row():
                 with gr.Column(scale=3):
-                    # F0용 초기값 (빈 피아노롤)
+                    # F0 initial value (empty piano roll)
                     initial_value_f0 = {
                         "notes": [],
                         "tempo": 120,
@@ -1985,70 +1985,70 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         height=600,
                         width=1000,
                         value=initial_value_f0,
-                        elem_id="piano_roll_f0",  # 고유 ID 부여
-                        use_backend_audio=False  # 프론트엔드 오디오 엔진 사용
+                        elem_id="piano_roll_f0",  # Unique ID
+                        use_backend_audio=False  # Use frontend audio engine
                     )
 
                 with gr.Column(scale=1):
-                    gr.Markdown("### 🎤 오디오 업로드")
+                    gr.Markdown("### 🎤 Upload Audio")
 
                     audio_input = gr.Audio(
-                        label="분석할 오디오 파일",
+                        label="Audio file to analyze",
                         type="filepath",
                         interactive=True
                     )
 
-                    gr.Markdown("### ⚙️ F0 추출 설정")
+                    gr.Markdown("### ⚙️ F0 Extraction Settings")
                     f0_method_dropdown = gr.Dropdown(
                         choices=[
-                            ("PYIN (정확함, 느림)", "pyin"),
-                            ("PipTrack (빠름, 덜 정확)", "piptrack")
+                            ("PYIN (accurate, slow)", "pyin"),
+                            ("PipTrack (fast, less accurate)", "piptrack")
                         ],
                         value="pyin",
-                        label="F0 추출 방법"
+                        label="F0 Extraction Method"
                     )
-                    gr.Markdown("💡 **PYIN**은 더 정확하지만 처리 시간이 길어집니다.")
+                    gr.Markdown("💡 **PYIN** is more accurate but takes longer to process.")
 
                     btn_analyze_f0 = gr.Button(
-                        "🔬 F0 분석 시작",
+                        "🔬 Start F0 Analysis",
                         variant="primary",
                         size="lg",
                         interactive=LIBROSA_AVAILABLE
                     )
 
                     btn_generate_demo = gr.Button(
-                        "🎵 데모 오디오 생성",
+                        "🎵 Generate Demo Audio",
                         variant="secondary"
                     )
-                    gr.Markdown("📄 F0가 시간에 따라 변하는 테스트 오디오를 생성합니다.")
+                    gr.Markdown("📄 Generate a test audio with F0 changing over time.")
 
                     if not LIBROSA_AVAILABLE:
-                        gr.Markdown("⚠️ librosa가 필요합니다")
+                        gr.Markdown("⚠️ librosa is required")
 
             with gr.Row():
                 with gr.Column():
                     f0_status_text = gr.Textbox(
-                        label="분석 상태",
+                        label="Analysis Status",
                         interactive=False,
                         lines=6
                     )
 
             with gr.Row():
                 with gr.Column():
-                    # 비교용 오디오 재생
+                    # Reference audio playback
                     reference_audio = gr.Audio(
-                        label="원본 오디오 (참고용)",
+                        label="Original Audio (reference)",
                         type="filepath",
                         interactive=False
                     )
 
             with gr.Row():
                 with gr.Column():
-                    output_json_f0 = gr.JSON(label="F0 분석 결과")
+                    output_json_f0 = gr.JSON(label="F0 Analysis Result")
 
-            # F0 탭 이벤트 처리
+            # F0 tab event processing
 
-            # F0 분석 버튼
+            # F0 analysis button
             btn_analyze_f0.click(
                 fn=analyze_audio_f0,
                 inputs=[piano_roll_f0, audio_input, f0_method_dropdown],
@@ -2056,12 +2056,12 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=True
             )
 
-            # 데모 오디오 생성 버튼
+            # Demo audio generation button
             def create_and_analyze_demo():
-                """데모 오디오를 생성하고 자동으로 F0 분석을 수행합니다."""
+                """Create demo audio and automatically analyze F0."""
                 demo_audio_path = generate_f0_demo_audio()
                 if demo_audio_path:
-                    # 초기 피아노롤 데이터
+                    # Initial piano roll data
                     initial_piano_roll = {
                         "notes": [],
                         "tempo": 120,
@@ -2071,12 +2071,12 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         "pixelsPerBeat": 80
                     }
 
-                    # F0 분석 수행
+                    # Perform F0 analysis
                     updated_piano_roll, status, _ = analyze_audio_f0(initial_piano_roll, demo_audio_path, "pyin")
 
                     return updated_piano_roll, status, demo_audio_path, demo_audio_path
                 else:
-                    return initial_value_f0, "데모 오디오 생성에 실패했습니다.", None, None
+                    return initial_value_f0, "Failed to generate demo audio.", None, None
 
             btn_generate_demo.click(
                 fn=create_and_analyze_demo,
@@ -2084,7 +2084,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=True
             )
 
-            # 노트 변경 시 JSON 출력 업데이트
+            # Update JSON output when note changes
             def update_f0_json_output(piano_roll_data):
                 return piano_roll_data
 
@@ -2095,34 +2095,34 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=False
             )
 
-            # 재생 이벤트 로깅
+            # Log play event
             def log_f0_play_event(event_data=None):
                 print("📊 F0 Play event triggered:", event_data)
-                return f"재생 시작: {event_data if event_data else '재생 중'}"
+                return f"Play started: {event_data if event_data else 'Playing'}"
 
             def log_f0_pause_event(event_data=None):
                 print("📊 F0 Pause event triggered:", event_data)
-                return f"일시정지: {event_data if event_data else '일시정지'}"
+                return f"Paused: {event_data if event_data else 'Paused'}"
 
             def log_f0_stop_event(event_data=None):
                 print("📊 F0 Stop event triggered:", event_data)
-                return f"정지: {event_data if event_data else '정지'}"
+                return f"Stopped: {event_data if event_data else 'Stopped'}"
 
             piano_roll_f0.play(log_f0_play_event, outputs=f0_status_text)
             piano_roll_f0.pause(log_f0_pause_event, outputs=f0_status_text)
             piano_roll_f0.stop(log_f0_stop_event, outputs=f0_status_text)
 
-        # 다섯 번째 탭: 오디오 특성 분석 데모
+        # Fifth tab: Audio feature analysis demo
         with gr.TabItem("🔊 Audio Feature Analysis"):
-            gr.Markdown("## 🎵 오디오 특성 분석 데모")
+            gr.Markdown("## 🎵 Audio Feature Analysis Demo")
             if LIBROSA_AVAILABLE:
-                gr.Markdown("피아노롤 노트에서 오디오를 생성하고 F0와 loudness를 분석하거나, 직접 오디오를 업로드해서 분석해보세요!")
+                gr.Markdown("Create audio from PianoRoll notes and analyze F0 and loudness, or upload your own audio for analysis!")
             else:
-                gr.Markdown("⚠️ **librosa가 설치되지 않음**: 오디오 특성 분석을 위해 `pip install librosa`를 실행해주세요.")
+                gr.Markdown("⚠️ **librosa is not installed**: Run `pip install librosa` to install it.")
 
             with gr.Row():
                 with gr.Column(scale=3):
-                    # 오디오 특성 분석용 초기값
+                    # Audio feature analysis initial value
                     initial_value_features = {
                         "notes": [
                             {
@@ -2157,13 +2157,13 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         height=600,
                         width=1000,
                         value=initial_value_features,
-                        elem_id="piano_roll_features",  # 고유 ID 부여
-                        use_backend_audio=True  # 백엔드 오디오 엔진 사용
+                        elem_id="piano_roll_features",  # Unique ID
+                        use_backend_audio=True  # Use backend audio engine
                     )
             with gr.Row():
                 with gr.Column():
                     btn_analyze_generated = gr.Button(
-                        "🎶 노트에서 오디오 생성 & 분석",
+                        "🎶 Create Audio from Notes & Analyze",
                         variant="primary",
                         size="lg",
                         interactive=LIBROSA_AVAILABLE
@@ -2172,7 +2172,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
             with gr.Row():
                 with gr.Column():
                     btn_analyze_uploaded = gr.Button(
-                        "📤 업로드된 오디오 분석",
+                        "📤 Analyze Uploaded Audio",
                         variant="secondary",
                         size="lg",
                         interactive=LIBROSA_AVAILABLE
@@ -2180,138 +2180,138 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
 
             with gr.Row():
                 with gr.Column(scale=1):
-                    gr.Markdown("### 🎛️ 신디사이저 설정")
+                    gr.Markdown("### 🎛️ Synthesizer Settings")
 
-                    # ADSR 설정
+                    # ADSR settings
                     attack_features = gr.Slider(
                         minimum=0.001,
                         maximum=1.0,
                         value=0.01,
                         step=0.001,
-                        label="Attack (초)"
+                        label="Attack (seconds)"
                     )
                     decay_features = gr.Slider(
                         minimum=0.001,
                         maximum=1.0,
                         value=0.1,
                         step=0.001,
-                        label="Decay (초)"
+                        label="Decay (seconds)"
                     )
                     sustain_features = gr.Slider(
                         minimum=0.0,
                         maximum=1.0,
                         value=0.7,
                         step=0.01,
-                        label="Sustain (레벨)"
+                        label="Sustain (level)"
                     )
                     release_features = gr.Slider(
                         minimum=0.001,
                         maximum=2.0,
                         value=0.3,
                         step=0.001,
-                        label="Release (초)"
+                        label="Release (seconds)"
                     )
 
-                    # 파형 설정
+                    # Waveform settings
                     wave_type_features = gr.Dropdown(
                         choices=[
-                            ("복합 파형 (Complex)", "complex"),
-                            ("하모닉 합성 (Harmonic)", "harmonic"),
-                            ("FM 합성 (FM)", "fm"),
-                            ("톱니파 (Sawtooth)", "sawtooth"),
-                            ("사각파 (Square)", "square"),
-                            ("삼각파 (Triangle)", "triangle"),
-                            ("사인파 (Sine)", "sine")
+                            ("Complex", "complex"),
+                            ("Harmonic", "harmonic"),
+                            ("FM", "fm"),
+                            ("Sawtooth", "sawtooth"),
+                            ("Square", "square"),
+                            ("Triangle", "triangle"),
+                            ("Sine", "sine")
                         ],
                         value="complex",
-                        label="파형 타입"
+                        label="Waveform Type"
                     )
                 with gr.Column():
-                    gr.Markdown("### 📊 분석 설정")
+                    gr.Markdown("### 📊 Analysis Settings")
 
-                    # 분석할 특성 선택
+                    # Select features to analyze
                     include_f0_features = gr.Checkbox(
-                        label="F0 (기본 주파수) 분석",
+                        label="F0 (fundamental frequency) analysis",
                         value=True
                     )
                     include_loudness_features = gr.Checkbox(
-                        label="Loudness (음량) 분석",
+                        label="Loudness (loudness) analysis",
                         value=True
                     )
                     include_voicing_features = gr.Checkbox(
-                        label="Voice/Unvoice (유성음/무성음) 분석",
+                        label="Voice/Unvoice (voiced/unvoiced) analysis",
                         value=True
                     )
 
-                    # F0 분석 방법
+                    # F0 analysis method
                     f0_method_features = gr.Dropdown(
                         choices=[
-                            ("PYIN (정확함, 느림)", "pyin"),
-                            ("PipTrack (빠름, 덜 정확)", "piptrack")
+                            ("PYIN (accurate, slow)", "pyin"),
+                            ("PipTrack (fast, less accurate)", "piptrack")
                         ],
                         value="pyin",
-                        label="F0 추출 방법"
+                        label="F0 Extraction Method"
                     )
 
-                    # Loudness 설정
+                    # Loudness settings
                     loudness_use_db_features = gr.Checkbox(
-                        label="Loudness를 dB 단위로 표시",
+                        label="Display Loudness in dB",
                         value=True
                     )
                     with gr.Row():
                         loudness_y_min_features = gr.Number(
-                            label="Loudness 최소값 (비워두면 자동)",
+                            label="Loudness minimum value (auto if empty)",
                             value=None
                         )
                         loudness_y_max_features = gr.Number(
-                            label="Loudness 최대값 (비워두면 자동)",
+                            label="Loudness maximum value (auto if empty)",
                             value=None
                         )
 
-                    # Voice/Unvoice 설정
+                    # Voice/Unvoice settings
                     voicing_use_probs_features = gr.Checkbox(
-                        label="Voice/Unvoice를 확률값으로 표시",
+                        label="Display Voice/Unvoice as probabilities",
                         value=True,
-                        info="체크 해제 시 이진값(0/1)으로 표시"
+                        info="Unchecked: Display as binary (0/1)"
                     )
                 with gr.Column():
-                    gr.Markdown("### 🎤 오디오 업로드")
+                    gr.Markdown("### 🎤 Upload Audio")
                     audio_upload_features = gr.Audio(
-                        label="직접 분석할 오디오 파일",
+                        label="Audio file to analyze",
                         type="filepath",
                         interactive=True
                     )
 
                     btn_generate_feature_demo = gr.Button(
-                        "🎵 특성 분석용 데모 오디오 생성",
+                        "🎵 Generate Demo Audio for Feature Analysis",
                         variant="secondary"
                     )
-                    gr.Markdown("📄 F0 변화와 loudness 변화를 모두 포함하는 테스트 오디오를 생성합니다.")
+                    gr.Markdown("📄 Generate a test audio with F0 and loudness changing over time.")
 
             with gr.Row():
                 with gr.Column():
                     features_status_text = gr.Textbox(
-                        label="분석 상태",
+                        label="Analysis Status",
                         interactive=False,
                         lines=4
                     )
 
             with gr.Row():
                 with gr.Column():
-                    # 비교용 오디오 재생
+                    # Reference audio playback
                     reference_audio_features = gr.Audio(
-                        label="분석된 오디오 (참고용)",
+                        label="Analyzed Audio (reference)",
                         type="filepath",
                         interactive=False
                     )
 
             with gr.Row():
                 with gr.Column():
-                    output_json_features = gr.JSON(label="오디오 특성 분석 결과")
+                    output_json_features = gr.JSON(label="Audio Feature Analysis Result")
 
-            # 오디오 특성 분석 탭 이벤트 처리
+            # Audio feature analysis tab event processing
 
-            # 생성된 오디오 분석 버튼
+            # Analyze generated audio button
             btn_analyze_generated.click(
                 fn=synthesize_and_analyze_features,
                 inputs=[
@@ -2334,7 +2334,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=True
             )
 
-            # 업로드된 오디오 분석 버튼
+            # Analyze uploaded audio button
             btn_analyze_uploaded.click(
                 fn=analyze_uploaded_audio_features,
                 inputs=[
@@ -2353,12 +2353,12 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=True
             )
 
-            # 데모 오디오 생성 및 분석 버튼
+            # Generate demo audio and analyze button
             def create_and_analyze_feature_demo():
-                """특성 분석용 데모 오디오를 생성하고 자동으로 분석을 수행합니다."""
+                """Generate demo audio for feature analysis and automatically analyze it."""
                 demo_audio_path = generate_feature_demo_audio()
                 if demo_audio_path:
-                    # 초기 피아노롤 데이터
+                    # Initial piano roll data
                     initial_piano_roll = {
                         "notes": [],
                         "tempo": 120,
@@ -2368,7 +2368,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         "pixelsPerBeat": 80
                     }
 
-                                        # 오디오 특성 분석 수행 (F0, loudness, voice/unvoice 모두)
+                    # Perform audio feature analysis (F0, loudness, voice/unvoice)
                     updated_piano_roll, status, _ = analyze_uploaded_audio_features(
                         initial_piano_roll, demo_audio_path,
                         include_f0=True, include_loudness=True, include_voicing=True, f0_method="pyin",
@@ -2377,7 +2377,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
 
                     return updated_piano_roll, status, demo_audio_path, demo_audio_path
                 else:
-                    return initial_value_features, "데모 오디오 생성에 실패했습니다.", None, None
+                    return initial_value_features, "Failed to generate demo audio.", None, None
 
             btn_generate_feature_demo.click(
                 fn=create_and_analyze_feature_demo,
@@ -2385,7 +2385,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=True
             )
 
-            # 노트 변경 시 JSON 출력 업데이트
+            # Update JSON output when note changes
             def update_features_json_output(piano_roll_data):
                 return piano_roll_data
 
@@ -2396,25 +2396,25 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 show_progress=False
             )
 
-            # 재생 이벤트 로깅
+            # Log play event
             def log_features_play_event(event_data=None):
                 print("🔊 Features Play event triggered:", event_data)
-                return f"재생 시작: {event_data if event_data else '재생 중'}"
+                return f"Play started: {event_data if event_data else 'Playing'}"
 
             def log_features_pause_event(event_data=None):
                 print("🔊 Features Pause event triggered:", event_data)
-                return f"일시정지: {event_data if event_data else '일시정지'}"
+                return f"Paused: {event_data if event_data else 'Paused'}"
 
             def log_features_stop_event(event_data=None):
                 print("🔊 Features Stop event triggered:", event_data)
-                return f"정지: {event_data if event_data else '정지'}"
+                return f"Stopped: {event_data if event_data else 'Stopped'}"
 
             piano_roll_features.play(log_features_play_event, outputs=features_status_text)
             piano_roll_features.pause(log_features_pause_event, outputs=features_status_text)
             piano_roll_features.stop(log_features_stop_event, outputs=features_status_text)
 
             if not LIBROSA_AVAILABLE:
-                gr.Markdown("⚠️ librosa가 필요합니다")
+                gr.Markdown("⚠️ librosa is required")
 
 if __name__ == "__main__":
     demo.launch()
