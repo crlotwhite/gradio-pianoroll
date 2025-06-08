@@ -7,7 +7,7 @@
   import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks, calculateAllTimingData } from '../utils/flicks';
   import { LayerManager, GridLayer, NotesLayer, WaveformLayer, LineLayer } from '../utils/layers';
   import LayerControlPanel from './LayerControlPanel.svelte';
-  import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint } from '../utils/layers';
+  import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint } from '../types/layer';
   import { AudioEngineManager } from '../utils/audioEngine';
 
   // Props

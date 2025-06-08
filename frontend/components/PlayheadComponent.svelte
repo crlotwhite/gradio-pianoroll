@@ -5,6 +5,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { flicksToBeats, flicksToPixels } from '../utils/flicks';
+  // import type { LayerRenderContext } from '../../types/layer'; // 필요시 이 경로에서 import
 
   // Props
   export let width = 880;

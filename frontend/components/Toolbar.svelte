@@ -4,6 +4,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
 
+  /** @type {import('../types/component').ToolbarProps} */
   export let tempo = 120;
   export let timeSignature = { numerator: 4, denominator: 4 };
   export let editMode = 'select'; // 'select', 'draw', 'erase', etc.

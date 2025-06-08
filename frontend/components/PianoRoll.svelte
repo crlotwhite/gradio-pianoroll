@@ -14,32 +14,35 @@
   import { AudioEngineManager } from '../utils/audioEngine';
   import { beatsToFlicks, flicksToBeats, formatFlicks } from '../utils/flicks';
   import { createEventDispatcher } from 'svelte';
+  /**
+   * @typedef {import('../../types/component').PianoRollProps} PianoRollProps
+   */
 
   // 이벤트 디스패처 생성
   const dispatch = createEventDispatcher();
 
-  // Props
+  // Props (외부에서 주입되는 값)
+  /** @type {number} */
   export let width = 1000;  // Total width of the piano roll
+  /** @type {number} */
   export let height = 600;  // Total height of the piano roll
+  /** @type {number} */
   export let keyboardWidth = 120; // Width of the keyboard component
+  /** @type {number} */
   export let timelineHeight = 40; // Height of the timeline component
+  /** @type {string} */
   export let elem_id = '';  // 컴포넌트 고유 ID
 
-  // 백엔드 데이터 속성들
+  /** @type {string | null} */
   export let audio_data: string | null = null;
+  /** @type {object | null} */
   export let curve_data: object | null = null;
-  export let segment_data: Array<any> | null = null;
+  /** @type {object | null} */
   export let line_data: object | null = null;  // Line layer data
+  /** @type {boolean} */
   export let use_backend_audio: boolean = false;
 
-  // use_backend_audio prop 변경 감지
-  $: {
-    console.log("🔊 PianoRoll: use_backend_audio prop changed to:", use_backend_audio);
-    console.log("🔊 PianoRoll: audio_data present:", !!audio_data);
-    console.log("🔊 PianoRoll: elem_id:", elem_id);
-  }
-
-  // Shared state
+  /** @type {Array<PianoRollProps['notes'][0]>} */
   export let notes: Array<{
     id: string,
     start: number,
@@ -62,21 +65,23 @@
   }> = [];
 
   // Settings
+  /** @type {number} */
   export let tempo = 120;
+  /** @type {{ numerator: number, denominator: number }} */
   export let timeSignature = { numerator: 4, denominator: 4 };
+  /** @type {string} */
   export let editMode = 'select'; // 'select', 'draw', 'erase', etc.
+  /** @type {string} */
   export let snapSetting = '1/4'; // Default snap setting: 1/4
 
   // Audio metadata
+  /** @type {number} */
   export let sampleRate = 44100; // Audio sample rate
+  /** @type {number} */
   export let ppqn = 480;         // MIDI pulses per quarter note
 
-  // Playback state
-  let isPlaying = false;
-  let isRendering = false;
-  let currentFlicks = 0;
-
   // Zoom level (pixels per beat) - now controlled from parent
+  /** @type {number} */
   export let pixelsPerBeat = 80;
   const MIN_PIXELS_PER_BEAT = 40; // Minimum zoom level
   const MAX_PIXELS_PER_BEAT = 200; // Maximum zoom level
@@ -97,6 +102,12 @@
       dispatchDataChange();
     }
   }
+
+  // State variables (내부 상태)
+  // Playback state
+  let isPlaying = false;
+  let isRendering = false;
+  let currentFlicks = 0;
 
   // Scroll positions
   let horizontalScroll = 0;

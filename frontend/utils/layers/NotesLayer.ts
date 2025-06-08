@@ -3,28 +3,8 @@
  */
 
 import { BaseLayer, LayerZIndex } from '../LayerSystem';
-import type { LayerRenderContext } from '../LayerSystem';
-
-export interface Note {
-  id: string;
-  start: number;
-  duration: number;
-  startFlicks?: number;
-  durationFlicks?: number;
-  startSeconds?: number;
-  durationSeconds?: number;
-  endSeconds?: number;
-  startBeats?: number;
-  durationBeats?: number;
-  startTicks?: number;
-  durationTicks?: number;
-  startSample?: number;
-  durationSamples?: number;
-  pitch: number;
-  velocity: number;
-  lyric?: string;
-  phoneme?: string;
-}
+import type { LayerRenderContext } from '../../types/layer';
+import type { Note } from '../../types/layer';
 
 export class NotesLayer extends BaseLayer {
   // Note colors and styling
@@ -125,7 +105,7 @@ export class NotesLayer extends BaseLayer {
   findNotesAtPosition(x: number, y: number, horizontalScroll: number, verticalScroll: number): Note[] {
     const NOTE_HEIGHT = 20;
     const TOTAL_NOTES = 128;
-    
+
     // Convert screen coordinates to world coordinates
     const worldX = x + horizontalScroll;
     const worldY = y + verticalScroll;
@@ -150,4 +130,4 @@ export class NotesLayer extends BaseLayer {
   getSelectedNotes(): Set<string> {
     return this.selectedNotes;
   }
-} 
+}

@@ -3,6 +3,7 @@
 -->
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+  // import type { Note } from '../../types/layer'; // Note 타입 등 필요시 이 경로에서 import
 
   // Props
   export let keyboardWidth = 120;  // Width of the keyboard

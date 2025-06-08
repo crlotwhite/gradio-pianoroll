@@ -5,6 +5,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { LayerManager, LineLayer } from '../utils/layers';
+  /** @type {import('../../types/component').LayerControlPanelProps} */
 
   // Props
   export let layerManager: LayerManager | null = null;
