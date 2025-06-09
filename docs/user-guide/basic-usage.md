@@ -1,417 +1,281 @@
 # 기본 사용법
 
-피아노롤의 모든 편집 기능과 조작법을 자세히 알아봅시다.
+이 가이드에서는 Gradio PianoRoll 컴포넌트의 기본적인 사용법을 설명합니다.
 
-## 🎼 인터페이스 개요
+## 🚀 빠른 시작
 
-### 메인 컴포넌트
+### 1. 기본 설치 및 import
+
+```python
+import gradio as gr
+from gradio_pianoroll import PianoRoll
+from gradio_pianoroll.data_models import PianoRollData, Note  # TypedDict 지원
+```
+
+### 2. 가장 간단한 예제
 
 ```python
 import gradio as gr
 from gradio_pianoroll import PianoRoll
 
-piano_roll = PianoRoll(
-    height=600,           # 캔버스 높이
-    width=1000,          # 캔버스 너비
-    value=initial_data,  # 초기 노트 데이터
-    interactive=True     # 편집 가능 여부
-)
+with gr.Blocks() as demo:
+    piano_roll = PianoRoll(height=400)
+
+demo.launch()
 ```
 
-### 화면 구성
-
-- **상단 툴바**: 편집 모드, 템포, 박자, 스냅 설정
-- **왼쪽 피아노**: MIDI 노트 (C0~G10, 128개 키)
-- **메인 그리드**: 노트 편집 영역
-- **하단 컨트롤**: 재생, 일시정지, 정지, 볼륨
-- **우측 패널**: 레이어 제어 (L키로 토글)
-
-## 🎯 편집 모드
-
-### 1. 선택 모드 (Select) 🎯
-
-**활성화**: 툴바의 화살표 아이콘 클릭 또는 `S` 키
-
-기본 조작:
-- **단일 선택**: 노트 클릭
-- **다중 선택**: `Ctrl` + 클릭 또는 드래그로 영역 선택
-- **전체 선택**: `Ctrl` + `A`
-- **선택 해제**: 빈 공간 클릭
-
-노트 조작:
-- **이동**: 선택된 노트를 드래그
-- **크기 조절**: 노트의 오른쪽 가장자리를 드래그
-- **복사**: `Ctrl` + `C` 후 `Ctrl` + `V`
-- **삭제**: `Delete` 키 또는 지우개 모드로 전환 후 클릭
+### 3. 초기 데이터와 함께 사용
 
 ```python
-# 선택 모드 예제
-def handle_selection(notes_data):
-    """선택된 노트 정보 처리"""
-    notes = notes_data.get('notes', [])
-    selected_notes = [note for note in notes if note.get('selected', False)]
-    
-    print(f"선택된 노트: {len(selected_notes)}개")
-    for note in selected_notes:
-        print(f"- {note.get('lyric', '?')} (피치: {note['pitch']})")
-    
-    return notes_data
+# TypedDict 타입 힌트 사용 (선택사항)
+from gradio_pianoroll.data_models import PianoRollData
 
-piano_roll.change(handle_selection, inputs=piano_roll, outputs=piano_roll)
-```
-
-### 2. 그리기 모드 (Draw) ✏️
-
-**활성화**: 툴바의 연필 아이콘 클릭 또는 `D` 키
-
-노트 생성:
-- **기본 그리기**: 클릭하고 드래그하여 노트 생성
-- **빠른 생성**: 그리드에 단순 클릭 (기본 길이로 생성)
-- **정밀 조절**: 드래그 중 `Shift` 키로 스냅 무시
-
-```python
-# 그리기 모드에서 자동 가사 생성
-def auto_assign_lyrics(notes_data):
-    """새로 생성된 노트에 자동 가사 할당"""
-    lyrics_sequence = ["도", "레", "미", "파", "솔", "라", "시"]
-    notes = notes_data.get('notes', [])
-    
-    for i, note in enumerate(notes):
-        if not note.get('lyric'):
-            note['lyric'] = lyrics_sequence[i % len(lyrics_sequence)]
-    
-    return notes_data
-```
-
-### 3. 지우기 모드 (Erase) 🗑️
-
-**활성화**: 툴바의 지우개 아이콘 클릭 또는 `E` 키
-
-삭제 방법:
-- **개별 삭제**: 삭제할 노트 클릭
-- **드래그 삭제**: 드래그하여 지나가는 모든 노트 삭제
-- **영역 삭제**: 영역을 드래그하여 포함된 노트들 삭제
-
-## ⚙️ 스냅 설정
-
-노트가 그리드에 맞춰지는 정밀도를 설정합니다.
-
-### 지원하는 스냅 값
-
-```python
-snap_settings = {
-    "1/1": "온음표 (4비트)",
-    "1/2": "2분음표 (2비트)",
-    "1/4": "4분음표 (1비트)",
-    "1/8": "8분음표 (0.5비트)",
-    "1/16": "16분음표 (0.25비트)",
-    "1/32": "32분음표 (0.125비트)"
-}
-```
-
-### 스냅 무시
-
-정밀한 편집을 위해 스냅을 일시적으로 무시할 수 있습니다:
-- **임시 무시**: 편집 중 `Shift` 키 유지
-- **완전 무시**: 스냅 설정을 "off"로 변경
-
-## 🎹 노트 편집
-
-### 가사 편집
-
-**방법 1: 더블클릭**
-1. 노트를 더블클릭
-2. 입력 모달에서 가사 입력
-3. Enter로 확인 또는 ESC로 취소
-
-**방법 2: 프로그래밍 방식**
-```python
-def batch_edit_lyrics(notes_data, lyric_mapping):
-    """여러 노트의 가사를 일괄 편집"""
-    notes = notes_data.get('notes', [])
-    
-    for note in notes:
-        pitch = note.get('pitch')
-        if pitch in lyric_mapping:
-            note['lyric'] = lyric_mapping[pitch]
-    
-    return notes_data
-
-# 사용 예제
-lyric_map = {
-    60: "도",  # C4
-    62: "레",  # D4
-    64: "미",  # E4
-    65: "파",  # F4
-    67: "솔", # G4
-    69: "라",  # A4
-    71: "시"   # B4
+# 초기 데이터 정의
+initial_data: PianoRollData = {
+    "notes": [
+        {
+            "id": "note_1",
+            "start": 0,
+            "duration": 160,
+            "pitch": 60,  # C4
+            "velocity": 100,
+            "lyric": "안녕"
+        },
+        {
+            "id": "note_2",
+            "start": 160,
+            "duration": 160,
+            "pitch": 64,  # E4
+            "velocity": 90,
+            "lyric": "하세요"
+        }
+    ],
+    "tempo": 120,
+    "timeSignature": {"numerator": 4, "denominator": 4},
+    "editMode": "select",
+    "snapSetting": "1/4",
+    "pixelsPerBeat": 80
 }
 
-piano_roll.change(
-    lambda data: batch_edit_lyrics(data, lyric_map),
-    inputs=piano_roll,
-    outputs=piano_roll
-)
+with gr.Blocks() as demo:
+    piano_roll = PianoRoll(value=initial_data, height=600)
+
+demo.launch()
 ```
 
-### 벨로시티 편집
+## 📊 데이터 구조 이해하기
 
-MIDI 벨로시티(음량)를 조절할 수 있습니다:
+### PianoRoll 데이터 형식 (TypedDict)
 
 ```python
-def adjust_velocity(notes_data, velocity_curve="linear"):
-    """벨로시티 곡선 적용"""
-    notes = notes_data.get('notes', [])
-    
-    for i, note in enumerate(notes):
-        if velocity_curve == "linear":
-            # 선형 증가
-            note['velocity'] = int(50 + (i / len(notes)) * 77)
-        elif velocity_curve == "crescendo":
-            # 점진적 증가
-            note['velocity'] = int(60 + (i / len(notes)) * 67)
-        elif velocity_curve == "random":
-            # 랜덤 변화
-            import random
-            note['velocity'] = random.randint(60, 127)
-    
-    return notes_data
+from gradio_pianoroll.data_models import PianoRollData, Note, TimeSignature
+
+# 전체 구조
+class PianoRollData(TypedDict, total=False):
+    # 필수 필드들
+    notes: List[Note]
+    tempo: int
+    timeSignature: TimeSignature
+    editMode: str
+    snapSetting: str
+
+    # 선택적 필드들 (자동으로 기본값 설정됨)
+    pixelsPerBeat: Optional[float]
+    sampleRate: Optional[int]
+    ppqn: Optional[int]
 ```
 
-## 🎵 템포와 박자
-
-### 템포 설정
+### 개별 노트 구조
 
 ```python
-def change_tempo(notes_data, new_tempo):
-    """템포 변경"""
-    notes_data['tempo'] = new_tempo
-    return notes_data
+class Note(TypedDict, total=False):
+    # 필수 필드들
+    id: str              # 자동 생성됨
+    start: float         # 시작 위치 (픽셀)
+    duration: float      # 지속 시간 (픽셀)
+    pitch: int           # MIDI 노트 번호 (0-127)
+    velocity: int        # 음량 (0-127)
 
-def get_tempo_presets():
-    """일반적인 템포 프리셋"""
-    return {
-        "라르고": 60,
-        "안단테": 76,
-        "모데라토": 108,
-        "알레그로": 132,
-        "프레스토": 168
-    }
+    # 선택적 필드들
+    lyric: Optional[str]     # 가사
+    phoneme: Optional[str]   # 음성학 표기
+
+    # 타이밍 필드들 (자동 계산됨)
+    startSeconds: Optional[float]
+    durationSeconds: Optional[float]
+    startFlicks: Optional[float]
+    # ... 기타 타이밍 필드들
 ```
 
-### 박자 설정
+## 🎯 이벤트 처리
+
+### 기본 이벤트 리스너
 
 ```python
-def change_time_signature(notes_data, numerator, denominator):
-    """박자 변경"""
-    notes_data['timeSignature'] = {
-        "numerator": numerator,
-        "denominator": denominator
-    }
-    return notes_data
+def handle_note_change(piano_roll_data):
+    """노트 변경 시 호출되는 함수"""
+    notes = piano_roll_data.get("notes", [])
+    print(f"현재 노트 개수: {len(notes)}")
 
-# 일반적인 박자
-common_time_signatures = [
-    (4, 4),  # 4/4 박자 (일반적)
-    (3, 4),  # 3/4 박자 (왈츠)
-    (2, 4),  # 2/4 박자 (행진곡)
-    (6, 8),  # 6/8 박자 (컴파운드)
-    (5, 4),  # 5/4 박자 (비정규)
-]
-```
-
-## 🎮 키보드 단축키
-
-### 편집 모드
-- `D`: 그리기 모드
-- `S`: 선택 모드
-- `E`: 지우기 모드
-
-### 재생 제어
-- `Space`: 재생/일시정지 토글
-- `Enter`: 재생 시작
-- `Esc`: 정지
-
-### 편집 작업
-- `Ctrl + A`: 전체 선택
-- `Ctrl + C`: 복사
-- `Ctrl + V`: 붙여넣기
-- `Delete`: 선택된 노트 삭제
-- `Ctrl + Z`: 실행 취소 (향후 지원 예정)
-
-### 뷰 제어
-- `L`: 레이어 패널 토글
-- `+/-`: 수평 줌 인/아웃
-- `Shift + +/-`: 수직 줌 인/아웃
-
-## 🖱️ 마우스 조작
-
-### 기본 조작
-- **좌클릭**: 선택/그리기
-- **우클릭**: 컨텍스트 메뉴 (향후 지원)
-- **드래그**: 영역 선택 또는 노트 이동
-- **휠**: 수평 스크롤
-- **Shift + 휠**: 수직 스크롤
-
-### 고급 조작
-- **Ctrl + 드래그**: 복사하면서 이동
-- **Alt + 드래그**: 스냅 무시하고 이동
-- **Shift + 클릭**: 다중 선택에 추가
-
-## 📐 정밀 편집
-
-### 픽셀 단위 조정
-
-```python
-def fine_tune_positions(notes_data, offset_pixels):
-    """노트 위치를 픽셀 단위로 미세 조정"""
-    notes = notes_data.get('notes', [])
-    
+    # TypedDict 사용 시 IDE 자동완성 지원
     for note in notes:
-        if note.get('selected', False):
-            note['start'] += offset_pixels
-            # 음수 위치 방지
-            note['start'] = max(0, note['start'])
-    
-    return notes_data
+        print(f"노트: pitch={note['pitch']}, lyric={note.get('lyric', '')}")
 
-# 미세 조정 버튼들
-with gr.Row():
-    btn_left = gr.Button("← 1px")
-    btn_right = gr.Button("1px →")
+    return piano_roll_data
 
-btn_left.click(lambda data: fine_tune_positions(data, -1), 
-               inputs=piano_roll, outputs=piano_roll)
-btn_right.click(lambda data: fine_tune_positions(data, 1), 
-                inputs=piano_roll, outputs=piano_roll)
+with gr.Blocks() as demo:
+    piano_roll = PianoRoll()
+
+    # 노트 변경 시 이벤트
+    piano_roll.change(
+        fn=handle_note_change,
+        inputs=piano_roll,
+        outputs=piano_roll
+    )
+
+demo.launch()
 ```
 
-### 그리드 스냅 계산
+### 재생 이벤트
 
 ```python
-def calculate_snap_position(pixel_position, pixels_per_beat, snap_setting):
-    """스냅 설정에 따른 위치 계산"""
-    snap_fractions = {
-        "1/1": 1.0,
-        "1/2": 0.5,
-        "1/4": 0.25,
-        "1/8": 0.125,
-        "1/16": 0.0625,
-        "1/32": 0.03125
-    }
-    
-    snap_size = pixels_per_beat * snap_fractions.get(snap_setting, 0.25)
-    snapped_position = round(pixel_position / snap_size) * snap_size
-    
-    return snapped_position
+def on_play(event_data):
+    print("재생 시작!")
+    return "재생 중..."
+
+def on_pause(event_data):
+    print("일시정지!")
+    return "일시정지됨"
+
+def on_stop(event_data):
+    print("정지!")
+    return "정지됨"
+
+with gr.Blocks() as demo:
+    piano_roll = PianoRoll()
+    status = gr.Textbox(label="상태")
+
+    # 재생 이벤트들
+    piano_roll.play(on_play, outputs=status)
+    piano_roll.pause(on_pause, outputs=status)
+    piano_roll.stop(on_stop, outputs=status)
+
+demo.launch()
 ```
 
-## 🎯 고급 기능
+## 🔧 데이터 유효성 검사
 
-### 노트 필터링
+### 자동 유효성 검사
+
+컴포넌트는 자동으로 데이터를 검사하고 문제가 있을 때 경고를 출력합니다:
 
 ```python
-def filter_notes_by_criteria(notes_data, criteria):
-    """특정 조건으로 노트 필터링"""
-    notes = notes_data.get('notes', [])
-    
-    filtered_notes = []
-    for note in notes:
-        if criteria.get('min_pitch', 0) <= note['pitch'] <= criteria.get('max_pitch', 127):
-            if criteria.get('min_velocity', 0) <= note['velocity'] <= criteria.get('max_velocity', 127):
-                if not criteria.get('require_lyric') or note.get('lyric'):
-                    filtered_notes.append(note)
-    
-    notes_data['notes'] = filtered_notes
-    return notes_data
-
-# 사용 예제: 고음역대 노트만 표시
-high_notes_criteria = {
-    'min_pitch': 72,  # C5 이상
-    'max_pitch': 127,
-    'min_velocity': 50,
-    'max_velocity': 127
+# 잘못된 데이터
+bad_data = {
+    "notes": [
+        {"pitch": 999, "start": 0, "duration": 100}  # 잘못된 피치
+    ],
+    "tempo": -50  # 잘못된 템포
 }
+
+# 컴포넌트가 자동으로 검사하고 경고 출력
+piano_roll = PianoRoll(value=bad_data)
+# UserWarning: Initial piano roll value validation failed:
+#   - Note 0: 'pitch' must be between 0 and 127
+#   - 'tempo' must be a positive number
 ```
 
-### 노트 정렬
+### 수동 검사
 
 ```python
-def sort_notes(notes_data, sort_by="start"):
-    """노트 정렬"""
-    notes = notes_data.get('notes', [])
-    
-    if sort_by == "start":
-        notes.sort(key=lambda n: n['start'])
-    elif sort_by == "pitch":
-        notes.sort(key=lambda n: n['pitch'])
-    elif sort_by == "velocity":
-        notes.sort(key=lambda n: n['velocity'], reverse=True)
-    elif sort_by == "duration":
-        notes.sort(key=lambda n: n['duration'], reverse=True)
-    
-    notes_data['notes'] = notes
-    return notes_data
+from gradio_pianoroll.data_models import validate_piano_roll_data, clean_piano_roll_data
+
+def safe_update_pianoroll(data):
+    """안전한 피아노롤 업데이트"""
+    # 1. 데이터 정리
+    cleaned_data = clean_piano_roll_data(data)
+
+    # 2. 유효성 검사
+    errors = validate_piano_roll_data(cleaned_data)
+    if errors:
+        print("데이터 오류:")
+        for error in errors:
+            print(f"  - {error}")
+        return None
+
+    # 3. 안전한 데이터 반환
+    return cleaned_data
 ```
 
-## 📊 데이터 분석
+## 🎵 연구자용 유틸리티 활용
 
-### 통계 정보
+### research 모듈 사용
 
 ```python
-def analyze_notes(notes_data):
-    """노트 데이터 분석"""
-    notes = notes_data.get('notes', [])
-    
-    if not notes:
-        return "노트가 없습니다."
-    
-    # 기본 통계
-    pitches = [n['pitch'] for n in notes]
-    velocities = [n['velocity'] for n in notes]
-    durations = [n['duration'] for n in notes]
-    
-    stats = {
-        "노트 개수": len(notes),
-        "음역대": f"{min(pitches)} ~ {max(pitches)}",
-        "평균 피치": round(sum(pitches) / len(pitches), 1),
-        "평균 벨로시티": round(sum(velocities) / len(velocities), 1),
-        "평균 길이": round(sum(durations) / len(durations), 1),
-        "총 길이": max(n['start'] + n['duration'] for n in notes) if notes else 0
-    }
-    
-    return stats
+from gradio_pianoroll.utils import research
+
+# 간단한 노트 생성
+notes = [(60, 0, 1), (64, 1, 1), (67, 2, 1)]  # (pitch, start_sec, duration_sec)
+data = research.from_notes(notes, tempo=120)
+
+piano_roll = PianoRoll(value=data)
 ```
 
-## 🔄 데이터 입출력
-
-### JSON 형식으로 저장
+### 3줄로 데모 만들기
 
 ```python
-import json
+from gradio_pianoroll.utils import research
 
-def save_to_json(notes_data, filename):
-    """노트 데이터를 JSON 파일로 저장"""
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(notes_data, f, ensure_ascii=False, indent=2)
-
-def load_from_json(filename):
-    """JSON 파일에서 노트 데이터 로드"""
-    with open(filename, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-# Gradio 인터페이스에서 사용
-def export_data(notes_data):
-    save_to_json(notes_data, "exported_notes.json")
-    return "데이터가 exported_notes.json으로 저장되었습니다."
-
-btn_export = gr.Button("📤 데이터 내보내기")
-btn_export.click(export_data, inputs=piano_roll, outputs=status_text)
+notes = [(60, 0, 1), (64, 1, 1), (67, 2, 1)]
+demo = research.quick_demo(notes, title="내 TTS 모델 결과")
+demo.launch()
 ```
 
----
+## 🔍 디버깅 팁
 
-이제 피아노롤의 모든 기본 기능을 마스터했습니다! 🎉
+### 1. 데이터 구조 확인
 
-**다음 단계**: [신디사이저](synthesizer.md)에서 실제 오디오 생성 방법을 알아보세요! 
+```python
+def debug_data(piano_roll_data):
+    """데이터 구조 디버깅"""
+    print("=== 피아노롤 데이터 구조 ===")
+    print(f"템포: {piano_roll_data.get('tempo')}")
+    print(f"노트 개수: {len(piano_roll_data.get('notes', []))}")
+
+    for i, note in enumerate(piano_roll_data.get('notes', [])):
+        print(f"노트 {i}: {note}")
+
+    return piano_roll_data
+
+piano_roll.change(debug_data, inputs=piano_roll, outputs=piano_roll)
+```
+
+### 2. TypedDict 타입 체크
+
+```python
+from gradio_pianoroll.data_models import PianoRollData
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # 개발 시에만 타입 체크
+    def type_safe_function(data: PianoRollData) -> PianoRollData:
+        # IDE에서 자동완성과 타입 검사 지원
+        notes = data["notes"]  # List[Note] 타입으로 추론
+        tempo = data["tempo"]  # int 타입으로 추론
+        return data
+```
+
+### 3. 일반적인 오류와 해결법
+
+| 오류 | 원인 | 해결법 |
+|------|------|---------|
+| `KeyError: 'notes'` | 필수 필드 누락 | `clean_piano_roll_data()` 사용 |
+| `TypeError: 'NoneType'` | None 데이터 전달 | 데이터 유효성 검사 추가 |
+| `UserWarning: validation failed` | 잘못된 데이터 값 | 데이터 범위 확인 (pitch: 0-127, tempo > 0) |
+
+## 📝 다음 단계
+
+- [연구자용 유틸리티](utils-research.md) - 고급 헬퍼 함수들
+- [음성 합성](synthesizer.md) - 오디오 생성 기능
+- [오디오 분석](audio-analysis.md) - F0, 음량 분석
+- [API 참조](../api/components.md) - 전체 API 문서

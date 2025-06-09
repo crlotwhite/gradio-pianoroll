@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Union
 
 from gradio.components.base import Component
 from gradio.events import Events
@@ -18,8 +18,16 @@ from .timing_utils import (
     create_note_with_timing,
 )
 
+from .data_models import (
+    PianoRollData,
+    validate_and_warn,
+    clean_piano_roll_data,
+    ensure_note_ids,
+)
+
 if TYPE_CHECKING:
     from gradio.components import Timer
+
 
 class PianoRoll(Component):
     """
@@ -50,7 +58,7 @@ class PianoRoll(Component):
 
     def __init__(
         self,
-        value: dict | None = None,
+        value: Union[dict, PianoRollData, None] = None,
         *,
         audio_data: str | None = None,
         curve_data: dict | None = None,
@@ -105,42 +113,82 @@ class PianoRoll(Component):
         default_ppqn = 480
 
         default_notes = [
-            create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕",
-                                  default_pixels_per_beat, default_tempo, default_sample_rate, default_ppqn),      # 1st beat of measure 1
-            create_note_with_timing(generate_note_id(), 160, 160, 64, 90, "하세요",
-                                  default_pixels_per_beat, default_tempo, default_sample_rate, default_ppqn),    # 1st beat of measure 2
-            create_note_with_timing(generate_note_id(), 320, 80, 67, 95, "반가워요",
-                                  default_pixels_per_beat, default_tempo, default_sample_rate, default_ppqn)    # 1st beat of measure 3
+            create_note_with_timing(
+                generate_note_id(),
+                80,
+                80,
+                60,
+                100,
+                "안녕",
+                default_pixels_per_beat,
+                default_tempo,
+                default_sample_rate,
+                default_ppqn,
+            ),  # 1st beat of measure 1
+            create_note_with_timing(
+                generate_note_id(),
+                160,
+                160,
+                64,
+                90,
+                "하세요",
+                default_pixels_per_beat,
+                default_tempo,
+                default_sample_rate,
+                default_ppqn,
+            ),  # 1st beat of measure 2
+            create_note_with_timing(
+                generate_note_id(),
+                320,
+                80,
+                67,
+                95,
+                "반가워요",
+                default_pixels_per_beat,
+                default_tempo,
+                default_sample_rate,
+                default_ppqn,
+            ),  # 1st beat of measure 3
         ]
 
         if value is None:
             self.value = {
                 "notes": default_notes,
                 "tempo": default_tempo,
-                "timeSignature": { "numerator": 4, "denominator": 4 },
+                "timeSignature": {"numerator": 4, "denominator": 4},
                 "editMode": "select",
                 "snapSetting": "1/4",
                 "pixelsPerBeat": default_pixels_per_beat,
                 "sampleRate": default_sample_rate,
-                "ppqn": default_ppqn
+                "ppqn": default_ppqn,
             }
         else:
-            # Ensure all notes have IDs and flicks values, generate them if missing
-            if "notes" in value and value["notes"]:
-                pixels_per_beat = value.get("pixelsPerBeat", default_pixels_per_beat)
-                tempo = value.get("tempo", default_tempo)
+            # 데이터 정리 및 유효성 검사
+            cleaned_value = clean_piano_roll_data(value)
+            validated_value = validate_and_warn(
+                cleaned_value, "Initial piano roll value"
+            )
 
-                for note in value["notes"]:
-                    if "id" not in note or not note["id"]:
-                        note["id"] = generate_note_id()
+            # ID 보장 및 타이밍 데이터 생성
+            self.value = ensure_note_ids(validated_value)
 
+            # Ensure all notes have timing values, generate them if missing
+            if "notes" in self.value and self.value["notes"]:
+                pixels_per_beat = self.value.get(
+                    "pixelsPerBeat", default_pixels_per_beat
+                )
+                tempo = self.value.get("tempo", default_tempo)
+
+                for note in self.value["notes"]:
                     # Add flicks values if missing
                     if "startFlicks" not in note:
-                        note["startFlicks"] = pixels_to_flicks(note["start"], pixels_per_beat, tempo)
+                        note["startFlicks"] = pixels_to_flicks(
+                            note["start"], pixels_per_beat, tempo
+                        )
                     if "durationFlicks" not in note:
-                        note["durationFlicks"] = pixels_to_flicks(note["duration"], pixels_per_beat, tempo)
-
-            self.value = value
+                        note["durationFlicks"] = pixels_to_flicks(
+                            note["duration"], pixels_per_beat, tempo
+                        )
 
         # 백엔드 데이터 속성들
         self.audio_data = audio_data
@@ -181,9 +229,18 @@ class PianoRoll(Component):
         Args:
             payload: The MIDI notes data to preprocess.
         Returns:
-            The preprocessed data (passed through).
+            The preprocessed data with validation.
         """
-        return payload
+        if payload is None:
+            return payload
+
+        # 데이터 정리 및 유효성 검사
+        cleaned_payload = clean_piano_roll_data(payload)
+        validated_payload = validate_and_warn(
+            cleaned_payload, "Frontend piano roll data"
+        )
+
+        return validated_payload
 
     def postprocess(self, value):
         """
@@ -207,28 +264,38 @@ class PianoRoll(Component):
 
                 # Add all timing values if missing
                 if "startFlicks" not in note or "startSeconds" not in note:
-                    start_timing = calculate_all_timing_data(note["start"], pixels_per_beat, tempo, sample_rate, ppqn)
-                    note.update({
-                        "startFlicks": start_timing['flicks'],
-                        "startSeconds": start_timing['seconds'],
-                        "startBeats": start_timing['beats'],
-                        "startTicks": start_timing['ticks'],
-                        "startSample": start_timing['samples']
-                    })
+                    start_timing = calculate_all_timing_data(
+                        note["start"], pixels_per_beat, tempo, sample_rate, ppqn
+                    )
+                    note.update(
+                        {
+                            "startFlicks": start_timing["flicks"],
+                            "startSeconds": start_timing["seconds"],
+                            "startBeats": start_timing["beats"],
+                            "startTicks": start_timing["ticks"],
+                            "startSample": start_timing["samples"],
+                        }
+                    )
 
                 if "durationFlicks" not in note or "durationSeconds" not in note:
-                    duration_timing = calculate_all_timing_data(note["duration"], pixels_per_beat, tempo, sample_rate, ppqn)
-                    note.update({
-                        "durationFlicks": duration_timing['flicks'],
-                        "durationSeconds": duration_timing['seconds'],
-                        "durationBeats": duration_timing['beats'],
-                        "durationTicks": duration_timing['ticks'],
-                        "durationSamples": duration_timing['samples']
-                    })
+                    duration_timing = calculate_all_timing_data(
+                        note["duration"], pixels_per_beat, tempo, sample_rate, ppqn
+                    )
+                    note.update(
+                        {
+                            "durationFlicks": duration_timing["flicks"],
+                            "durationSeconds": duration_timing["seconds"],
+                            "durationBeats": duration_timing["beats"],
+                            "durationTicks": duration_timing["ticks"],
+                            "durationSamples": duration_timing["samples"],
+                        }
+                    )
 
                 # Calculate end time if missing
                 if "endSeconds" not in note:
-                    note["endSeconds"] = note.get("startSeconds", 0) + note.get("durationSeconds", 0)
+                    note["endSeconds"] = note.get("startSeconds", 0) + note.get(
+                        "durationSeconds", 0
+                    )
 
         # Send backend data attributes along with the value
         if value and isinstance(value, dict):
@@ -236,19 +303,19 @@ class PianoRoll(Component):
             # This allows for independent backend settings per component instance
 
             if "audio_data" not in value or value["audio_data"] is None:
-                if hasattr(self, 'audio_data') and self.audio_data:
+                if hasattr(self, "audio_data") and self.audio_data:
                     value["audio_data"] = self.audio_data
 
             if "curve_data" not in value or value["curve_data"] is None:
-                if hasattr(self, 'curve_data') and self.curve_data:
+                if hasattr(self, "curve_data") and self.curve_data:
                     value["curve_data"] = self.curve_data
 
             if "segment_data" not in value or value["segment_data"] is None:
-                if hasattr(self, 'segment_data') and self.segment_data:
+                if hasattr(self, "segment_data") and self.segment_data:
                     value["segment_data"] = self.segment_data
 
             if "use_backend_audio" not in value:
-                if hasattr(self, 'use_backend_audio'):
+                if hasattr(self, "use_backend_audio"):
                     value["use_backend_audio"] = self.use_backend_audio
                 else:
                     value["use_backend_audio"] = False
@@ -275,16 +342,26 @@ class PianoRoll(Component):
 
         return {
             "notes": [
-                create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕",
-                                      pixels_per_beat, tempo, sample_rate, ppqn)
+                create_note_with_timing(
+                    generate_note_id(),
+                    80,
+                    80,
+                    60,
+                    100,
+                    "안녕",
+                    pixels_per_beat,
+                    tempo,
+                    sample_rate,
+                    ppqn,
+                )
             ],
             "tempo": tempo,
-            "timeSignature": { "numerator": 4, "denominator": 4 },
+            "timeSignature": {"numerator": 4, "denominator": 4},
             "editMode": "select",
             "snapSetting": "1/4",
             "pixelsPerBeat": pixels_per_beat,
             "sampleRate": sample_rate,
-            "ppqn": ppqn
+            "ppqn": ppqn,
         }
 
     def example_value(self):
@@ -300,18 +377,38 @@ class PianoRoll(Component):
 
         return {
             "notes": [
-                create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕",
-                                      pixels_per_beat, tempo, sample_rate, ppqn),
-                create_note_with_timing(generate_note_id(), 160, 160, 64, 90, "하세요",
-                                      pixels_per_beat, tempo, sample_rate, ppqn)
+                create_note_with_timing(
+                    generate_note_id(),
+                    80,
+                    80,
+                    60,
+                    100,
+                    "안녕",
+                    pixels_per_beat,
+                    tempo,
+                    sample_rate,
+                    ppqn,
+                ),
+                create_note_with_timing(
+                    generate_note_id(),
+                    160,
+                    160,
+                    64,
+                    90,
+                    "하세요",
+                    pixels_per_beat,
+                    tempo,
+                    sample_rate,
+                    ppqn,
+                ),
             ],
             "tempo": tempo,
-            "timeSignature": { "numerator": 4, "denominator": 4 },
+            "timeSignature": {"numerator": 4, "denominator": 4},
             "editMode": "select",
             "snapSetting": "1/4",
             "pixelsPerBeat": pixels_per_beat,
             "sampleRate": sample_rate,
-            "ppqn": ppqn
+            "ppqn": ppqn,
         }
 
     def api_info(self):
@@ -329,67 +426,121 @@ class PianoRoll(Component):
                         "type": "object",
                         "properties": {
                             "id": {"type": "string"},
-                            "start": {"type": "number", "description": "Start position in pixels"},
-                            "duration": {"type": "number", "description": "Duration in pixels"},
-                            "startFlicks": {"type": "number", "description": "Start position in flicks (precise timing)"},
-                            "durationFlicks": {"type": "number", "description": "Duration in flicks (precise timing)"},
-                            "startSeconds": {"type": "number", "description": "Start time in seconds (for audio processing)"},
-                            "durationSeconds": {"type": "number", "description": "Duration in seconds (for audio processing)"},
-                            "endSeconds": {"type": "number", "description": "End time in seconds (startSeconds + durationSeconds)"},
-                            "startBeats": {"type": "number", "description": "Start position in musical beats"},
-                            "durationBeats": {"type": "number", "description": "Duration in musical beats"},
-                            "startTicks": {"type": "integer", "description": "Start position in MIDI ticks"},
-                            "durationTicks": {"type": "integer", "description": "Duration in MIDI ticks"},
-                            "startSample": {"type": "integer", "description": "Start position in audio samples"},
-                            "durationSamples": {"type": "integer", "description": "Duration in audio samples"},
-                            "pitch": {"type": "number", "description": "MIDI pitch (0-127)"},
-                            "velocity": {"type": "number", "description": "MIDI velocity (0-127)"},
-                            "lyric": {"type": "string", "description": "Optional lyric text"}
+                            "start": {
+                                "type": "number",
+                                "description": "Start position in pixels",
+                            },
+                            "duration": {
+                                "type": "number",
+                                "description": "Duration in pixels",
+                            },
+                            "startFlicks": {
+                                "type": "number",
+                                "description": "Start position in flicks (precise timing)",
+                            },
+                            "durationFlicks": {
+                                "type": "number",
+                                "description": "Duration in flicks (precise timing)",
+                            },
+                            "startSeconds": {
+                                "type": "number",
+                                "description": "Start time in seconds (for audio processing)",
+                            },
+                            "durationSeconds": {
+                                "type": "number",
+                                "description": "Duration in seconds (for audio processing)",
+                            },
+                            "endSeconds": {
+                                "type": "number",
+                                "description": "End time in seconds (startSeconds + durationSeconds)",
+                            },
+                            "startBeats": {
+                                "type": "number",
+                                "description": "Start position in musical beats",
+                            },
+                            "durationBeats": {
+                                "type": "number",
+                                "description": "Duration in musical beats",
+                            },
+                            "startTicks": {
+                                "type": "integer",
+                                "description": "Start position in MIDI ticks",
+                            },
+                            "durationTicks": {
+                                "type": "integer",
+                                "description": "Duration in MIDI ticks",
+                            },
+                            "startSample": {
+                                "type": "integer",
+                                "description": "Start position in audio samples",
+                            },
+                            "durationSamples": {
+                                "type": "integer",
+                                "description": "Duration in audio samples",
+                            },
+                            "pitch": {
+                                "type": "number",
+                                "description": "MIDI pitch (0-127)",
+                            },
+                            "velocity": {
+                                "type": "number",
+                                "description": "MIDI velocity (0-127)",
+                            },
+                            "lyric": {
+                                "type": "string",
+                                "description": "Optional lyric text",
+                            },
                         },
-                        "required": ["id", "start", "duration", "startFlicks", "durationFlicks",
-                                   "startSeconds", "durationSeconds", "endSeconds", "startBeats", "durationBeats",
-                                   "startTicks", "durationTicks", "startSample", "durationSamples", "pitch", "velocity"]
-                    }
+                        "required": [
+                            "id",
+                            "start",
+                            "duration",
+                            "startFlicks",
+                            "durationFlicks",
+                            "startSeconds",
+                            "durationSeconds",
+                            "endSeconds",
+                            "startBeats",
+                            "durationBeats",
+                            "startTicks",
+                            "durationTicks",
+                            "startSample",
+                            "durationSamples",
+                            "pitch",
+                            "velocity",
+                        ],
+                    },
                 },
-                "tempo": {
-                    "type": "number",
-                    "description": "BPM tempo"
-                },
+                "tempo": {"type": "number", "description": "BPM tempo"},
                 "timeSignature": {
                     "type": "object",
                     "properties": {
                         "numerator": {"type": "number"},
-                        "denominator": {"type": "number"}
+                        "denominator": {"type": "number"},
                     },
-                    "required": ["numerator", "denominator"]
+                    "required": ["numerator", "denominator"],
                 },
-                "editMode": {
-                    "type": "string",
-                    "description": "Current edit mode"
-                },
-                "snapSetting": {
-                    "type": "string",
-                    "description": "Note snap setting"
-                },
+                "editMode": {"type": "string", "description": "Current edit mode"},
+                "snapSetting": {"type": "string", "description": "Note snap setting"},
                 "pixelsPerBeat": {
                     "type": "number",
-                    "description": "Zoom level in pixels per beat"
+                    "description": "Zoom level in pixels per beat",
                 },
                 "sampleRate": {
                     "type": "integer",
                     "description": "Audio sample rate (Hz) for sample-based timing calculations",
-                    "default": 44100
+                    "default": 44100,
                 },
                 "ppqn": {
                     "type": "integer",
                     "description": "Pulses Per Quarter Note for MIDI tick calculations",
-                    "default": 480
+                    "default": 480,
                 },
                 # Backend data attributes for passing
                 "audio_data": {
                     "type": "string",
                     "description": "Backend audio data (base64 encoded audio or URL)",
-                    "nullable": True
+                    "nullable": True,
                 },
                 "curve_data": {
                     "type": "object",
@@ -398,52 +549,75 @@ class PianoRoll(Component):
                         "pitch_curve": {
                             "type": "array",
                             "items": {"type": "number"},
-                            "description": "Pitch curve data points"
+                            "description": "Pitch curve data points",
                         },
                         "loudness_curve": {
                             "type": "array",
                             "items": {"type": "number"},
-                            "description": "Loudness curve data points"
+                            "description": "Loudness curve data points",
                         },
                         "formant_curves": {
                             "type": "object",
                             "description": "Formant frequency curves",
                             "additionalProperties": {
                                 "type": "array",
-                                "items": {"type": "number"}
-                            }
-                        }
+                                "items": {"type": "number"},
+                            },
+                        },
                     },
                     "additionalProperties": True,
-                    "nullable": True
+                    "nullable": True,
                 },
                 "segment_data": {
                     "type": "array",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "start": {"type": "number", "description": "Segment start time (seconds)"},
-                            "end": {"type": "number", "description": "Segment end time (seconds)"},
-                            "type": {"type": "string", "description": "Segment type (phoneme, syllable, word, etc.)"},
-                            "value": {"type": "string", "description": "Segment value/text"},
-                            "confidence": {"type": "number", "description": "Confidence score (0-1)", "minimum": 0, "maximum": 1}
+                            "start": {
+                                "type": "number",
+                                "description": "Segment start time (seconds)",
+                            },
+                            "end": {
+                                "type": "number",
+                                "description": "Segment end time (seconds)",
+                            },
+                            "type": {
+                                "type": "string",
+                                "description": "Segment type (phoneme, syllable, word, etc.)",
+                            },
+                            "value": {
+                                "type": "string",
+                                "description": "Segment value/text",
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "description": "Confidence score (0-1)",
+                                "minimum": 0,
+                                "maximum": 1,
+                            },
                         },
-                        "required": ["start", "end", "type", "value"]
+                        "required": ["start", "end", "type", "value"],
                     },
                     "description": "Segmentation data (pronunciation timing, etc.)",
-                    "nullable": True
+                    "nullable": True,
                 },
                 "use_backend_audio": {
                     "type": "boolean",
                     "description": "Whether to use backend audio (disables frontend audio engine when true)",
-                    "default": False
-                }
+                    "default": False,
+                },
             },
             "required": ["notes", "tempo", "timeSignature", "editMode", "snapSetting"],
-            "description": "Piano roll data object containing notes array, settings, and optional backend data"
+            "description": "Piano roll data object containing notes array, settings, and optional backend data",
         }
 
-    def update_backend_data(self, audio_data=None, curve_data=None, segment_data=None, use_backend_audio=None):
+    def update_backend_data(
+        self,
+        audio_data=None,
+        curve_data=None,
+        segment_data=None,
+        use_backend_audio=None,
+    ):
         """
         Update backend audio, curve, and segment data for this component instance.
         Args:
@@ -462,12 +636,14 @@ class PianoRoll(Component):
             self.use_backend_audio = use_backend_audio
 
         # Update _attrs as well
-        self._attrs.update({
-            "audio_data": self.audio_data,
-            "curve_data": self.curve_data,
-            "segment_data": self.segment_data,
-            "use_backend_audio": self.use_backend_audio,
-        })
+        self._attrs.update(
+            {
+                "audio_data": self.audio_data,
+                "curve_data": self.curve_data,
+                "segment_data": self.segment_data,
+                "use_backend_audio": self.use_backend_audio,
+            }
+        )
 
     def set_audio_data(self, audio_data: str):
         """

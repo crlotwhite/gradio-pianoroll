@@ -20,6 +20,7 @@ import time
 import random
 import string
 
+
 def generate_note_id() -> str:
     """
     Generate a unique note ID using the same algorithm as the frontend.
@@ -28,8 +29,9 @@ def generate_note_id() -> str:
         str: Unique note ID string.
     """
     timestamp = int(time.time() * 1000)  # Milliseconds like Date.now()
-    random_chars = ''.join(random.choices(string.ascii_lowercase + string.digits, k=5))
+    random_chars = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
     return f"note-{timestamp}-{random_chars}"
+
 
 def pixels_to_flicks(pixels: float, pixels_per_beat: float, tempo: float) -> float:
     """
@@ -44,6 +46,7 @@ def pixels_to_flicks(pixels: float, pixels_per_beat: float, tempo: float) -> flo
     FLICKS_PER_SECOND = 705600000
     return (pixels * 60 * FLICKS_PER_SECOND) / (pixels_per_beat * tempo)
 
+
 def pixels_to_seconds(pixels: float, pixels_per_beat: float, tempo: float) -> float:
     """
     Convert pixels to seconds for direct audio processing.
@@ -56,6 +59,7 @@ def pixels_to_seconds(pixels: float, pixels_per_beat: float, tempo: float) -> fl
     """
     return (pixels * 60) / (pixels_per_beat * tempo)
 
+
 def pixels_to_beats(pixels: float, pixels_per_beat: float) -> float:
     """
     Convert pixels to beats for musical accuracy.
@@ -66,6 +70,7 @@ def pixels_to_beats(pixels: float, pixels_per_beat: float) -> float:
         float: Number of beats.
     """
     return pixels / pixels_per_beat
+
 
 def pixels_to_ticks(pixels: float, pixels_per_beat: float, ppqn: int = 480) -> int:
     """
@@ -80,7 +85,10 @@ def pixels_to_ticks(pixels: float, pixels_per_beat: float, ppqn: int = 480) -> i
     beats = pixels_to_beats(pixels, pixels_per_beat)
     return int(beats * ppqn)
 
-def pixels_to_samples(pixels: float, pixels_per_beat: float, tempo: float, sample_rate: int = 44100) -> int:
+
+def pixels_to_samples(
+    pixels: float, pixels_per_beat: float, tempo: float, sample_rate: int = 44100
+) -> int:
     """
     Convert pixels to audio samples for precise digital audio processing.
     Args:
@@ -94,8 +102,14 @@ def pixels_to_samples(pixels: float, pixels_per_beat: float, tempo: float, sampl
     seconds = pixels_to_seconds(pixels, pixels_per_beat, tempo)
     return int(seconds * sample_rate)
 
-def calculate_all_timing_data(pixels: float, pixels_per_beat: float, tempo: float,
-                             sample_rate: int = 44100, ppqn: int = 480) -> dict:
+
+def calculate_all_timing_data(
+    pixels: float,
+    pixels_per_beat: float,
+    tempo: float,
+    sample_rate: int = 44100,
+    ppqn: int = 480,
+) -> dict:
     """
     Calculate all timing representations for a given pixel value.
     Args:
@@ -108,17 +122,26 @@ def calculate_all_timing_data(pixels: float, pixels_per_beat: float, tempo: floa
         dict: Dictionary with keys 'seconds', 'beats', 'flicks', 'ticks', 'samples'.
     """
     return {
-        'seconds': pixels_to_seconds(pixels, pixels_per_beat, tempo),
-        'beats': pixels_to_beats(pixels, pixels_per_beat),
-        'flicks': pixels_to_flicks(pixels, pixels_per_beat, tempo),
-        'ticks': pixels_to_ticks(pixels, pixels_per_beat, ppqn),
-        'samples': pixels_to_samples(pixels, pixels_per_beat, tempo, sample_rate)
+        "seconds": pixels_to_seconds(pixels, pixels_per_beat, tempo),
+        "beats": pixels_to_beats(pixels, pixels_per_beat),
+        "flicks": pixels_to_flicks(pixels, pixels_per_beat, tempo),
+        "ticks": pixels_to_ticks(pixels, pixels_per_beat, ppqn),
+        "samples": pixels_to_samples(pixels, pixels_per_beat, tempo, sample_rate),
     }
 
-def create_note_with_timing(note_id: str, start_pixels: float, duration_pixels: float,
-                          pitch: int, velocity: int, lyric: str,
-                          pixels_per_beat: float = 80, tempo: float = 120,
-                          sample_rate: int = 44100, ppqn: int = 480) -> dict:
+
+def create_note_with_timing(
+    note_id: str,
+    start_pixels: float,
+    duration_pixels: float,
+    pitch: int,
+    velocity: int,
+    lyric: str,
+    pixels_per_beat: float = 80,
+    tempo: float = 120,
+    sample_rate: int = 44100,
+    ppqn: int = 480,
+) -> dict:
     """
     Create a note with all timing data calculated from pixel values.
     Args:
@@ -135,24 +158,28 @@ def create_note_with_timing(note_id: str, start_pixels: float, duration_pixels: 
     Returns:
         dict: Dictionary containing note data with all timing representations.
     """
-    start_timing = calculate_all_timing_data(start_pixels, pixels_per_beat, tempo, sample_rate, ppqn)
-    duration_timing = calculate_all_timing_data(duration_pixels, pixels_per_beat, tempo, sample_rate, ppqn)
+    start_timing = calculate_all_timing_data(
+        start_pixels, pixels_per_beat, tempo, sample_rate, ppqn
+    )
+    duration_timing = calculate_all_timing_data(
+        duration_pixels, pixels_per_beat, tempo, sample_rate, ppqn
+    )
     return {
         "id": note_id,
         "start": start_pixels,
         "duration": duration_pixels,
-        "startFlicks": start_timing['flicks'],
-        "durationFlicks": duration_timing['flicks'],
-        "startSeconds": start_timing['seconds'],
-        "durationSeconds": duration_timing['seconds'],
-        "endSeconds": start_timing['seconds'] + duration_timing['seconds'],
-        "startBeats": start_timing['beats'],
-        "durationBeats": duration_timing['beats'],
-        "startTicks": start_timing['ticks'],
-        "durationTicks": duration_timing['ticks'],
-        "startSample": start_timing['samples'],
-        "durationSamples": duration_timing['samples'],
+        "startFlicks": start_timing["flicks"],
+        "durationFlicks": duration_timing["flicks"],
+        "startSeconds": start_timing["seconds"],
+        "durationSeconds": duration_timing["seconds"],
+        "endSeconds": start_timing["seconds"] + duration_timing["seconds"],
+        "startBeats": start_timing["beats"],
+        "durationBeats": duration_timing["beats"],
+        "startTicks": start_timing["ticks"],
+        "durationTicks": duration_timing["ticks"],
+        "startSample": start_timing["samples"],
+        "durationSamples": duration_timing["samples"],
         "pitch": pitch,
         "velocity": velocity,
-        "lyric": lyric
+        "lyric": lyric,
     }

@@ -1,11 +1,9 @@
-import gradio as gr
 import numpy as np
 import io
 import base64
 import wave
 import tempfile
 import os
-from gradio_pianoroll import PianoRoll
 
 # Additional imports for F0 analysis
 try:
@@ -60,6 +58,11 @@ def initialize_phoneme_map():
 # Initialize phoneme mapping at program start
 initialize_phoneme_map()
 
+def get_phoneme_mapping_list():
+    """Return current phoneme mapping list (for UI display)"""
+    global user_phoneme_map
+    return [{"lyric": k, "phoneme": v} for k, v in user_phoneme_map.items()]
+
 def get_phoneme_mapping_for_dataframe():
     """Return phoneme mapping list for DataFrame"""
     global user_phoneme_map
@@ -70,6 +73,27 @@ def add_phoneme_mapping(lyric: str, phoneme: str):
     global user_phoneme_map
     user_phoneme_map[lyric.strip()] = phoneme.strip()
     return get_phoneme_mapping_for_dataframe(), f"'{lyric}' → '{phoneme}' mapping added."
+
+def update_phoneme_mapping(old_lyric: str, new_lyric: str, new_phoneme: str):
+    """Update existing phoneme mapping"""
+    global user_phoneme_map
+
+    # Delete existing mapping
+    if old_lyric in user_phoneme_map:
+        del user_phoneme_map[old_lyric]
+
+    # Add new mapping
+    user_phoneme_map[new_lyric.strip()] = new_phoneme.strip()
+    return get_phoneme_mapping_for_dataframe(), f"Mapping updated to '{new_lyric}' → '{new_phoneme}'."
+
+def delete_phoneme_mapping(lyric: str):
+    """Delete phoneme mapping"""
+    global user_phoneme_map
+    if lyric in user_phoneme_map:
+        del user_phoneme_map[lyric]
+        return get_phoneme_mapping_for_dataframe(), f"'{lyric}' mapping deleted."
+    else:
+        return get_phoneme_mapping_for_dataframe(), f"'{lyric}' mapping not found."
 
 def reset_phoneme_mapping():
     """Reset phoneme mapping to default values"""
@@ -360,6 +384,97 @@ def calculate_waveform_data(audio_data, pixels_per_beat, tempo, target_width=100
 
     return waveform_points
 
+def convert_basic(piano_roll):
+    """Basic conversion function (first tab)"""
+    print("=== Basic Convert function called ===")
+    print("Received piano_roll:")
+    print(piano_roll)
+    print("Type:", type(piano_roll))
+    return piano_roll
+
+def synthesize_and_play(piano_roll, attack, decay, sustain, release, wave_type='complex'):
+    """Synthesize audio and pass it to the piano roll"""
+    print("=== Synthesize function called ===")
+    print("Piano roll data:", piano_roll)
+    print(f"ADSR: A={attack}, D={decay}, S={sustain}, R={release}")
+    print(f"Wave Type: {wave_type}")
+
+    # Synthesize audio
+    audio_data = synthesize_audio(piano_roll, attack, decay, sustain, release, wave_type)
+
+    if audio_data is None:
+        print("Audio synthesis failed")
+        return piano_roll, "Audio synthesis failed", None
+
+    # Convert to base64 (for piano roll)
+    audio_base64 = audio_to_base64_wav(audio_data, SAMPLE_RATE)
+
+    # Create WAV file for gradio Audio component
+    gradio_audio_path = create_temp_wav_file(audio_data, SAMPLE_RATE)
+
+    # Add audio data to piano roll data
+    updated_piano_roll = piano_roll.copy() if piano_roll else {}
+    updated_piano_roll['audio_data'] = audio_base64
+    updated_piano_roll['use_backend_audio'] = True
+
+    print(f"🔊 [synthesize_and_play] Setting backend audio data:")
+    print(f"   - audio_data length: {len(audio_base64) if audio_base64 else 0}")
+    print(f"   - use_backend_audio: {updated_piano_roll['use_backend_audio']}")
+    print(f"   - audio_base64 preview: {audio_base64[:50] + '...' if audio_base64 else 'None'}")
+
+    # Calculate waveform data
+    pixels_per_beat = updated_piano_roll.get('pixelsPerBeat', 80)
+    tempo = updated_piano_roll.get('tempo', 120)
+    waveform_data = calculate_waveform_data(audio_data, pixels_per_beat, tempo)
+
+    # Example curve data (pitch curve + waveform data)
+    curve_data = {}
+
+    # Add waveform data
+    if waveform_data:
+        curve_data['waveform_data'] = waveform_data
+        print(f"Waveform data created: {len(waveform_data)} points")
+
+    # Pitch curve data (existing)
+    if 'notes' in updated_piano_roll and updated_piano_roll['notes']:
+        pitch_curve = []
+        for note in updated_piano_roll['notes']:
+            # Simple example: create curve based on note pitch
+            base_pitch = note['pitch']
+            # Slightly vibrato effect
+            curve_points = [base_pitch + 0.5 * np.sin(i * 0.5) for i in range(10)]
+            pitch_curve.extend(curve_points)
+
+        curve_data['pitch_curve'] = pitch_curve[:100]  # Limit to 100 points
+
+    updated_piano_roll['curve_data'] = curve_data
+
+    # Example segment data (phoneme timing)
+    if 'notes' in updated_piano_roll and updated_piano_roll['notes']:
+        segment_data = []
+
+        for i, note in enumerate(updated_piano_roll['notes']):
+            start_seconds = (note['start'] / pixels_per_beat) * (60.0 / tempo)
+            duration_seconds = (note['duration'] / pixels_per_beat) * (60.0 / tempo)
+
+            segment_data.append({
+                'start': start_seconds,
+                'end': start_seconds + duration_seconds,
+                'type': 'note',
+                'value': note.get('lyric', f"Note_{i+1}"),
+                'confidence': 0.95
+            })
+
+        updated_piano_roll['segment_data'] = segment_data
+
+    print(f"Audio synthesis completed: {len(audio_data)} samples")
+    if waveform_data:
+        print(f"Waveform points: {len(waveform_data)}")
+
+    status_message = f"Audio synthesis completed ({wave_type} waveform): {len(audio_data)} samples, duration: {len(audio_data)/SAMPLE_RATE:.2f} seconds"
+
+    return updated_piano_roll, status_message, gradio_audio_path
+
 def create_temp_wav_file(audio_data, sample_rate):
     """Create temporary WAV file for gradio Audio component"""
     if audio_data is None or len(audio_data) == 0:
@@ -386,6 +501,24 @@ def create_temp_wav_file(audio_data, sample_rate):
         print(f"Error creating temporary WAV file: {e}")
         return None
 
+def clear_and_regenerate_waveform(piano_roll, attack, decay, sustain, release, wave_type='complex'):
+    """Clear and regenerate waveform"""
+    print("=== Clear and Regenerate Waveform ===")
+
+    # First clear waveform data
+    cleared_piano_roll = piano_roll.copy() if piano_roll else {}
+    cleared_piano_roll['curve_data'] = {}  # Initialize curve data
+    cleared_piano_roll['audio_data'] = None  # Initialize audio data
+    cleared_piano_roll['use_backend_audio'] = False  # Disable backend audio
+
+    # Message for waiting
+    yield cleared_piano_roll, "Clearing waveform...", None
+
+    # Then regenerate new waveform
+    result_piano_roll, status_message, gradio_audio_path = synthesize_and_play(piano_roll, attack, decay, sustain, release, wave_type)
+
+    yield result_piano_roll, f"Regeneration completed! {status_message}", gradio_audio_path
+
 # G2P (Grapheme-to-Phoneme) function (using custom mapping)
 def mock_g2p(text: str) -> str:
     """
@@ -411,9 +544,64 @@ def mock_g2p(text: str) -> str:
 
     return ' '.join(result)
 
+def process_lyric_input(piano_roll, lyric_data):
+    """
+    Process lyric input event and run G2P to create phoneme
+    """
+    print("=== G2P Processing ===")
+    print("Piano roll data:", piano_roll)
+    print("Lyric data:", lyric_data)
 
+    if not piano_roll or not lyric_data:
+        return piano_roll, "Lyric data is missing."
 
+    # Run G2P for new lyric
+    new_lyric = lyric_data.get('newLyric', '')
+    if new_lyric:
+        # Run G2P (using mock function)
+        phoneme = mock_g2p(new_lyric)
+        print(f"G2P result: '{new_lyric}' -> '{phoneme}'")
 
+        # Update phoneme for the corresponding note
+        note_id = lyric_data.get('noteId')
+        if note_id and 'notes' in piano_roll:
+            notes = piano_roll['notes'].copy()
+            for note in notes:
+                if note.get('id') == note_id:
+                    note['phoneme'] = phoneme
+                    print(f"Note {note_id} phoneme updated: {phoneme}")
+                    break
+
+            # Return updated piano roll data
+            updated_piano_roll = piano_roll.copy()
+            updated_piano_roll['notes'] = notes
+
+            return updated_piano_roll, f"G2P completed: '{new_lyric}' -> [{phoneme}]"
+
+    return piano_roll, "G2P processing completed"
+
+def manual_phoneme_update(piano_roll, note_index, phoneme_text):
+    """
+    Manually update phoneme for a specific note
+    """
+    print(f"=== Manual Phoneme Update ===")
+    print(f"Note index: {note_index}, Phoneme: '{phoneme_text}'")
+
+    if not piano_roll or 'notes' not in piano_roll:
+        return piano_roll, "Piano roll data is missing."
+
+    notes = piano_roll['notes'].copy()
+
+    if 0 <= note_index < len(notes):
+        notes[note_index]['phoneme'] = phoneme_text
+
+        updated_piano_roll = piano_roll.copy()
+        updated_piano_roll['notes'] = notes
+
+        lyric = notes[note_index].get('lyric', '?')
+        return updated_piano_roll, f"Note {note_index + 1} ('{lyric}') phoneme set to '{phoneme_text}'"
+    else:
+        return piano_roll, f"Invalid note index: {note_index}"
 
 def clear_all_phonemes(piano_roll):
     """
@@ -1176,442 +1364,120 @@ def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, inc
         print(f"❌ {error_message}")
         return piano_roll, error_message, audio_file
 
-# Gradio interface
-with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
-    gr.Markdown("# 🎹 Gradio PianoRoll with Synthesizer")
-    gr.Markdown("Test PianoRoll component and synthesizer functionality!")
-
-    if not LIBROSA_AVAILABLE:
-        gr.Markdown("⚠️ **librosa is not installed**: Run `pip install librosa` to install it.")
-
-    with gr.Row():
-        with gr.Column(scale=3):
-            # Audio feature analysis initial value
-            initial_value = {
-                "notes": [
-                    {
-                        "id": "note_0",
-                        "start": 0,
-                        "duration": 160,
-                        "pitch": 60,  # C4
-                        "velocity": 100,
-                        "lyric": "안녕",
-                        "phoneme": "aa n ny eo ng"  # Pre-set phoneme
-                    },
-                    {
-                        "id": "note_1",
-                        "start": 160,
-                        "duration": 160,
-                        "pitch": 62,  # D4
-                        "velocity": 100,
-                        "lyric": "하세요",
-                        "phoneme": "h a s e y o"
-                    },
-                    {
-                        "id": "note_2",
-                        "start": 320,
-                        "duration": 160,
-                        "pitch": 64,  # E4
-                        "velocity": 100,
-                        "lyric": "음악",
-                        "phoneme": "eu m a k"
-                    },
-                    {
-                        "id": "note_3",
-                        "start": 480,
-                        "duration": 160,
-                        "pitch": 65,  # F4
-                        "velocity": 100,
-                        "lyric": "피아노"
-                    }
-                ],
-                "tempo": 120,
-                "timeSignature": {"numerator": 4, "denominator": 4},
-                "editMode": "select",
-                "snapSetting": "1/4",
-                "pixelsPerBeat": 80
-            }
-
-            piano_roll = PianoRoll(
-                height=800,
-                width=1000,
-                value=initial_value,
-                elem_id="piano_roll",  # Unique ID
-                use_backend_audio=True  # Use backend audio engine
-            )
-
-            btn_analyze_generated = gr.Button(
-                "🎶 Create Audio from Notes & Analyze",
-                variant="primary",
-                size="lg",
-                interactive=LIBROSA_AVAILABLE
-            )
-
-        with gr.Column(scale=1):
-            gr.Markdown("### 📝 Phoneme Mapping Management")
-
-            # Display current mapping list
-            phoneme_mapping_dataframe = gr.Dataframe(
-                headers=["Lyric", "Phoneme"],
-                datatype=["str", "str"],
-                value=get_phoneme_mapping_for_dataframe(),
-                label="Current Phoneme Mapping",
-                interactive=True,
-                wrap=True
-            )
-
-            gr.Markdown("#### ➕ Add New Mapping")
-            with gr.Row():
-                add_lyric_input = gr.Textbox(
-                    label="Lyric",
-                    placeholder="Example: 라",
-                    scale=1
-                )
-                add_phoneme_input = gr.Textbox(
-                    label="Phoneme",
-                    placeholder="Example: l aa",
-                    scale=1
-                )
-            btn_add_mapping = gr.Button("➕ Add Mapping", variant="primary", size="sm")
-
-            gr.Markdown("### 🔧 Batch Operations")
-            with gr.Row():
-                btn_auto_generate = gr.Button("🤖 Auto-generate All Phonemes", variant="primary")
-                btn_clear_phonemes = gr.Button("🗑️ Clear All Phonemes", variant="secondary")
-
-            btn_reset_mapping = gr.Button("🔄 Reset Mapping to Default", variant="secondary")
-
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### 🎛️ Synthesizer Settings")
-
-            # ADSR settings
-            attack_features = gr.Slider(
-                minimum=0.001,
-                maximum=1.0,
-                value=0.01,
-                step=0.001,
-                label="Attack (seconds)"
-            )
-            decay_features = gr.Slider(
-                minimum=0.001,
-                maximum=1.0,
-                value=0.1,
-                step=0.001,
-                label="Decay (seconds)"
-            )
-            sustain_features = gr.Slider(
-                minimum=0.0,
-                maximum=1.0,
-                value=0.7,
-                step=0.01,
-                label="Sustain (level)"
-            )
-            release_features = gr.Slider(
-                minimum=0.001,
-                maximum=2.0,
-                value=0.3,
-                step=0.001,
-                label="Release (seconds)"
-            )
-
-            # Waveform settings
-            wave_type_features = gr.Dropdown(
-                choices=[
-                    ("Complex", "complex"),
-                    ("Harmonic", "harmonic"),
-                    ("FM", "fm"),
-                    ("Sawtooth", "sawtooth"),
-                    ("Square", "square"),
-                    ("Triangle", "triangle"),
-                    ("Sine", "sine")
-                ],
-                value="complex",
-                label="Waveform Type"
-            )
-        with gr.Column():
-            gr.Markdown("### 📊 Analysis Settings")
-
-            # Select features to analyze
-            include_f0_features = gr.Checkbox(
-                label="F0 (fundamental frequency) analysis",
-                value=True
-            )
-            include_loudness_features = gr.Checkbox(
-                label="Loudness (loudness) analysis",
-                value=True
-            )
-            include_voicing_features = gr.Checkbox(
-                label="Voice/Unvoice (voiced/unvoiced) analysis",
-                value=True
-            )
-
-            # F0 analysis method
-            f0_method_features = gr.Dropdown(
-                choices=[
-                    ("PYIN (accurate, slow)", "pyin"),
-                    ("PipTrack (fast, less accurate)", "piptrack")
-                ],
-                value="pyin",
-                label="F0 Extraction Method"
-            )
-
-            # Loudness settings
-            loudness_use_db_features = gr.Checkbox(
-                label="Display Loudness in dB",
-                value=True
-            )
-            with gr.Row():
-                loudness_y_min_features = gr.Number(
-                    label="Loudness minimum value (auto if empty)",
-                    value=None
-                )
-                loudness_y_max_features = gr.Number(
-                    label="Loudness maximum value (auto if empty)",
-                    value=None
-                )
-
-            # Voice/Unvoice settings
-            voicing_use_probs_features = gr.Checkbox(
-                label="Display Voice/Unvoice as probabilities",
-                value=True,
-                info="Unchecked: Display as binary (0/1)"
-            )
-        with gr.Column():
-            gr.Markdown("### 🎤 Upload Audio")
-            audio_upload_features = gr.Audio(
-                label="Audio file to analyze",
-                type="filepath",
-                interactive=True
-            )
-
-            btn_analyze_uploaded = gr.Button(
-                "📤 Analyze Uploaded Audio",
-                variant="secondary",
-                size="lg",
-                interactive=LIBROSA_AVAILABLE
-            )
-
-    with gr.Row():
-        with gr.Column():
-            features_status_text = gr.Textbox(
-                label="Analysis Status",
-                interactive=False,
-                lines=4
-            )
-
-    with gr.Row():
-        with gr.Column():
-            # Reference audio playback
-            reference_audio_features = gr.Audio(
-                label="Analyzed Audio (reference)",
-                type="filepath",
-                interactive=False
-            )
-    with gr.Row():
-        with gr.Column():
-            phoneme_status_text = gr.Textbox(label="Status", interactive=False)
-
-    with gr.Row():
-        with gr.Column():
-            output_json_features = gr.JSON(label="Audio Feature Analysis Result")
-
-    with gr.Row():
-        with gr.Column():
-            output_json = gr.JSON(label="JSON Data")
-
-    # Audio feature analysis tab event processing
-
-    # Analyze generated audio button
-    btn_analyze_generated.click(
-        fn=synthesize_and_analyze_features,
-        inputs=[
-            piano_roll,
-            attack_features,
-            decay_features,
-            sustain_features,
-            release_features,
-            wave_type_features,
-            include_f0_features,
-            include_loudness_features,
-            include_voicing_features,
-            f0_method_features,
-            loudness_y_min_features,
-            loudness_y_max_features,
-            loudness_use_db_features,
-            voicing_use_probs_features
-        ],
-        outputs=[piano_roll, features_status_text, reference_audio_features],
-        show_progress=True
+def analyze_audio_f0(piano_roll, audio_file, f0_method="pyin"):
+    """
+    Extract F0 from uploaded audio file and display on piano roll (for backward compatibility)
+    """
+    return analyze_uploaded_audio_features(
+        piano_roll, audio_file, include_f0=True, include_loudness=False, include_voicing=False, f0_method=f0_method
     )
 
-    # Analyze uploaded audio button
-    btn_analyze_uploaded.click(
-        fn=analyze_uploaded_audio_features,
-        inputs=[
-            piano_roll,
-            audio_upload_features,
-            include_f0_features,
-            include_loudness_features,
-            include_voicing_features,
-            f0_method_features,
-            loudness_y_min_features,
-            loudness_y_max_features,
-            loudness_use_db_features,
-            voicing_use_probs_features
-        ],
-        outputs=[piano_roll, features_status_text, reference_audio_features],
-        show_progress=True
-    )
+def generate_f0_demo_audio():
+    """
+    Create a simple audio for F0 analysis demo
+    """
+    print("🎵 Creating F0 analysis demo audio...")
 
-    # Update JSON output when note changes
-    def update_features_json_output(piano_roll_data):
-        return piano_roll_data
+    # Create a simple sawtooth tone (100Hz to 400Hz)
+    duration = 3.0  # 3 seconds
+    sample_rate = 44100
+    t = np.linspace(0, duration, int(duration * sample_rate), False)
 
-    piano_roll.change(
-        fn=update_features_json_output,
-        inputs=[piano_roll],
-        outputs=[output_json_features],
-        show_progress=False
-    )
+    # Create a sine wave with frequency changing over time (100Hz -> 400Hz)
+    start_freq = 100
+    end_freq = 400
+    instantaneous_freq = start_freq + (end_freq - start_freq) * (t / duration)
 
-    # Add mapping
-    btn_add_mapping.click(
-        fn=add_phoneme_mapping,
-        inputs=[add_lyric_input, add_phoneme_input],
-        outputs=[phoneme_mapping_dataframe, phoneme_status_text],
-        show_progress=False
-    ).then(
-        fn=lambda: ["", ""],  # Reset input fields
-        outputs=[add_lyric_input, add_phoneme_input]
-    )
+    # Create a frequency-modulated sine wave
+    phase = 2 * np.pi * np.cumsum(instantaneous_freq) / sample_rate
+    audio = 0.3 * np.sin(phase)  # Volume adjustment
 
-    # Reset
-    btn_reset_mapping.click(
-        fn=reset_phoneme_mapping,
-        outputs=[phoneme_mapping_dataframe, phoneme_status_text],
-        show_progress=False
-    )
+    # Save as WAV file
+    temp_fd, temp_path = tempfile.mkstemp(suffix='.wav')
+    try:
+        with wave.open(temp_path, 'wb') as wav_file:
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(sample_rate)
 
-    # Automatic G2P processing when lyric is input
-    def handle_phoneme_input_event(piano_roll_data):
-        """Process lyric input event - detect piano roll changes and generate phoneme"""
-        print("🗣️ Phoneme tab - Input event triggered")
-        print(f"   - Piano roll data: {type(piano_roll_data)}")
+            # Convert to 16-bit PCM
+            audio_16bit = (audio * 32767).astype(np.int16)
+            wav_file.writeframes(audio_16bit.tobytes())
 
-        if not piano_roll_data or 'notes' not in piano_roll_data:
-            return piano_roll_data, "Piano roll data is missing."
+        os.close(temp_fd)
+        print(f"✅ Demo audio created: {temp_path}")
+        return temp_path
 
-        return auto_generate_missing_phonemes(piano_roll_data)
+    except Exception as e:
+        os.close(temp_fd)
+        print(f"❌ Failed to create demo audio: {e}")
+        return None
 
-    def auto_generate_missing_phonemes(piano_roll_data):
-        """Automatically generate phoneme for notes with lyrics but no phoneme"""
-        if not piano_roll_data or 'notes' not in piano_roll_data:
-            return piano_roll_data, "Piano roll data is missing."
+def generate_feature_demo_audio():
+    """
+    Create an audio with various features for audio feature analysis demo
+    Includes F0 and loudness changes
+    """
+    print("🎵 Creating audio with various features for audio feature analysis demo...")
 
-        # Copy current notes
-        notes = piano_roll_data['notes'].copy()
-        updated_notes = []
-        changes_made = 0
+    duration = 4.0  # 4 seconds
+    sample_rate = 44100
+    t = np.linspace(0, duration, int(duration * sample_rate), False)
 
-        for note in notes:
-            note_copy = note.copy()
+    # Create audio with different features for each section
+    audio = np.zeros_like(t)
 
-            # Process if lyric exists
-            lyric = note.get('lyric', '').strip()
-            current_phoneme = note.get('phoneme', '').strip()
+    # Section 1 (0-1 second): C4 to C5 + volume increase
+    mask1 = (t >= 0) & (t < 1)
+    t1 = t[mask1]
+    f1_start, f1_end = 261.63, 523.25  # C4 to C5
+    freq1 = f1_start + (f1_end - f1_start) * (t1 / 1.0)
+    phase1 = 2 * np.pi * np.cumsum(freq1) / sample_rate
+    vol1 = 0.1 + 0.4 * (t1 / 1.0)  # Increase from 0.1 to 0.5
+    audio[mask1] = vol1 * np.sin(phase1)
 
-            if lyric:
-                # Run G2P to create new phoneme
-                new_phoneme = mock_g2p(lyric)
+    # Section 2 (1-2 seconds): C5 to G4 + constant volume
+    mask2 = (t >= 1) & (t < 2)
+    t2 = t[mask2] - 1
+    f2_start, f2_end = 523.25, 392.00  # C5 to G4
+    freq2 = f2_start + (f2_end - f2_start) * (t2 / 1.0)
+    phase2 = 2 * np.pi * np.cumsum(freq2) / sample_rate
+    audio[mask2] = 0.5 * np.sin(phase2)
 
-                # Update if different from existing phoneme or missing
-                if not current_phoneme or current_phoneme != new_phoneme:
-                    note_copy['phoneme'] = new_phoneme
-                    changes_made += 1
-                    print(f"   - G2P applied: '{lyric}' -> '{new_phoneme}'")
-            else:
-                # Remove phoneme if lyric is missing
-                if current_phoneme:
-                    note_copy['phoneme'] = None
-                    changes_made += 1
-                    print(f"   - Phoneme removed (no lyric)")
+    # Section 3 (2-3 seconds): A4 fixed + volume decrease (tremolo effect)
+    mask3 = (t >= 2) & (t < 3)
+    t3 = t[mask3] - 2
+    freq3 = 440.0  # A4 fixed
+    phase3 = 2 * np.pi * freq3 * t3
+    vol3 = 0.5 * (1 - t3 / 1.0) * (1 + 0.3 * np.sin(2 * np.pi * 6 * t3))  # Tremolo
+    audio[mask3] = vol3 * np.sin(phase3)
 
-            updated_notes.append(note_copy)
+    # Section 4 (3-4 seconds): Complex sound (A4 + E5) + fade out
+    mask4 = (t >= 3) & (t < 4)
+    t4 = t[mask4] - 3
+    freq4a, freq4b = 440.0, 659.25  # A4 + E5
+    phase4a = 2 * np.pi * freq4a * t4
+    phase4b = 2 * np.pi * freq4b * t4
+    vol4 = 0.4 * (1 - t4 / 1.0)  # Fade out
+    audio[mask4] = vol4 * (0.6 * np.sin(phase4a) + 0.4 * np.sin(phase4b))
 
-        if changes_made > 0:
-            # Return updated piano roll data
-            updated_piano_roll = piano_roll_data.copy()
-            updated_piano_roll['notes'] = updated_notes
-            return updated_piano_roll, f"Automatic G2P completed: {changes_made} notes updated"
-        else:
-            return piano_roll_data, "No changes to apply G2P."
+    # Save as WAV file
+    temp_fd, temp_path = tempfile.mkstemp(suffix='.wav')
+    try:
+        with wave.open(temp_path, 'wb') as wav_file:
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(sample_rate)
 
-    piano_roll.input(
-        fn=handle_phoneme_input_event,
-        inputs=[piano_roll],
-        outputs=[piano_roll, phoneme_status_text],
-        show_progress=False
-    )
+            # Convert to 16-bit PCM
+            audio_16bit = (audio * 32767).astype(np.int16)
+            wav_file.writeframes(audio_16bit.tobytes())
 
-    # Automatic phoneme generation when note changes
-    def handle_phoneme_change_event(piano_roll_data):
-        """Handle automatic phoneme generation when note changes"""
-        return auto_generate_missing_phonemes(piano_roll_data)
+        os.close(temp_fd)
+        print(f"✅ Audio feature analysis demo audio generated: {temp_path}")
+        return temp_path
 
-    piano_roll.change(
-        fn=handle_phoneme_change_event,
-        inputs=[piano_roll],
-        outputs=[piano_roll, phoneme_status_text],
-        show_progress=False
-    )
-
-    # Automatic phoneme generation (manual button)
-    btn_auto_generate.click(
-        fn=auto_generate_all_phonemes,
-        inputs=[piano_roll],
-        outputs=[piano_roll, phoneme_status_text],
-        show_progress=True
-    )
-
-    # Clear all phonemes
-    btn_clear_phonemes.click(
-        fn=clear_all_phonemes,
-        inputs=[piano_roll],
-        outputs=[piano_roll, phoneme_status_text],
-        show_progress=False
-    )
-
-    # Update JSON output when note changes (separate from automatic phoneme processing)
-    def update_json_output(piano_roll_data):
-        return piano_roll_data
-
-    piano_roll.change(
-        fn=update_json_output,
-        inputs=[piano_roll],
-        outputs=[piano_roll],
-        show_progress=False
-    )
-
-    # Log play event
-    def log_features_play_event(event_data=None):
-        print("🔊 Features Play event triggered:", event_data)
-        return f"Play started: {event_data if event_data else 'Playing'}"
-
-    def log_features_pause_event(event_data=None):
-        print("🔊 Features Pause event triggered:", event_data)
-        return f"Paused: {event_data if event_data else 'Paused'}"
-
-    def log_features_stop_event(event_data=None):
-        print("🔊 Features Stop event triggered:", event_data)
-        return f"Stopped: {event_data if event_data else 'Stopped'}"
-
-    piano_roll.play(log_features_play_event, outputs=features_status_text)
-    piano_roll.pause(log_features_pause_event, outputs=features_status_text)
-    piano_roll.stop(log_features_stop_event, outputs=features_status_text)
-
-    if not LIBROSA_AVAILABLE:
-        gr.Markdown("⚠️ librosa is required")
-
-if __name__ == "__main__":
-    demo.launch()
+    except Exception as e:
+        os.close(temp_fd)
+        print(f"❌ Failed to generate audio feature analysis demo audio: {e}")
+        return None
