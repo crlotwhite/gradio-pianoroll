@@ -1176,75 +1176,6 @@ def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, inc
         print(f"❌ {error_message}")
         return piano_roll, error_message, audio_file
 
-def generate_feature_demo_audio():
-    """
-    Create an audio with various features for audio feature analysis demo
-    Includes F0 and loudness changes
-    """
-    print("🎵 Creating audio with various features for audio feature analysis demo...")
-
-    duration = 4.0  # 4 seconds
-    sample_rate = 44100
-    t = np.linspace(0, duration, int(duration * sample_rate), False)
-
-    # Create audio with different features for each section
-    audio = np.zeros_like(t)
-
-    # Section 1 (0-1 second): C4 to C5 + volume increase
-    mask1 = (t >= 0) & (t < 1)
-    t1 = t[mask1]
-    f1_start, f1_end = 261.63, 523.25  # C4 to C5
-    freq1 = f1_start + (f1_end - f1_start) * (t1 / 1.0)
-    phase1 = 2 * np.pi * np.cumsum(freq1) / sample_rate
-    vol1 = 0.1 + 0.4 * (t1 / 1.0)  # Increase from 0.1 to 0.5
-    audio[mask1] = vol1 * np.sin(phase1)
-
-    # Section 2 (1-2 seconds): C5 to G4 + constant volume
-    mask2 = (t >= 1) & (t < 2)
-    t2 = t[mask2] - 1
-    f2_start, f2_end = 523.25, 392.00  # C5 to G4
-    freq2 = f2_start + (f2_end - f2_start) * (t2 / 1.0)
-    phase2 = 2 * np.pi * np.cumsum(freq2) / sample_rate
-    audio[mask2] = 0.5 * np.sin(phase2)
-
-    # Section 3 (2-3 seconds): A4 fixed + volume decrease (tremolo effect)
-    mask3 = (t >= 2) & (t < 3)
-    t3 = t[mask3] - 2
-    freq3 = 440.0  # A4 fixed
-    phase3 = 2 * np.pi * freq3 * t3
-    vol3 = 0.5 * (1 - t3 / 1.0) * (1 + 0.3 * np.sin(2 * np.pi * 6 * t3))  # Tremolo
-    audio[mask3] = vol3 * np.sin(phase3)
-
-    # Section 4 (3-4 seconds): Complex sound (A4 + E5) + fade out
-    mask4 = (t >= 3) & (t < 4)
-    t4 = t[mask4] - 3
-    freq4a, freq4b = 440.0, 659.25  # A4 + E5
-    phase4a = 2 * np.pi * freq4a * t4
-    phase4b = 2 * np.pi * freq4b * t4
-    vol4 = 0.4 * (1 - t4 / 1.0)  # Fade out
-    audio[mask4] = vol4 * (0.6 * np.sin(phase4a) + 0.4 * np.sin(phase4b))
-
-    # Save as WAV file
-    temp_fd, temp_path = tempfile.mkstemp(suffix='.wav')
-    try:
-        with wave.open(temp_path, 'wb') as wav_file:
-            wav_file.setnchannels(1)  # Mono
-            wav_file.setsampwidth(2)  # 16-bit
-            wav_file.setframerate(sample_rate)
-
-            # Convert to 16-bit PCM
-            audio_16bit = (audio * 32767).astype(np.int16)
-            wav_file.writeframes(audio_16bit.tobytes())
-
-        os.close(temp_fd)
-        print(f"✅ Audio feature analysis demo audio generated: {temp_path}")
-        return temp_path
-
-    except Exception as e:
-        os.close(temp_fd)
-        print(f"❌ Failed to generate audio feature analysis demo audio: {e}")
-        return None
-
 # Gradio interface
 with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
     gr.Markdown("# 🎹 Gradio PianoRoll with Synthesizer")
@@ -1316,12 +1247,6 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 interactive=LIBROSA_AVAILABLE
             )
 
-            btn_analyze_uploaded = gr.Button(
-                "📤 Analyze Uploaded Audio",
-                variant="secondary",
-                size="lg",
-                interactive=LIBROSA_AVAILABLE
-            )
         with gr.Column(scale=1):
             gr.Markdown("### 📝 Phoneme Mapping Management")
 
@@ -1460,11 +1385,12 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 interactive=True
             )
 
-            btn_generate_feature_demo = gr.Button(
-                "🎵 Generate Demo Audio for Feature Analysis",
-                variant="secondary"
+            btn_analyze_uploaded = gr.Button(
+                "📤 Analyze Uploaded Audio",
+                variant="secondary",
+                size="lg",
+                interactive=LIBROSA_AVAILABLE
             )
-            gr.Markdown("📄 Generate a test audio with F0 and loudness changing over time.")
 
     with gr.Row():
         with gr.Column():
@@ -1535,38 +1461,6 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
             voicing_use_probs_features
         ],
         outputs=[piano_roll, features_status_text, reference_audio_features],
-        show_progress=True
-    )
-
-    # Generate demo audio and analyze button
-    def create_and_analyze_feature_demo():
-        """Generate demo audio for feature analysis and automatically analyze it."""
-        demo_audio_path = generate_feature_demo_audio()
-        if demo_audio_path:
-            # Initial piano roll data
-            initial_piano_roll = {
-                "notes": [],
-                "tempo": 120,
-                "timeSignature": {"numerator": 4, "denominator": 4},
-                "editMode": "select",
-                "snapSetting": "1/4",
-                "pixelsPerBeat": 80
-            }
-
-            # Perform audio feature analysis (F0, loudness, voice/unvoice)
-            updated_piano_roll, status, _ = analyze_uploaded_audio_features(
-                initial_piano_roll, demo_audio_path,
-                include_f0=True, include_loudness=True, include_voicing=True, f0_method="pyin",
-                loudness_y_min=None, loudness_y_max=None, loudness_use_db=True, voicing_use_probs=True
-            )
-
-            return updated_piano_roll, status, demo_audio_path, demo_audio_path
-        else:
-            return initial_value, "Failed to generate demo audio.", None, None
-
-    btn_generate_feature_demo.click(
-        fn=create_and_analyze_feature_demo,
-        outputs=[piano_roll, features_status_text, audio_upload_features, reference_audio_features],
         show_progress=True
     )
 
