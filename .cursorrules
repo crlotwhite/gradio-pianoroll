@@ -1,0 +1,56 @@
+# Cursor Rules for gradio-pianoroll
+
+## 🚫 Auto-generated Files - DO NOT EDIT
+
+### README.md
+**❌ README.md는 Gradio CLI에 의해 자동 생성됩니다. 직접 수정하지 마세요!**
+
+- README.md는 `gradio cc publish` 명령어로 자동 생성됨
+- 수동 수정 시 다음 배포에서 덮어씌워집니다
+- 문서 작업은 반드시 `/docs` 디렉토리에서 진행하세요
+
+### 대신 사용할 파일들:
+- **사용자 가이드**: `/docs/user-guide/` 디렉토리
+- **API 문서**: `/docs/api/` 디렉토리  
+- **개발자 문서**: `/docs/developer/` 디렉토리
+- **설치 가이드**: `/docs/getting-started/` 디렉토리
+
+## 📝 문서 작성 가이드
+
+### 새로운 API 추가 시:
+1. `/docs/api/` 디렉토리에 문서 추가
+2. `/docs/index.md`에서 메인 문서 테이블 업데이트
+3. 관련 사용자 가이드에서 예제 추가
+
+### 기능 업데이트 시:
+1. 해당 `/docs/user-guide/` 문서 업데이트  
+2. 예제 코드는 `/demo/` 디렉토리와 동기화
+3. API 변경사항은 `/docs/api/components.md` 반영
+
+## ✅ 편집 가능한 파일들
+
+### 문서:
+- `/docs/**/*.md` - 모든 문서 파일
+- `/docs/index.md` - 메인 문서 인덱스
+
+### 코드:
+- `/backend/**/*.py` - 백엔드 Python 코드
+- `/frontend/**/*.ts`, `/frontend/**/*.svelte` - 프론트엔드 코드  
+- `/demo/**/*.py` - 데모 및 예제 코드
+
+### 설정:
+- `pyproject.toml` - 프로젝트 설정
+- `mkdocs.yml` - 문서 설정
+
+## 🔄 워크플로우
+
+1. **기능 개발**: `/backend/` 또는 `/frontend/`에서 코드 작성
+2. **문서 작성**: `/docs/`에서 상세 문서 작성  
+3. **예제 추가**: `/demo/`에서 실제 동작 예제 구현
+4. **배포**: Gradio CLI가 README.md 자동 생성
+
+## 💡 유용한 팁
+
+- AI/ML 헬퍼 함수는 `/docs/api/audio-utils.md`에 문서화
+- librosa 통합 예제는 `/docs/user-guide/audio-analysis.md` 참조
+- 복잡한 예제는 `/demo/audio_utils_demo.py` 확인 

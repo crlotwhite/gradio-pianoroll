@@ -28,195 +28,37 @@ pip install gradio_pianoroll
 
 ```python
 import gradio as gr
-import numpy as np
-import io
-import base64
-import wave
-import tempfile
-import os
 from gradio_pianoroll import PianoRoll
 
-# Additional imports for F0 analysis
-try:
-    import librosa
-    LIBROSA_AVAILABLE = True
-    print("✅ librosa available")
-except ImportError:
-    LIBROSA_AVAILABLE = False
-    print("⚠️ librosa not installed. F0 analysis functionality is limited.")
-
-# Synthesizer settings
-SAMPLE_RATE = 44100
-MAX_DURATION = 10.0  # Maximum 10 seconds
-
-# User-defined phoneme mapping (global state)
-user_phoneme_map = {}
-
-def initialize_phoneme_map():
-    """Initialize with default Korean phoneme mapping"""
-    global user_phoneme_map
-    user_phoneme_map = {
-        '가': 'g a',
-        '나': 'n a',
-        '다': 'd a',
-        '라': 'l aa',
-        '마': 'm a',
-        '바': 'b a',
-        '사': 's a',
-        '아': 'aa',
-        '자': 'j a',
-        '차': 'ch a',
-        '카': 'k a',
-        '타': 't a',
-        '파': 'p a',
-        '하': 'h a',
-        '도': 'd o',
-        '레': 'l e',
-        '미': 'm i',
-        '파': 'p aa',
-        '솔': 's o l',
-        '라': 'l aa',
-        '시': 's i',
-        '안녕': 'aa n ny eo ng',
-        '하세요': 'h a s e y o',
-        '노래': 'n o l ae',
-        '사랑': 's a l a ng',
-        '행복': 'h ae ng b o k',
-        '음악': 'eu m a k',
-        '피아노': 'p i a n o'
+# 기본 피아노롤 컴포넌트 생성
+piano_roll = PianoRoll(
+    height=600,
+    width=1000,
+    value={
+        "notes": [
+            {
+                "start": 80,
+                "duration": 80,
+                "pitch": 60,
+                "velocity": 100,
+                "lyric": "안녕"
+            }
+        ],
+        "tempo": 120,
+        "timeSignature": {"numerator": 4, "denominator": 4}
     }
+)
 
-# Initialize phoneme mapping at program start
-initialize_phoneme_map()
+def process_notes(notes_data):
+    print("받은 노트 데이터:", notes_data)
+    return notes_data
 
-def get_phoneme_mapping_list():
-    """Return current phoneme mapping list (for UI display)"""
-    global user_phoneme_map
-    return [{"lyric": k, "phoneme": v} for k, v in user_phoneme_map.items()]
+# Gradio 인터페이스 생성
+with gr.Blocks() as demo:
+    piano_roll.render()
+    piano_roll.change(process_notes, inputs=piano_roll, outputs=piano_roll)
 
-def get_phoneme_mapping_for_dataframe():
-    """Return phoneme mapping list for DataFrame"""
-    global user_phoneme_map
-    return [[k, v] for k, v in user_phoneme_map.items()]
-
-def add_phoneme_mapping(lyric: str, phoneme: str):
-    """Add new phoneme mapping"""
-    global user_phoneme_map
-    user_phoneme_map[lyric.strip()] = phoneme.strip()
-    return get_phoneme_mapping_for_dataframe(), f"'{lyric}' → '{phoneme}' mapping added."
-
-def update_phoneme_mapping(old_lyric: str, new_lyric: str, new_phoneme: str):
-    """Update existing phoneme mapping"""
-    global user_phoneme_map
-
-    # Delete existing mapping
-    if old_lyric in user_phoneme_map:
-        del user_phoneme_map[old_lyric]
-
-    # Add new mapping
-    user_phoneme_map[new_lyric.strip()] = new_phoneme.strip()
-    return get_phoneme_mapping_for_dataframe(), f"Mapping updated to '{new_lyric}' → '{new_phoneme}'."
-
-def delete_phoneme_mapping(lyric: str):
-    """Delete phoneme mapping"""
-    global user_phoneme_map
-    if lyric in user_phoneme_map:
-        del user_phoneme_map[lyric]
-        return get_phoneme_mapping_for_dataframe(), f"'{lyric}' mapping deleted."
-    else:
-        return get_phoneme_mapping_for_dataframe(), f"'{lyric}' mapping not found."
-
-def reset_phoneme_mapping():
-    """Reset phoneme mapping to default values"""
-    initialize_phoneme_map()
-    return get_phoneme_mapping_for_dataframe(), "Phoneme mapping reset to default values."
-
-def midi_to_frequency(midi_note):
-    """Convert MIDI note number to frequency (A4 = 440Hz)"""
-    return 440.0 * (2.0 ** ((midi_note - 69) / 12.0))
-
-def create_adsr_envelope(attack, decay, sustain, release, duration, sample_rate):
-    """Generate ADSR envelope"""
-    total_samples = int(duration * sample_rate)
-    attack_samples = int(attack * sample_rate)
-    decay_samples = int(decay * sample_rate)
-    release_samples = int(release * sample_rate)
-    sustain_samples = total_samples - attack_samples - decay_samples - release_samples
-
-    # Adjust sustain section to avoid negative values
-    if sustain_samples < 0:
-        sustain_samples = 0
-        total_samples = attack_samples + decay_samples + release_samples
-
-    envelope = np.zeros(total_samples)
-
-    # Attack phase
-    if attack_samples > 0:
-        envelope[:attack_samples] = np.linspace(0, 1, attack_samples)
-
-    # Decay phase
-    if decay_samples > 0:
-        start_idx = attack_samples
-        end_idx = attack_samples + decay_samples
-        envelope[start_idx:end_idx] = np.linspace(1, sustain, decay_samples)
-
-    # Sustain phase
-    if sustain_samples > 0:
-        start_idx = attack_samples + decay_samples
-        end_idx = start_idx + sustain_samples
-        envelope[start_idx:end_idx] = sustain
-
-    # Release phase
-    if release_samples > 0:
-        start_idx = attack_samples + decay_samples + sustain_samples
-        envelope[start_idx:] = np.linspace(sustain, 0, release_samples)
-
-    return envelope
-
-def generate_sine_wave(frequency, duration, sample_rate):
-    """Generate sine wave"""
-    t = np.linspace(0, duration, int(duration * sample_rate), False)
-    return np.sin(2 * np.pi * frequency * t)
-
-def generate_sawtooth_wave(frequency, duration, sample_rate):
-    """Generate sawtooth wave"""
-    t = np.linspace(0, duration, int(duration * sample_rate), False)
-    # 2 * (t * frequency - np.floor(0.5 + t * frequency))
-    return 2 * (t * frequency % 1) - 1
-
-def generate_square_wave(frequency, duration, sample_rate):
-    """Generate square wave"""
-    t = np.linspace(0, duration, int(duration * sample_rate), False)
-    return np.sign(np.sin(2 * np.pi * frequency * t))
-
-def generate_triangle_wave(frequency, duration, sample_rate):
-    """Generate triangle wave"""
-    t = np.linspace(0, duration, int(duration * sample_rate), False)
-    return 2 * np.abs(2 * (t * frequency % 1) - 1) - 1
-
-def generate_harmonic_wave(frequency, duration, sample_rate, harmonics=5):
-    """Generate complex waveform with harmonics"""
-    t = np.linspace(0, duration, int(duration * sample_rate), False)
-    wave = np.zeros_like(t)
-
-    # Fundamental frequency
-    wave += np.sin(2 * np.pi * frequency * t)
-
-    # Add harmonics (amplitude decreases by 1/n)
-    for n in range(2, harmonics + 1):
-        amplitude = 1.0 / n
-        wave += amplitude * np.sin(2 * np.pi * frequency * n * t)
-
-    # Normalize
-    wave = wave / np.max(np.abs(wave))
-    return wave
-
-def generate_fm_wave(frequency, duration, sample_rate, mod_freq=5.0, mod_depth=2.0):
-    """Generate FM waveform"""
-    t = np.linspace(0, duration, int(duration * sample_rate), False)
-
-    # Modulator
-    modulator = mod_depth * np.sin(2 * np.pi * mod_freq * t)
+demo.launch()
 
     # Carrier with frequency modulation
     carrier = np.sin(2 * np.pi * frequency * t + modulator)

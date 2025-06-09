@@ -8,12 +8,16 @@
 	import type { SelectData } from "@gradio/utils";
 
 	import PianoRoll from "./components/PianoRoll.svelte";
+	
+	// 새로운 백엔드 데이터 관리 import
+	import type { Note, PianoRollData, PianoRollBackendData } from "./types";
+	import { BackendDataManager, extractBackendData, createTimingContext, updateNotesTiming, validateNote } from "./utils";
 
 	export let elem_id = "";
 	export let elem_classes: string[] = [];
 	export let visible = true;
 
-	export let value = {
+	export let value: PianoRollData = {
 		notes: [],
 		tempo: 120,
 		timeSignature: { numerator: 4, denominator: 4 },
@@ -38,15 +42,18 @@
 		clear_status: LoadingStatus;
 	}>;
 
-	// 백엔드 데이터 속성들
+	// 백엔드 데이터 속성들 (새로운 타입 사용)
 	export let audio_data: string | null = null;
-	export let curve_data: object | null = null;
+	export let curve_data: Record<string, any> | null = null;
 	export let segment_data: Array<any> | null = null;
-	export let line_data: object | null = null;  // Line layer data (pitch curves, loudness, etc.)
+	export let line_data: Record<string, any> | null = null;  // Line layer data (pitch curves, loudness, etc.)
 	export let use_backend_audio: boolean = false;
 
 	export let width = 800;
 	export let height = 400;
+
+	// 백엔드 데이터 매니저 인스턴스
+	let backendDataManager = new BackendDataManager();
 
 	// value가 초기화되지 않았거나 필수 속성이 누락된 경우 기본값 설정
 	$: if (!value || typeof value !== 'object') {
@@ -72,9 +79,13 @@
 		if (!value.ppqn) value.ppqn = 480;
 	}
 
-	// 백엔드 데이터 추출 - value가 변경될 때마다 백엔드 데이터 props 업데이트
+	// 백엔드 데이터 추출 - value가 변경될 때마다 백엔드 데이터 매니저 및 props 업데이트
 	$: if (value && typeof value === 'object') {
-		// value에서 백엔드 데이터가 있으면 props 업데이트
+		// 백엔드 데이터 추출 및 매니저 업데이트
+		const extractedBackendData = extractBackendData(value);
+		backendDataManager.updateFromBackend(extractedBackendData);
+		
+		// legacy props도 업데이트 (기존 컴포넌트 호환성)
 		if ('audio_data' in value && value.audio_data !== undefined) {
 			console.log("🎵 Audio data updated:", !!value.audio_data);
 			audio_data = typeof value.audio_data === 'string' ? value.audio_data : null;
@@ -88,12 +99,34 @@
 			segment_data = Array.isArray(value.segment_data) ? value.segment_data : null;
 		}
 		if ('use_backend_audio' in value && value.use_backend_audio !== undefined) {
-			// console.log("🔊 Backend audio flag:", value.use_backend_audio);
 			use_backend_audio = typeof value.use_backend_audio === 'boolean' ? value.use_backend_audio : false;
 		}
 		if ('line_data' in value && value.line_data !== undefined) {
 			console.log("📊 Line data updated:", value.line_data);
 			line_data = value.line_data && typeof value.line_data === 'object' ? value.line_data : null;
+		}
+		
+		// 노트 데이터의 타이밍 정보 검증 및 업데이트
+		if (value.notes && Array.isArray(value.notes)) {
+			const context = createTimingContext(
+				value.pixelsPerBeat || 80,
+				value.tempo || 120,
+				value.sampleRate || 44100,
+				value.ppqn || 480
+			);
+			
+			// 노트들의 타이밍 데이터가 불완전하면 재계산
+			const needsTimingUpdate = value.notes.some((note: any) => 
+				!note.startFlicks || !note.durationFlicks || !note.startSeconds
+			);
+			
+			if (needsTimingUpdate) {
+				console.log("🔄 Updating note timing data for", value.notes.length, "notes");
+				const validNotes = value.notes.filter(validateNote);
+				if (validNotes.length > 0) {
+					value.notes = updateNotesTiming(validNotes, context);
+				}
+			}
 		}
 	}
 

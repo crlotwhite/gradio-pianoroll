@@ -30,7 +30,7 @@ Gradio PianoRoll 컴포넌트는 고급 오디오 분석 기능을 제공하여 
 
 ```python
 import gradio as gr
-from gradio_pianoroll import PianoRoll
+from gradio_pianoroll import PianoRoll, PianoRollBackendData, Note
 
 def analyze_generated_audio(piano_roll_data):
     """피아노롤 노트에서 오디오를 생성하고 분석"""
@@ -57,20 +57,25 @@ def analyze_generated_audio(piano_roll_data):
     return piano_roll_data
 
 with gr.Blocks() as demo:
+    # 백엔드 데이터 설정
+    backend_data = PianoRollBackendData()
+    backend_data.enable_backend_audio(True)  # 백엔드 오디오 엔진 사용
+    
+    # Note 클래스로 초기 노트 생성
+    initial_note = Note(
+        pitch=60,
+        velocity=100,
+        lyric="도",
+        start_pixels=0,
+        duration_pixels=320
+    )
+    
     piano_roll = PianoRoll(
         value={
-            "notes": [
-                {
-                    "start": 0,
-                    "duration": 320,
-                    "pitch": 60,
-                    "velocity": 100,
-                    "lyric": "도"
-                }
-            ],
+            "notes": [initial_note.to_dict()],
             "tempo": 120
         },
-        use_backend_audio=True  # 백엔드 오디오 엔진 사용
+        backend_data=backend_data
     )
     
     analyze_btn = gr.Button("오디오 생성 & 분석")
@@ -85,7 +90,7 @@ with gr.Blocks() as demo:
 
 ```python
 def analyze_uploaded_audio(piano_roll_data, audio_file):
-    """업로드된 오디오 파일 분석"""
+    """업로드된 오디오 파일 분석 (새로운 방식)"""
     
     if not audio_file:
         return piano_roll_data
@@ -99,7 +104,29 @@ def analyze_uploaded_audio(piano_roll_data, audio_file):
         include_voicing=True
     )
     
-    # 피아노롤에 분석 결과 적용
+    # 백엔드 데이터로 분석 결과 적용 (새로운 방식)
+    piano_roll.add_curve_data("f0_curve", features.get("f0", []))
+    piano_roll.add_curve_data("loudness_curve", features.get("loudness", []))
+    piano_roll.add_curve_data("voicing_curve", features.get("voicing", []))
+    
+    return piano_roll_data
+
+def analyze_uploaded_audio_legacy(piano_roll_data, audio_file):
+    """업로드된 오디오 파일 분석 (기존 방식)"""
+    
+    if not audio_file:
+        return piano_roll_data
+    
+    # 오디오 특성 추출
+    features = extract_audio_features(
+        audio_file_path=audio_file,
+        f0_method="pyin",
+        include_f0=True,
+        include_loudness=True,
+        include_voicing=True
+    )
+    
+    # 기존 방식: 딕셔너리에 직접 추가
     piano_roll_data["curve_data"] = {
         "f0_curve": features.get("f0", []),
         "loudness_curve": features.get("loudness", []),
@@ -109,7 +136,8 @@ def analyze_uploaded_audio(piano_roll_data, audio_file):
     return piano_roll_data
 
 with gr.Blocks() as demo:
-    piano_roll = PianoRoll()
+    backend_data = PianoRollBackendData()
+    piano_roll = PianoRoll(backend_data=backend_data)
     audio_input = gr.Audio(type="filepath")
     
     analyze_btn = gr.Button("업로드된 오디오 분석")

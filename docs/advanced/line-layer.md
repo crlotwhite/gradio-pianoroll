@@ -6,39 +6,56 @@ LineLayer는 피아노롤에서 시간에 따른 선형 데이터를 시각화�
 
 ### 1. Backend에서 line_data 전송
 
-Python backend에서 다음과 같은 형식으로 line_data를 전송합니다:
+#### 새로운 방식 (PianoRollBackendData 사용)
+
+```python
+from gradio_pianoroll import PianoRoll, PianoRollBackendData
+
+# 백엔드 데이터 객체 생성
+backend_data = PianoRollBackendData()
+
+# 곡선 데이터 추가
+backend_data.add_curve("pitch_curve", {
+    "color": "#FF6B6B",  # 선 색상
+    "lineWidth": 2,      # 선 두께
+    "yMin": 50,          # Y축 최소값 (Hz)
+    "yMax": 500,         # Y축 최대값 (Hz)
+    "position": "top",   # 위치 ("top", "center", "bottom")
+    "height": 100,       # 레이어 높이 (픽셀)
+    "visible": True,     # 표시 여부
+    "opacity": 1.0,      # 투명도 (0.0-1.0)
+    "data": [
+        {"x": 0, "y": 220},      # 직접 픽셀 좌표
+        {"x": 100, "y": 440},
+        {"x": 200, "y": 330},
+        # ...
+    ]
+})
+
+backend_data.add_curve("loudness", {
+    "color": "#4ECDC4",
+    "lineWidth": 3,
+    "yMin": -60,         # dB
+    "yMax": 0,
+    "position": "bottom",
+    "data": [
+        {"time": 0.0, "value": -20},    # 시간(초) + 값
+        {"time": 0.1, "value": -15},
+        {"time": 0.2, "value": -25},
+        # ...
+    ]
+})
+
+# 피아노롤에 적용
+piano_roll = PianoRoll(backend_data=backend_data)
+```
+
+#### 기존 방식 (여전히 지원)
 
 ```python
 line_data = {
-    "pitch_curve": {
-        "color": "#FF6B6B",  # 선 색상
-        "lineWidth": 2,      # 선 두께
-        "yMin": 50,          # Y축 최소값 (Hz)
-        "yMax": 500,         # Y축 최대값 (Hz)
-        "position": "top",   # 위치 ("top", "center", "bottom")
-        "height": 100,       # 레이어 높이 (픽셀)
-        "visible": True,     # 표시 여부
-        "opacity": 1.0,      # 투명도 (0.0-1.0)
-        "data": [
-            {"x": 0, "y": 220},      # 직접 픽셀 좌표
-            {"x": 100, "y": 440},
-            {"x": 200, "y": 330},
-            # ...
-        ]
-    },
-    "loudness": {
-        "color": "#4ECDC4",
-        "lineWidth": 3,
-        "yMin": -60,         # dB
-        "yMax": 0,
-        "position": "bottom",
-        "data": [
-            {"time": 0.0, "value": -20},    # 시간(초) + 값
-            {"time": 0.1, "value": -15},
-            {"time": 0.2, "value": -25},
-            # ...
-        ]
-    }
+    "pitch_curve": {...},
+    "loudness": {...}
 }
 
 # Gradio 컴포넌트 업데이트

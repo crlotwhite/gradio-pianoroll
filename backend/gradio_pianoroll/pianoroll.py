@@ -1,22 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from gradio.components.base import Component
 from gradio.events import Events
 from gradio.i18n import I18nData
 
-from .timing_utils import (
-    generate_note_id,
-    pixels_to_flicks,
-    pixels_to_seconds,
-    pixels_to_beats,
-    pixels_to_ticks,
-    pixels_to_samples,
-    calculate_all_timing_data,
-    create_note_with_timing,
-)
+from .backend_data import PianoRollBackendData
+from .note import Note
 
 if TYPE_CHECKING:
     from gradio.components import Timer
@@ -52,10 +44,7 @@ class PianoRoll(Component):
         self,
         value: dict | None = None,
         *,
-        audio_data: str | None = None,
-        curve_data: dict | None = None,
-        segment_data: list | None = None,
-        use_backend_audio: bool = False,
+        backend_data: PianoRollBackendData | None = None,
         label: str | I18nData | None = None,
         every: "Timer | float | None" = None,
         inputs: Component | Sequence[Component] | set[Component] | None = None,
@@ -75,10 +64,7 @@ class PianoRoll(Component):
         """
         Parameters:
             value: default MIDI notes data to provide in piano roll. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
-            audio_data: Backend audio data (base64 encoded audio or URL)
-            curve_data: Backend curve data (pitch curve, loudness curve, etc.)
-            segment_data: Backend segment data (pronunciation timing, etc.)
-            use_backend_audio: Whether to use backend audio engine (True disables frontend audio engine)
+            backend_data: PianoRollBackendData instance containing audio, curve, and segment data for backend processing
             label: the label for this component, displayed above the component if `show_label` is `True` and is also used as the header if there are a table of examples for this component. If None and used in a `gr.Interface`, the label will be the name of the parameter this component corresponds to.
             every: Continously calls `value` to recalculate it if `value` is a function (has no effect otherwise). Can provide a Timer whose tick resets `value`, or a float that provides the regular interval for the reset Timer.
             inputs: Components that are used as inputs to calculate `value` if `value` is a function (has no effect otherwise). `value` is recalculated any time the inputs change.
@@ -97,65 +83,26 @@ class PianoRoll(Component):
         """
         self.width = width
         self.height = height
+        
+        # Default settings
+        self._default_pixels_per_beat = 80
+        self._default_tempo = 120
+        self._default_sample_rate = 44100
+        self._default_ppqn = 480
 
-        # Default settings for flicks calculation
-        default_pixels_per_beat = 80
-        default_tempo = 120
-        default_sample_rate = 44100
-        default_ppqn = 480
+        # Initialize backend data
+        self.backend_data = backend_data or PianoRollBackendData()
 
-        default_notes = [
-            create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕",
-                                  default_pixels_per_beat, default_tempo, default_sample_rate, default_ppqn),      # 1st beat of measure 1
-            create_note_with_timing(generate_note_id(), 160, 160, 64, 90, "하세요",
-                                  default_pixels_per_beat, default_tempo, default_sample_rate, default_ppqn),    # 1st beat of measure 2
-            create_note_with_timing(generate_note_id(), 320, 80, 67, 95, "반가워요",
-                                  default_pixels_per_beat, default_tempo, default_sample_rate, default_ppqn)    # 1st beat of measure 3
-        ]
-
+        # Initialize value with default notes if not provided
         if value is None:
-            self.value = {
-                "notes": default_notes,
-                "tempo": default_tempo,
-                "timeSignature": { "numerator": 4, "denominator": 4 },
-                "editMode": "select",
-                "snapSetting": "1/4",
-                "pixelsPerBeat": default_pixels_per_beat,
-                "sampleRate": default_sample_rate,
-                "ppqn": default_ppqn
-            }
+            self.value = self._create_default_value()
         else:
-            # Ensure all notes have IDs and flicks values, generate them if missing
-            if "notes" in value and value["notes"]:
-                pixels_per_beat = value.get("pixelsPerBeat", default_pixels_per_beat)
-                tempo = value.get("tempo", default_tempo)
-
-                for note in value["notes"]:
-                    if "id" not in note or not note["id"]:
-                        note["id"] = generate_note_id()
-
-                    # Add flicks values if missing
-                    if "startFlicks" not in note:
-                        note["startFlicks"] = pixels_to_flicks(note["start"], pixels_per_beat, tempo)
-                    if "durationFlicks" not in note:
-                        note["durationFlicks"] = pixels_to_flicks(note["duration"], pixels_per_beat, tempo)
-
-            self.value = value
-
-        # 백엔드 데이터 속성들
-        self.audio_data = audio_data
-        self.curve_data = curve_data or {}
-        self.segment_data = segment_data or []
-        self.use_backend_audio = use_backend_audio
+            self.value = self._normalize_value(value)
 
         self._attrs = {
             "width": width,
             "height": height,
             "value": self.value,
-            "audio_data": self.audio_data,
-            "curve_data": self.curve_data,
-            "segment_data": self.segment_data,
-            "use_backend_audio": self.use_backend_audio,
         }
 
         super().__init__(
@@ -174,6 +121,68 @@ class PianoRoll(Component):
             key=key,
             preserved_by_key=preserved_by_key,
         )
+    
+    def _create_default_value(self) -> Dict[str, Any]:
+        """Create default piano roll value with sample notes."""
+        default_notes = [
+            Note(
+                pitch=60, velocity=100, lyric="안녕",
+                start_pixels=80, duration_pixels=80,
+                pixels_per_beat=self._default_pixels_per_beat,
+                tempo=self._default_tempo,
+                sample_rate=self._default_sample_rate,
+                ppqn=self._default_ppqn
+            ).to_dict(),
+            Note(
+                pitch=64, velocity=90, lyric="하세요",
+                start_pixels=160, duration_pixels=160,
+                pixels_per_beat=self._default_pixels_per_beat,
+                tempo=self._default_tempo,
+                sample_rate=self._default_sample_rate,
+                ppqn=self._default_ppqn
+            ).to_dict(),
+            Note(
+                pitch=67, velocity=95, lyric="반가워요",
+                start_pixels=320, duration_pixels=80,
+                pixels_per_beat=self._default_pixels_per_beat,
+                tempo=self._default_tempo,
+                sample_rate=self._default_sample_rate,
+                ppqn=self._default_ppqn
+            ).to_dict()
+        ]
+        
+        return {
+            "notes": default_notes,
+            "tempo": self._default_tempo,
+            "timeSignature": {"numerator": 4, "denominator": 4},
+            "editMode": "select",
+            "snapSetting": "1/4",
+            "pixelsPerBeat": self._default_pixels_per_beat,
+            "sampleRate": self._default_sample_rate,
+            "ppqn": self._default_ppqn
+        }
+    
+    def _normalize_value(self, value: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize input value, ensuring all notes have complete timing data."""
+        if not value:
+            return self._create_default_value()
+        
+        # Get context values
+        pixels_per_beat = value.get("pixelsPerBeat", self._default_pixels_per_beat)
+        tempo = value.get("tempo", self._default_tempo)
+        sample_rate = value.get("sampleRate", self._default_sample_rate)
+        ppqn = value.get("ppqn", self._default_ppqn)
+        
+        # Normalize notes
+        if "notes" in value and value["notes"]:
+            normalized_notes = []
+            for note_data in value["notes"]:
+                # Convert to Note object to ensure complete timing data
+                note = Note.from_dict(note_data, pixels_per_beat, tempo, sample_rate, ppqn)
+                normalized_notes.append(note.to_dict())
+            value["notes"] = normalized_notes
+        
+        return value
 
     def preprocess(self, payload):
         """
@@ -188,77 +197,28 @@ class PianoRoll(Component):
     def postprocess(self, value):
         """
         Postprocess outgoing MIDI notes data from the user function before sending to the frontend.
-        Ensures all notes have IDs and timing values, and attaches backend data if needed.
+        Ensures all notes have complete timing data and attaches backend data if available.
         Args:
             value: The MIDI notes data to postprocess.
         Returns:
             The postprocessed data (with all required fields).
         """
-        # Ensure all notes have IDs and all timing values when sending to frontend
-        if value and "notes" in value and value["notes"]:
-            pixels_per_beat = value.get("pixelsPerBeat", 80)
-            tempo = value.get("tempo", 120)
-            sample_rate = value.get("sampleRate", 44100)
-            ppqn = value.get("ppqn", 480)
-
-            for note in value["notes"]:
-                if "id" not in note or not note["id"]:
-                    note["id"] = generate_note_id()
-
-                # Add all timing values if missing
-                if "startFlicks" not in note or "startSeconds" not in note:
-                    start_timing = calculate_all_timing_data(note["start"], pixels_per_beat, tempo, sample_rate, ppqn)
-                    note.update({
-                        "startFlicks": start_timing['flicks'],
-                        "startSeconds": start_timing['seconds'],
-                        "startBeats": start_timing['beats'],
-                        "startTicks": start_timing['ticks'],
-                        "startSample": start_timing['samples']
-                    })
-
-                if "durationFlicks" not in note or "durationSeconds" not in note:
-                    duration_timing = calculate_all_timing_data(note["duration"], pixels_per_beat, tempo, sample_rate, ppqn)
-                    note.update({
-                        "durationFlicks": duration_timing['flicks'],
-                        "durationSeconds": duration_timing['seconds'],
-                        "durationBeats": duration_timing['beats'],
-                        "durationTicks": duration_timing['ticks'],
-                        "durationSamples": duration_timing['samples']
-                    })
-
-                # Calculate end time if missing
-                if "endSeconds" not in note:
-                    note["endSeconds"] = note.get("startSeconds", 0) + note.get("durationSeconds", 0)
-
-        # Send backend data attributes along with the value
-        if value and isinstance(value, dict):
-            # Prioritize backend data already in value, otherwise get from component attributes
-            # This allows for independent backend settings per component instance
-
-            if "audio_data" not in value or value["audio_data"] is None:
-                if hasattr(self, 'audio_data') and self.audio_data:
-                    value["audio_data"] = self.audio_data
-
-            if "curve_data" not in value or value["curve_data"] is None:
-                if hasattr(self, 'curve_data') and self.curve_data:
-                    value["curve_data"] = self.curve_data
-
-            if "segment_data" not in value or value["segment_data"] is None:
-                if hasattr(self, 'segment_data') and self.segment_data:
-                    value["segment_data"] = self.segment_data
-
-            if "use_backend_audio" not in value:
-                if hasattr(self, 'use_backend_audio'):
-                    value["use_backend_audio"] = self.use_backend_audio
-                else:
-                    value["use_backend_audio"] = False
-
-            # Add debug logging
-            print(f"🔊 [postprocess] Backend audio data processed:")
-            print(f"   - audio_data present: {bool(value.get('audio_data'))}")
-            print(f"   - use_backend_audio: {value.get('use_backend_audio', False)}")
-            print(f"   - curve_data present: {bool(value.get('curve_data'))}")
-            print(f"   - segment_data present: {bool(value.get('segment_data'))}")
+        if not value:
+            value = self._create_default_value()
+        
+        # Normalize the value to ensure complete timing data
+        value = self._normalize_value(value)
+        
+        # Attach backend data if available
+        if self.backend_data.has_data():
+            backend_dict = self.backend_data.to_dict()
+            value.update(backend_dict)
+            
+            print(f"🔊 [postprocess] Backend data attached:")
+            print(f"   - audio_data: {bool(backend_dict.get('audio_data'))}")
+            print(f"   - curve_data: {bool(backend_dict.get('curve_data'))}")
+            print(f"   - segment_data: {bool(backend_dict.get('segment_data'))}")
+            print(f"   - use_backend_audio: {backend_dict.get('use_backend_audio', False)}")
 
         return value
 
@@ -268,23 +228,22 @@ class PianoRoll(Component):
         Returns:
             dict: Example piano roll data.
         """
-        pixels_per_beat = 80
-        tempo = 120
-        sample_rate = 44100
-        ppqn = 480
+        note = Note(
+            pitch=60, velocity=100, lyric="안녕",
+            start_pixels=80, duration_pixels=80,
+            pixels_per_beat=80, tempo=120,
+            sample_rate=44100, ppqn=480
+        )
 
         return {
-            "notes": [
-                create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕",
-                                      pixels_per_beat, tempo, sample_rate, ppqn)
-            ],
-            "tempo": tempo,
-            "timeSignature": { "numerator": 4, "denominator": 4 },
+            "notes": [note.to_dict()],
+            "tempo": 120,
+            "timeSignature": {"numerator": 4, "denominator": 4},
             "editMode": "select",
             "snapSetting": "1/4",
-            "pixelsPerBeat": pixels_per_beat,
-            "sampleRate": sample_rate,
-            "ppqn": ppqn
+            "pixelsPerBeat": 80,
+            "sampleRate": 44100,
+            "ppqn": 480
         }
 
     def example_value(self):
@@ -293,25 +252,30 @@ class PianoRoll(Component):
         Returns:
             dict: Example piano roll data.
         """
-        pixels_per_beat = 80
-        tempo = 120
-        sample_rate = 44100
-        ppqn = 480
+        notes = [
+            Note(
+                pitch=60, velocity=100, lyric="안녕",
+                start_pixels=80, duration_pixels=80,
+                pixels_per_beat=80, tempo=120,
+                sample_rate=44100, ppqn=480
+            ).to_dict(),
+            Note(
+                pitch=64, velocity=90, lyric="하세요",
+                start_pixels=160, duration_pixels=160,
+                pixels_per_beat=80, tempo=120,
+                sample_rate=44100, ppqn=480
+            ).to_dict()
+        ]
 
         return {
-            "notes": [
-                create_note_with_timing(generate_note_id(), 80, 80, 60, 100, "안녕",
-                                      pixels_per_beat, tempo, sample_rate, ppqn),
-                create_note_with_timing(generate_note_id(), 160, 160, 64, 90, "하세요",
-                                      pixels_per_beat, tempo, sample_rate, ppqn)
-            ],
-            "tempo": tempo,
-            "timeSignature": { "numerator": 4, "denominator": 4 },
+            "notes": notes,
+            "tempo": 120,
+            "timeSignature": {"numerator": 4, "denominator": 4},
             "editMode": "select",
             "snapSetting": "1/4",
-            "pixelsPerBeat": pixels_per_beat,
-            "sampleRate": sample_rate,
-            "ppqn": ppqn
+            "pixelsPerBeat": 80,
+            "sampleRate": 44100,
+            "ppqn": 480
         }
 
     def api_info(self):
@@ -443,64 +407,62 @@ class PianoRoll(Component):
             "description": "Piano roll data object containing notes array, settings, and optional backend data"
         }
 
-    def update_backend_data(self, audio_data=None, curve_data=None, segment_data=None, use_backend_audio=None):
-        """
-        Update backend audio, curve, and segment data for this component instance.
-        Args:
-            audio_data (str|None): New audio data.
-            curve_data (dict|None): New curve data.
-            segment_data (list|None): New segment data.
-            use_backend_audio (bool|None): Whether to use backend audio.
-        """
-        if audio_data is not None:
-            self.audio_data = audio_data
-        if curve_data is not None:
-            self.curve_data = curve_data
-        if segment_data is not None:
-            self.segment_data = segment_data
-        if use_backend_audio is not None:
-            self.use_backend_audio = use_backend_audio
+    # Clean backend data management methods
+    def set_audio_data(self, audio_data: str) -> None:
+        """Set backend audio data."""
+        self.backend_data.set_audio(audio_data)
 
-        # Update _attrs as well
-        self._attrs.update({
-            "audio_data": self.audio_data,
-            "curve_data": self.curve_data,
-            "segment_data": self.segment_data,
-            "use_backend_audio": self.use_backend_audio,
-        })
+    def add_curve_data(self, name: str, curve_data: Dict[str, Any]) -> None:
+        """Add or update a curve dataset."""
+        self.backend_data.add_curve(name, curve_data)
 
-    def set_audio_data(self, audio_data: str):
-        """
-        Set the backend audio data for this component.
-        Args:
-            audio_data (str): New audio data (base64 or URL).
-        """
-        self.audio_data = audio_data
-        self._attrs["audio_data"] = audio_data
+    def remove_curve_data(self, name: str) -> None:
+        """Remove a curve dataset."""
+        self.backend_data.remove_curve(name)
 
-    def set_curve_data(self, curve_data: dict):
-        """
-        Set the backend curve data for this component.
-        Args:
-            curve_data (dict): New curve data.
-        """
-        self.curve_data = curve_data
-        self._attrs["curve_data"] = curve_data
+    def add_segment_data(self, segment: Dict[str, Any]) -> None:
+        """Add a segment data entry."""
+        self.backend_data.add_segment(segment)
 
-    def set_segment_data(self, segment_data: list):
-        """
-        Set the backend segment data for this component.
-        Args:
-            segment_data (list): New segment data.
-        """
-        self.segment_data = segment_data
-        self._attrs["segment_data"] = segment_data
+    def clear_segment_data(self) -> None:
+        """Clear all segment data."""
+        self.backend_data.clear_segments()
 
-    def enable_backend_audio(self, enable: bool = True):
-        """
-        Enable or disable backend audio for this component.
-        Args:
-            enable (bool): True to enable backend audio, False to disable.
-        """
-        self.use_backend_audio = enable
-        self._attrs["use_backend_audio"] = enable
+    def enable_backend_audio(self, enable: bool = True) -> None:
+        """Enable or disable backend audio engine."""
+        self.backend_data.enable_backend_audio(enable)
+    
+    def get_backend_data(self) -> PianoRollBackendData:
+        """Get the backend data object."""
+        return self.backend_data
+    
+    # Convenience methods for working with notes
+    def add_note(self, pitch: int, start_pixels: float, duration_pixels: float, 
+                 velocity: int = 100, lyric: str = "") -> str:
+        """Add a new note to the piano roll and return its ID."""
+        pixels_per_beat = self.value.get("pixelsPerBeat", self._default_pixels_per_beat)
+        tempo = self.value.get("tempo", self._default_tempo)
+        sample_rate = self.value.get("sampleRate", self._default_sample_rate)
+        ppqn = self.value.get("ppqn", self._default_ppqn)
+        
+        note = Note(
+            pitch=pitch, velocity=velocity, lyric=lyric,
+            start_pixels=start_pixels, duration_pixels=duration_pixels,
+            pixels_per_beat=pixels_per_beat, tempo=tempo,
+            sample_rate=sample_rate, ppqn=ppqn
+        )
+        
+        if "notes" not in self.value:
+            self.value["notes"] = []
+        
+        self.value["notes"].append(note.to_dict())
+        return note.id
+    
+    def remove_note(self, note_id: str) -> bool:
+        """Remove a note by ID. Returns True if found and removed."""
+        if "notes" not in self.value:
+            return False
+        
+        original_count = len(self.value["notes"])
+        self.value["notes"] = [note for note in self.value["notes"] if note.get("id") != note_id]
+        return len(self.value["notes"]) < original_count

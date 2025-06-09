@@ -8,13 +8,17 @@
 
 ```python
 import gradio as gr
-from gradio_pianoroll import PianoRoll
+from gradio_pianoroll import PianoRoll, PianoRollBackendData, Note
+
+# 백엔드 데이터 설정 (선택적)
+backend_data = PianoRollBackendData()
 
 piano_roll = PianoRoll(
-    height=600,           # 캔버스 높이
-    width=1000,          # 캔버스 너비
-    value=initial_data,  # 초기 노트 데이터
-    interactive=True     # 편집 가능 여부
+    height=600,               # 캔버스 높이
+    width=1000,              # 캔버스 너비
+    value=initial_data,      # 초기 노트 데이터
+    backend_data=backend_data, # 백엔드 데이터 객체
+    interactive=True         # 편집 가능 여부
 )
 ```
 
@@ -127,7 +131,7 @@ snap_settings = {
 **방법 2: 프로그래밍 방식**
 ```python
 def batch_edit_lyrics(notes_data, lyric_mapping):
-    """여러 노트의 가사를 일괄 편집"""
+    """여러 노트의 가사를 일괄 편집 (기존 방식)"""
     notes = notes_data.get('notes', [])
     
     for note in notes:
@@ -137,20 +141,38 @@ def batch_edit_lyrics(notes_data, lyric_mapping):
     
     return notes_data
 
-# 사용 예제
+def create_notes_with_lyrics():
+    """Note 클래스를 사용한 새로운 방식"""
+    from gradio_pianoroll import Note
+    
+    notes = [
+        Note(pitch=60, lyric="도", start_pixels=0, duration_pixels=80),
+        Note(pitch=62, lyric="레", start_pixels=80, duration_pixels=80),
+        Note(pitch=64, lyric="미", start_pixels=160, duration_pixels=80),
+        Note(pitch=65, lyric="파", start_pixels=240, duration_pixels=80),
+        Note(pitch=67, lyric="솔", start_pixels=320, duration_pixels=80)
+    ]
+    
+    return {
+        "notes": [note.to_dict() for note in notes],
+        "tempo": 120
+    }
+
+# 기존 방식
 lyric_map = {
-    60: "도",  # C4
-    62: "레",  # D4
-    64: "미",  # E4
-    65: "파",  # F4
-    67: "솔", # G4
-    69: "라",  # A4
-    71: "시"   # B4
+    60: "도", 62: "레", 64: "미", 65: "파", 67: "솔"
 }
 
 piano_roll.change(
     lambda data: batch_edit_lyrics(data, lyric_map),
     inputs=piano_roll,
+    outputs=piano_roll
+)
+
+# 새로운 방식 (더 간단함)
+init_btn = gr.Button("음계 초기화")
+init_btn.click(
+    fn=create_notes_with_lyrics,
     outputs=piano_roll
 )
 ```

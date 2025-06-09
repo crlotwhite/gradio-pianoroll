@@ -16,7 +16,10 @@ requires-python = ">=3.10"
 authors = [{ name = "crlotwhite", email = "crlotwhite@gmail.com" }]
 keywords = ["gradio-custom-component", "gradio-template-Fallback", "audio"]
 # Add dependencies here
-dependencies = ["gradio>=4.0,<6.0"]
+dependencies = [
+    "gradio>=4.0,<6.0",
+    "numpy>=1.21.0"
+]
 classifiers = [
   'Development Status :: 3 - Alpha',
   'Operating System :: OS Independent',
@@ -42,16 +45,70 @@ repository = "https://github.com/crlotwhite/gradio-pianoroll"
 space = "https://huggingface.co/spaces/crlotwhite/gradio_pianoroll"
 
 [project.optional-dependencies]
-dev = ["build", "twine"]
+dev = ["build", "twine", "mypy>=1.0.0", "pytest>=7.0.0", "pytest-cov>=4.0.0"]
 docs = [
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.0.0",
     "mkdocs-include-markdown-plugin>=6.0.0",
     "pymdown-extensions>=10.0.0"
 ]
+typing = ["mypy>=1.0.0"]
+test = ["pytest>=7.0.0", "pytest-cov>=4.0.0", "numpy>=1.21.0"]
 
 [tool.hatch.build]
 artifacts = ["/backend/gradio_pianoroll/templates", "*.pyi"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["/backend/gradio_pianoroll"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = "gradio.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "numpy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pytest.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+source = ["backend/gradio_pianoroll"]
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]

@@ -30,9 +30,14 @@ pip install git+https://github.com/crlotwhite/gradio-pianoroll.git
 
 ```python
 import gradio as gr
-from gradio_pianoroll import PianoRoll
+from gradio_pianoroll import PianoRoll, PianoRollBackendData, Note
 
 print("✅ Gradio PianoRoll이 성공적으로 설치되었습니다!")
+
+# 새로운 클래스들 테스트
+backend_data = PianoRollBackendData()
+note = Note(pitch=60, lyric="도")
+print(f"✅ 새로운 클래스들이 정상 동작합니다! 노트 시간: {note.start_seconds}초")
 ```
 
 ## 📦 선택적 의존성

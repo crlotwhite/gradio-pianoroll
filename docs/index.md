@@ -48,29 +48,36 @@ pip install gradio-pianoroll
 
 ```python
 import gradio as gr
-from gradio_pianoroll import PianoRoll
+from gradio_pianoroll import PianoRoll, PianoRollBackendData, Note
 
-# 기본 피아노롤 컴포넌트
+# Note 클래스로 간편한 노트 생성
+note = Note(
+    pitch=60,
+    velocity=100,
+    lyric="안녕",
+    start_pixels=80,
+    duration_pixels=80
+)
+
+# 백엔드 데이터 설정 (선택적)
+backend_data = PianoRollBackendData()
+
+# 피아노롤 컴포넌트
 piano_roll = PianoRoll(
     height=600,
     width=1000,
     value={
-        "notes": [
-            {
-                "start": 80,
-                "duration": 80,
-                "pitch": 60,
-                "velocity": 100,
-                "lyric": "안녕"
-            }
-        ],
+        "notes": [note.to_dict()],
         "tempo": 120,
         "timeSignature": {"numerator": 4, "denominator": 4}
-    }
+    },
+    backend_data=backend_data
 )
 
 def process_notes(notes_data):
     print("받은 노트:", notes_data)
+    # 새로운 노트 추가 예제
+    piano_roll.add_note(pitch=64, start_pixels=160, duration_pixels=80, lyric="하세요")
     return notes_data
 
 with gr.Blocks() as demo:
@@ -108,6 +115,11 @@ python app.py
     2. [LineLayer 시각화](advanced/line-layer.md) - 데이터 시각화
     3. [타이밍 변환](advanced/timing-conversions.md) - 정밀 타이밍
 
+=== "AI/ML 개발자"
+    1. [Audio Utils API](api/audio-utils.md) - Hz/시간 변환 헬퍼
+    2. [오디오 분석](user-guide/audio-analysis.md) - librosa 통합
+    3. [코드 예제](developer/examples.md) - 실제 구현 예제
+
 === "개발자"
     1. [API 참조](developer/api-reference.md) - 컴포넌트 API
     2. [코드 예제](developer/examples.md) - 실제 구현 예제
@@ -128,6 +140,7 @@ python app.py
 | [기본 사용법](user-guide/basic-usage.md) | 노트 편집의 모든 것 | 일반 사용자 |
 | [신디사이저](user-guide/synthesizer.md) | 오디오 생성 및 ADSR | 음악 개발자 |
 | [오디오 분석](user-guide/audio-analysis.md) | F0/Loudness 분석 | 음성 연구자 |
+| [Audio Utils API](api/audio-utils.md) | Hz/시간 변환 헬퍼 함수 | AI/ML 개발자 |
 | [LineLayer](advanced/line-layer.md) | 고급 시각화 기능 | 고급 사용자 |
 | [API 참조](developer/api-reference.md) | 개발자 레퍼런스 | 개발자 |
 
