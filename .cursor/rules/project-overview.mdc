@@ -1,0 +1,39 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Gradio PianoRoll 프로젝트 개요
+
+이 프로젝트는 Gradio용 커스텀 피아노롤 컴포넌트입니다. 음악과 오디오 관련 기능을 제공하며, 한국어 가사 및 음성 합성 기능을 포함합니다.
+
+## 프로젝트 구조
+
+- **Backend**: [backend/gradio_pianoroll/](mdc:backend/gradio_pianoroll) - Python 백엔드 코드
+  - [pianoroll.py](mdc:backend/gradio_pianoroll/pianoroll.py) - 메인 컴포넌트 구현
+  - [pianoroll.pyi](mdc:backend/gradio_pianoroll/pianoroll.pyi) - 타입 정의
+  
+- **Frontend**: [frontend/](mdc:frontend) - TypeScript/Svelte 프론트엔드 코드
+  - [Index.svelte](mdc:frontend/Index.svelte) - 메인 Svelte 컴포넌트
+  - [package.json](mdc:frontend/package.json) - 프론트엔드 의존성 관리
+  
+- **Demo**: [demo/](mdc:demo) - 데모 애플리케이션
+  - [app.py](mdc:demo/app.py) - 메인 데모 앱
+  - [space.py](mdc:demo/space.py) - HuggingFace Space용 앱
+  
+- **Configuration**: [pyproject.toml](mdc:pyproject.toml) - 프로젝트 설정 및 의존성
+
+## 주요 기능
+
+1. **피아노롤 시각화**: MIDI 데이터 기반 피아노롤 인터페이스
+2. **음성 합성**: 한국어 가사를 phoneme으로 변환하여 음성 합성
+3. **오디오 생성**: 다양한 파형(사인파, 톱니파, 사각파, 삼각파) 지원
+4. **ADSR 엔벨로프**: Attack, Decay, Sustain, Release 파라미터 지원
+5. **F0 분석**: librosa를 사용한 기본 주파수 분석
+
+## 개발 환경
+
+- Python 3.10+
+- Gradio 4.0+
+- TypeScript/Svelte (프론트엔드)
+- Node.js (프론트엔드 빌드)

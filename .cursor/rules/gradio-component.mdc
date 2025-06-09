@@ -1,0 +1,87 @@
+---
+description: describe about gradio custom component development
+globs: 
+alwaysApply: false
+---
+# Gradio 커스텀 컴포넌트 개발
+
+이 프로젝트는 Gradio 4.0+ 버전용 커스텀 PianoRoll 컴포넌트입니다.
+
+## 컴포넌트 구조
+
+### Python 백엔드
+- **메인 클래스**: [backend/gradio_pianoroll/pianoroll.py](mdc:backend/gradio_pianoroll/pianoroll.py)
+- **타입 정의**: [backend/gradio_pianoroll/pianoroll.pyi](mdc:backend/gradio_pianoroll/pianoroll.pyi)
+- **초기화**: [backend/gradio_pianoroll/__init__.py](mdc:backend/gradio_pianoroll/__init__.py)
+
+### Frontend (Svelte)
+- **메인 컴포넌트**: [frontend/Index.svelte](mdc:frontend/Index.svelte)
+- **예제 컴포넌트**: [frontend/Example.svelte](mdc:frontend/Example.svelte)
+- **빌드 설정**: [frontend/gradio.config.js](mdc:frontend/gradio.config.js)
+
+## Gradio 컴포넌트 패턴
+
+### 백엔드 구현 패턴
+Gradio 커스텀 컴포넌트는 다음 구조를 따릅니다:
+
+1. **컴포넌트 클래스 정의**
+   - `gradio.Component`를 상속
+   - `preprocess()`, `postprocess()` 메서드 구현
+   - 데이터 타입 및 validation 로직
+
+2. **프로퍼티 설정**
+   - 컴포넌트별 고유 프로퍼티 정의
+   - 기본값 설정
+   - 타입 힌트 제공
+
+### 프론트엔드 구현 패턴
+
+#### Svelte 컴포넌트 구조
+- **Props**: Python에서 전달되는 데이터
+- **Events**: 사용자 인터랙션을 Python으로 전달
+- **State Management**: 컴포넌트 내부 상태 관리
+
+#### Gradio Dependencies
+[frontend/package.json](mdc:frontend/package.json)에 정의된 핵심 의존성:
+- `@gradio/atoms`: 기본 UI 원자 컴포넌트
+- `@gradio/statustracker`: 로딩 상태 관리
+- `@gradio/utils`: 유틸리티 함수들
+
+## 빌드 및 패키징
+
+### Python 패키지
+[pyproject.toml](mdc:pyproject.toml) 설정:
+- `hatchling` 빌드 시스템
+- Wheel 패키징에 `/backend/gradio_pianoroll` 포함
+- 템플릿 파일 아티팩트 포함
+
+### 프론트엔드 번들링
+- TypeScript 컴파일: [frontend/tsconfig.json](mdc:frontend/tsconfig.json)
+- Svelte 전처리: `svelte-preprocess` 사용
+- 타입 정의 생성: `.d.ts` 파일 자동 생성
+
+## 개발 가이드라인
+
+### 컴포넌트 API 설계
+1. **단순성**: 사용자가 쉽게 이해할 수 있는 API
+2. **일관성**: Gradio 기본 컴포넌트와 일관된 패턴
+3. **확장성**: 미래 기능 추가를 고려한 설계
+
+### 데이터 플로우
+```
+Python Backend ↔ Gradio Core ↔ Svelte Frontend
+     ↑                              ↑
+   Business Logic              User Interface
+```
+
+### 테스트 및 검증
+- [demo/app.py](mdc:demo/app.py): 로컬 개발 테스트
+- [demo/space.py](mdc:demo/space.py): HuggingFace Spaces 배포
+- [demo/requirements.txt](mdc:demo/requirements.txt): 런타임 의존성
+
+## 주의사항
+
+1. **Gradio 버전 호환성**: 4.0 이상 6.0 미만 지원
+2. **Python 버전**: 3.10 이상 요구
+3. **프론트엔드 빌드**: 변경 사항 반영을 위해 재빌드 필요
+4. **타입 안전성**: Python과 TypeScript 간 타입 일치 유지

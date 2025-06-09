@@ -1,0 +1,74 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# 오디오 및 음성 합성 기능
+
+이 프로젝트의 핵심 기능인 오디오 처리 및 음성 합성 관련 구현사항입니다.
+
+## 주요 오디오 기능
+
+### 1. 파형 생성
+데모 코드 [demo/app.py](mdc:demo/app.py)에서 다음 파형들을 지원합니다:
+- `generate_sine_wave()`: 사인파
+- `generate_sawtooth_wave()`: 톱니파  
+- `generate_square_wave()`: 사각파
+- `generate_triangle_wave()`: 삼각파
+- `generate_harmonic_wave()`: 하모닉 복합 파형
+
+### 2. ADSR 엔벨로프
+- `create_adsr_envelope()`: Attack, Decay, Sustain, Release 파라미터로 소리의 시간적 변화 제어
+- 샘플레이트: 44.1kHz 기본 사용
+- 최대 지속시간: 10초
+
+### 3. MIDI 처리
+- `midi_to_frequency()`: MIDI 노트 번호를 주파수로 변환 (A4 = 440Hz 기준)
+- 피아노롤 시각화와 연동
+
+## 한국어 음성 합성
+
+### Phoneme 매핑 시스템
+전역 상태로 관리되는 한국어 가사-음소 매핑:
+
+#### 핵심 함수들
+- `initialize_phoneme_map()`: 기본 한국어 phoneme 매핑 초기화
+- `add_phoneme_mapping()`: 새로운 매핑 추가
+- `update_phoneme_mapping()`: 기존 매핑 수정
+- `delete_phoneme_mapping()`: 매핑 삭제
+- `reset_phoneme_mapping()`: 기본값으로 리셋
+
+#### 기본 매핑 예시
+```python
+user_phoneme_map = {
+    '가': 'g a',
+    '나': 'n a', 
+    '안녕': 'aa n ny eo ng',
+    '하세요': 'h a s e y o',
+    '노래': 'n o l ae',
+    '음악': 'eu m a k'
+}
+```
+
+### F0 분석
+- `librosa` 라이브러리를 사용한 기본 주파수 분석
+- 선택적 의존성 (LIBROSA_AVAILABLE 플래그로 체크)
+
+## 오디오 파일 처리
+
+### 지원 형식
+- WAV 형식 기본 지원
+- Base64 인코딩을 통한 데이터 전송
+- 임시 파일 생성 및 정리
+
+### 샘플링 설정
+- 기본 샘플레이트: 44,100 Hz
+- 최대 오디오 길이: 10초
+- 16-bit PCM 형식
+
+## 개발 시 주의사항
+
+1. **메모리 관리**: 긴 오디오 생성 시 메모리 사용량 확인
+2. **샘플레이트 일관성**: 모든 오디오 처리에서 동일한 샘플레이트 사용
+3. **임시 파일 정리**: 생성된 임시 오디오 파일 적절히 삭제
+4. **에러 처리**: librosa 미설치 시 graceful degradation
