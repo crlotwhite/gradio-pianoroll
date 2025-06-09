@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Union
 
 from gradio.components.base import Component
 from gradio.events import Events
@@ -16,6 +16,13 @@ from .timing_utils import (
     pixels_to_samples,
     calculate_all_timing_data,
     create_note_with_timing,
+)
+
+from .data_models import (
+    PianoRollData,
+    validate_and_warn,
+    clean_piano_roll_data,
+    ensure_note_ids,
 )
 
 if TYPE_CHECKING:
@@ -50,7 +57,7 @@ class PianoRoll(Component):
 
     def __init__(
         self,
-        value: dict | None = None,
+        value: Union[dict, PianoRollData, None] = None,
         *,
         audio_data: str | None = None,
         curve_data: dict | None = None,
@@ -125,22 +132,24 @@ class PianoRoll(Component):
                 "ppqn": default_ppqn
             }
         else:
-            # Ensure all notes have IDs and flicks values, generate them if missing
-            if "notes" in value and value["notes"]:
-                pixels_per_beat = value.get("pixelsPerBeat", default_pixels_per_beat)
-                tempo = value.get("tempo", default_tempo)
+            # 데이터 정리 및 유효성 검사
+            cleaned_value = clean_piano_roll_data(value)
+            validated_value = validate_and_warn(cleaned_value, "Initial piano roll value")
 
-                for note in value["notes"]:
-                    if "id" not in note or not note["id"]:
-                        note["id"] = generate_note_id()
+            # ID 보장 및 타이밍 데이터 생성
+            self.value = ensure_note_ids(validated_value)
 
+            # Ensure all notes have timing values, generate them if missing
+            if "notes" in self.value and self.value["notes"]:
+                pixels_per_beat = self.value.get("pixelsPerBeat", default_pixels_per_beat)
+                tempo = self.value.get("tempo", default_tempo)
+
+                for note in self.value["notes"]:
                     # Add flicks values if missing
                     if "startFlicks" not in note:
                         note["startFlicks"] = pixels_to_flicks(note["start"], pixels_per_beat, tempo)
                     if "durationFlicks" not in note:
                         note["durationFlicks"] = pixels_to_flicks(note["duration"], pixels_per_beat, tempo)
-
-            self.value = value
 
         # 백엔드 데이터 속성들
         self.audio_data = audio_data
@@ -181,9 +190,16 @@ class PianoRoll(Component):
         Args:
             payload: The MIDI notes data to preprocess.
         Returns:
-            The preprocessed data (passed through).
+            The preprocessed data with validation.
         """
-        return payload
+        if payload is None:
+            return payload
+
+        # 데이터 정리 및 유효성 검사
+        cleaned_payload = clean_piano_roll_data(payload)
+        validated_payload = validate_and_warn(cleaned_payload, "Frontend piano roll data")
+
+        return validated_payload
 
     def postprocess(self, value):
         """

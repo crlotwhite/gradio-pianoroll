@@ -7,8 +7,11 @@
 ### 생성자
 
 ```python
+from gradio_pianoroll import PianoRoll
+from gradio_pianoroll.data_models import PianoRollData
+
 PianoRoll(
-    value=None,
+    value: Union[dict, PianoRollData, None] = None,
     height=600,
     width=1000,
     elem_id=None,
@@ -16,6 +19,9 @@ PianoRoll(
     visible=True,
     interactive=True,
     use_backend_audio=False,
+    audio_data: str | None = None,
+    curve_data: dict | None = None,
+    segment_data: list | None = None,
     **kwargs
 )
 ```
@@ -24,7 +30,7 @@ PianoRoll(
 
 | 매개변수 | 타입 | 기본값 | 설명 |
 |---------|------|--------|------|
-| `value` | `dict \| None` | `None` | 초기 피아노롤 데이터 |
+| `value` | `Union[dict, PianoRollData, None]` | `None` | 초기 피아노롤 데이터 (TypedDict 지원) |
 | `height` | `int` | `600` | 컴포넌트 높이 (픽셀) |
 | `width` | `int` | `1000` | 컴포넌트 너비 (픽셀) |
 | `elem_id` | `str \| None` | `None` | HTML 요소 ID |
@@ -32,16 +38,50 @@ PianoRoll(
 | `visible` | `bool` | `True` | 컴포넌트 표시 여부 |
 | `interactive` | `bool` | `True` | 사용자 입력 허용 여부 |
 | `use_backend_audio` | `bool` | `False` | 백엔드 오디오 엔진 사용 여부 |
+| `audio_data` | `str \| None` | `None` | 백엔드 오디오 데이터 (base64 또는 URL) |
+| `curve_data` | `dict \| None` | `None` | 곡선 데이터 (F0, 음량 등) |
+| `segment_data` | `list \| None` | `None` | 세그먼트 데이터 (발음 타이밍 등) |
 
-### 데이터 구조
+### 데이터 구조 (TypedDict)
 
-#### PianoRoll 데이터 형식
+#### PianoRollData 타입
 
 ```python
-{
+from gradio_pianoroll.data_models import PianoRollData, Note, TimeSignature
+
+# TypedDict 기반 타입 안전 데이터 구조
+class PianoRollData(TypedDict, total=False):
+    # 필수 필드들
+    notes: List[Note]
+    tempo: int
+    timeSignature: TimeSignature
+    editMode: str
+    snapSetting: str
+
+    # 선택적 필드들
+    pixelsPerBeat: Optional[float]
+    sampleRate: Optional[int]
+    ppqn: Optional[int]
+
+    # 백엔드 데이터
+    audio_data: Optional[str]
+    curve_data: Optional[Dict[str, Any]]
+    segment_data: Optional[List[Dict[str, Any]]]
+    line_data: Optional[Dict[str, LineLayerConfig]]
+    use_backend_audio: Optional[bool]
+
+    # 파형 데이터
+    waveform_data: Optional[List[Dict[str, float]]]
+```
+
+#### 사용 예시
+
+```python
+# 타입 힌트와 함께 사용
+data: PianoRollData = {
     "notes": [
         {
-            "id": "note_0",           # 음표 고유 ID (선택사항)
+            "id": "note_0",           # 음표 고유 ID (자동 생성)
             "start": 0,               # 시작 위치 (픽셀)
             "duration": 160,          # 지속 시간 (픽셀)
             "pitch": 60,              # MIDI 노트 번호 (0-127)
@@ -58,11 +98,10 @@ PianoRoll(
     "editMode": "select",             # 편집 모드
     "snapSetting": "1/4",             # 스냅 설정
     "pixelsPerBeat": 80,              # 박자당 픽셀 수
-    "curve_data": {},                 # 곡선 데이터 (선택사항)
-    "line_data": {},                  # 라인 데이터 (선택사항)
-    "audio_data": "data:audio/wav;base64,...",  # 오디오 데이터 (선택사항)
-    "use_backend_audio": false        # 백엔드 오디오 사용 여부
 }
+
+# 컴포넌트 생성 시 자동 유효성 검사
+piano_roll = PianoRoll(value=data)
 ```
 
 #### Note 객체
@@ -108,11 +147,66 @@ piano_roll.update(value=new_data, visible=True)
 
 #### `postprocess(value)`
 
-프론트엔드로 전송하기 전에 데이터를 후처리합니다.
+프론트엔드로 전송하기 전에 데이터를 후처리합니다. 자동으로 ID 생성과 타이밍 데이터 보완을 수행합니다.
 
 #### `preprocess(value)`
 
-백엔드에서 받은 데이터를 전처리합니다.
+백엔드에서 받은 데이터를 전처리합니다. 자동으로 유효성 검사와 데이터 정리를 수행합니다.
+
+#### 백엔드 데이터 관리 메서드
+
+```python
+# 백엔드 데이터 업데이트
+component.update_backend_data(
+    audio_data="data:audio/wav;base64,...",
+    curve_data={"f0_curve": {...}},
+    use_backend_audio=True
+)
+
+# 개별 데이터 설정
+component.set_audio_data(audio_base64)
+component.set_curve_data(curve_dict)
+component.enable_backend_audio(True)
+```
+
+## 유효성 검사 시스템
+
+### 자동 유효성 검사
+
+컴포넌트는 자동으로 데이터 유효성을 검사하고 문제가 있을 때 경고를 출력합니다:
+
+```python
+# 잘못된 데이터
+invalid_data = {
+    "notes": [{"pitch": 999}],  # 잘못된 피치 (0-127 범위 벗어남)
+    "tempo": -10                # 잘못된 템포 (음수)
+}
+
+# 컴포넌트가 자동으로 검사하고 경고 출력
+piano_roll = PianoRoll(value=invalid_data)
+# 출력: UserWarning: Initial piano roll value validation failed: ...
+```
+
+### 수동 유효성 검사
+
+```python
+from gradio_pianoroll.data_models import (
+    validate_piano_roll_data,
+    validate_and_warn,
+    clean_piano_roll_data
+)
+
+# 데이터 검사
+errors = validate_piano_roll_data(data)
+if errors:
+    print("유효성 검사 실패:", errors)
+
+# 데이터 검사 + 경고 출력
+validated_data = validate_and_warn(data, "사용자 입력")
+
+# 데이터 정리 (기본값 설정, None 값 제거)
+cleaned_data = clean_piano_roll_data(raw_data)
+```
 
 ## 고급 데이터 구조
 
