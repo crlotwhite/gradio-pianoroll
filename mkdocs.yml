@@ -1,11 +1,12 @@
 site_name: Gradio PianoRoll Documentation
-site_description: A comprehensive guide to using the Gradio PianoRoll component
+site_description: Gradio PianoRoll 컴포넌트 사용 가이드 - 한국어 음성 합성과 MIDI 편집을 위한 강력한 도구
 site_url: https://crlotwhite.github.io/gradio-pianoroll/
 repo_url: https://github.com/crlotwhite/gradio-pianoroll
 repo_name: crlotwhite/gradio-pianoroll
 
 theme:
   name: material
+  language: ko
   palette:
     # Palette toggle for light mode
     - scheme: default
@@ -13,35 +14,46 @@ theme:
       accent: blue
       toggle:
         icon: material/brightness-7
-        name: Switch to dark mode
+        name: 다크 모드로 전환
     # Palette toggle for dark mode
     - scheme: slate
       primary: blue
       accent: blue
       toggle:
         icon: material/brightness-4
-        name: Switch to light mode
+        name: 라이트 모드로 전환
   features:
     - navigation.tabs
     - navigation.sections
     - navigation.expand
     - navigation.path
     - navigation.top
+    - navigation.indexes
     - search.highlight
     - search.share
+    - search.suggest
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
 
 plugins:
-  - search
+  - search:
+      lang: ko
   - include-markdown
 
 markdown_extensions:
   - admonition
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.tabbed:
@@ -49,30 +61,35 @@ markdown_extensions:
   - tables
   - attr_list
   - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - toc:
+      permalink: true
 
 nav:
-  - Home: index.md
-  - Quick Start:
-    - Installation: installation/index.md
-    - Basic Usage: quickstart/index.md
-  - Examples:
-    - Overview: examples/index.md
-    - Basic Demo: examples/basic-usage.md
-    - Synthesizer: examples/synthesizer.md
-    - Phoneme Processing: examples/phoneme-processing.md
-    - F0 Analysis: examples/f0-analysis.md
-    - Audio Feature Analysis: examples/audio-features.md
-  - Guides:
-    - Line Layer Usage: guides/line-layer.md
-    - Synthesizer Guide: guides/synthesizer.md
-    - Timing Conversions: guides/timing-conversions.md
-    - F0 Demo Setup: guides/f0-demo-setup.md
-  - API Reference:
-    - Components: api/components.md
-    - Events: api/events.md
-  - Development:
-    - Contributing: development/contributing.md
-    - Building: development/building.md
+  - 홈: index.md
+  - 시작하기:
+    - 설치: getting-started/installation.md
+    - 빠른 시작: getting-started/quick-start.md
+    - FAQ: getting-started/faq.md
+  - 사용자 가이드:
+    - 기본 사용법: user-guide/basic-usage.md
+    - 신시사이저: user-guide/synthesizer.md
+    - 음성학적 처리: user-guide/phoneme-processing.md
+    - 오디오 분석: user-guide/audio-analysis.md
+  - 고급 기능:
+    - LineLayer 사용법: advanced/line-layer.md
+    - 타이밍 변환: advanced/timing-conversions.md
+    - 성능 최적화: advanced/performance.md
+  - 개발자 가이드:
+    - API 참조: developer/api-reference.md
+    - 예제 코드: developer/examples.md
 
 docs_dir: docs
 site_dir: site
@@ -83,3 +100,5 @@ extra:
       link: https://github.com/crlotwhite/gradio-pianoroll
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/gradio-pianoroll/
+
+copyright: Copyright &copy; 2024 gradio-pianoroll contributors
