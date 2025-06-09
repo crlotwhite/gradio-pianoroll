@@ -8,13 +8,17 @@ from __future__ import annotations
 from typing import TypedDict, Optional, List, Dict, Any, Union
 import warnings
 
+
 class TimeSignature(TypedDict):
     """박자표 정보"""
+
     numerator: int
     denominator: int
 
+
 class Note(TypedDict, total=False):
     """노트 정보 - total=False로 일부 필드 선택적"""
+
     # 필수 필드들
     id: str
     start: float
@@ -39,13 +43,17 @@ class Note(TypedDict, total=False):
     lyric: Optional[str]
     phoneme: Optional[str]
 
+
 class LineDataPoint(TypedDict):
     """라인 데이터 포인트"""
+
     x: float
     y: float
 
+
 class LineLayerConfig(TypedDict, total=False):
     """라인 레이어 설정"""
+
     color: str
     lineWidth: float
     yMin: float
@@ -59,8 +67,10 @@ class LineLayerConfig(TypedDict, total=False):
     originalRange: Optional[Dict[str, Any]]
     data: List[LineDataPoint]
 
+
 class PianoRollData(TypedDict, total=False):
     """피아노롤 전체 데이터 구조"""
+
     # 필수 필드들
     notes: List[Note]
     tempo: int
@@ -83,6 +93,7 @@ class PianoRollData(TypedDict, total=False):
     # 파형 데이터
     waveform_data: Optional[List[Dict[str, float]]]
 
+
 def validate_note(note: Dict[str, Any]) -> List[str]:
     """
     노트 데이터 유효성 검사
@@ -96,32 +107,33 @@ def validate_note(note: Dict[str, Any]) -> List[str]:
     errors = []
 
     # 필수 필드 검사
-    required_fields = ['id', 'start', 'duration', 'pitch', 'velocity']
+    required_fields = ["id", "start", "duration", "pitch", "velocity"]
     for field in required_fields:
         if field not in note:
             errors.append(f"Required field '{field}' is missing")
 
     # 타입 검사
-    if 'start' in note and not isinstance(note['start'], (int, float)):
+    if "start" in note and not isinstance(note["start"], (int, float)):
         errors.append("'start' must be a number")
-    if 'duration' in note and not isinstance(note['duration'], (int, float)):
+    if "duration" in note and not isinstance(note["duration"], (int, float)):
         errors.append("'duration' must be a number")
-    if 'pitch' in note and not isinstance(note['pitch'], int):
+    if "pitch" in note and not isinstance(note["pitch"], int):
         errors.append("'pitch' must be an integer")
-    if 'velocity' in note and not isinstance(note['velocity'], int):
+    if "velocity" in note and not isinstance(note["velocity"], int):
         errors.append("'velocity' must be an integer")
 
     # 범위 검사
-    if 'pitch' in note and not (0 <= note['pitch'] <= 127):
+    if "pitch" in note and not (0 <= note["pitch"] <= 127):
         errors.append("'pitch' must be between 0 and 127")
-    if 'velocity' in note and not (0 <= note['velocity'] <= 127):
+    if "velocity" in note and not (0 <= note["velocity"] <= 127):
         errors.append("'velocity' must be between 0 and 127")
-    if 'start' in note and note['start'] < 0:
+    if "start" in note and note["start"] < 0:
         errors.append("'start' must be non-negative")
-    if 'duration' in note and note['duration'] <= 0:
+    if "duration" in note and note["duration"] <= 0:
         errors.append("'duration' must be positive")
 
     return errors
+
 
 def validate_piano_roll_data(data: Dict[str, Any]) -> List[str]:
     """
@@ -139,40 +151,51 @@ def validate_piano_roll_data(data: Dict[str, Any]) -> List[str]:
         return ["Piano roll data must be a dictionary"]
 
     # 필수 필드 검사
-    required_fields = ['notes', 'tempo', 'timeSignature', 'editMode', 'snapSetting']
+    required_fields = ["notes", "tempo", "timeSignature", "editMode", "snapSetting"]
     for field in required_fields:
         if field not in data:
             errors.append(f"Required field '{field}' is missing")
 
     # notes 검사
-    if 'notes' in data:
-        if not isinstance(data['notes'], list):
+    if "notes" in data:
+        if not isinstance(data["notes"], list):
             errors.append("'notes' must be a list")
         else:
-            for i, note in enumerate(data['notes']):
+            for i, note in enumerate(data["notes"]):
                 note_errors = validate_note(note)
                 for error in note_errors:
                     errors.append(f"Note {i}: {error}")
 
     # tempo 검사
-    if 'tempo' in data:
-        if not isinstance(data['tempo'], (int, float)) or data['tempo'] <= 0:
+    if "tempo" in data:
+        if not isinstance(data["tempo"], (int, float)) or data["tempo"] <= 0:
             errors.append("'tempo' must be a positive number")
 
     # timeSignature 검사
-    if 'timeSignature' in data:
-        ts = data['timeSignature']
+    if "timeSignature" in data:
+        ts = data["timeSignature"]
         if not isinstance(ts, dict):
             errors.append("'timeSignature' must be a dictionary")
         else:
-            if 'numerator' not in ts or not isinstance(ts['numerator'], int) or ts['numerator'] <= 0:
+            if (
+                "numerator" not in ts
+                or not isinstance(ts["numerator"], int)
+                or ts["numerator"] <= 0
+            ):
                 errors.append("'timeSignature.numerator' must be a positive integer")
-            if 'denominator' not in ts or not isinstance(ts['denominator'], int) or ts['denominator'] <= 0:
+            if (
+                "denominator" not in ts
+                or not isinstance(ts["denominator"], int)
+                or ts["denominator"] <= 0
+            ):
                 errors.append("'timeSignature.denominator' must be a positive integer")
 
     return errors
 
-def validate_and_warn(data: Dict[str, Any], context: str = "Piano roll data") -> Dict[str, Any]:
+
+def validate_and_warn(
+    data: Dict[str, Any], context: str = "Piano roll data"
+) -> Dict[str, Any]:
     """
     데이터 유효성 검사하고 경고 출력
 
@@ -186,11 +209,14 @@ def validate_and_warn(data: Dict[str, Any], context: str = "Piano roll data") ->
     errors = validate_piano_roll_data(data)
 
     if errors:
-        warning_msg = f"{context} validation failed:\n" + "\n".join(f"  - {error}" for error in errors)
+        warning_msg = f"{context} validation failed:\n" + "\n".join(
+            f"  - {error}" for error in errors
+        )
         warnings.warn(warning_msg, UserWarning, stacklevel=2)
         return {}
 
     return data
+
 
 def create_default_piano_roll_data() -> PianoRollData:
     """기본 피아노롤 데이터 생성"""
@@ -202,8 +228,9 @@ def create_default_piano_roll_data() -> PianoRollData:
         "snapSetting": "1/4",
         "pixelsPerBeat": 80,
         "sampleRate": 44100,
-        "ppqn": 480
+        "ppqn": 480,
     }
+
 
 def ensure_note_ids(data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -215,21 +242,24 @@ def ensure_note_ids(data: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         ID가 보장된 데이터
     """
-    if 'notes' not in data:
+    if "notes" not in data:
         return data
 
     from .timing_utils import generate_note_id
 
     modified = False
-    for note in data['notes']:
-        if 'id' not in note or not note['id']:
-            note['id'] = generate_note_id()
+    for note in data["notes"]:
+        if "id" not in note or not note["id"]:
+            note["id"] = generate_note_id()
             modified = True
 
     if modified:
-        print(f"🔧 Auto-generated IDs for {sum(1 for note in data['notes'] if not note.get('id'))} notes")
+        print(
+            f"🔧 Auto-generated IDs for {sum(1 for note in data['notes'] if not note.get('id'))} notes"
+        )
 
     return data
+
 
 def clean_piano_roll_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -253,13 +283,17 @@ def clean_piano_roll_data(data: Dict[str, Any]) -> Dict[str, Any]:
         "snapSetting": data.get("snapSetting", "1/4"),
         "pixelsPerBeat": data.get("pixelsPerBeat", 80),
         "sampleRate": data.get("sampleRate", 44100),
-        "ppqn": data.get("ppqn", 480)
+        "ppqn": data.get("ppqn", 480),
     }
 
     # 선택적 필드들 (None이 아닌 경우만 포함)
     optional_fields = [
-        'audio_data', 'curve_data', 'segment_data', 'line_data',
-        'use_backend_audio', 'waveform_data'
+        "audio_data",
+        "curve_data",
+        "segment_data",
+        "line_data",
+        "use_backend_audio",
+        "waveform_data",
     ]
 
     for field in optional_fields:

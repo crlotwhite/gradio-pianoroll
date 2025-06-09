@@ -7,7 +7,15 @@ __pycache__/
 __tmp/*
 *.pyi
 .mypycache
+.mypy_cache/
 .ruff_cache
 node_modules
 backend/**/templates/
 site
+
+# 개발 도구 결과물
+stubs/
+.pytest_cache/
+coverage.xml
+*.coverage
+.coverage.*

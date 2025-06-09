@@ -19,16 +19,20 @@
 # 각 모듈을 lazy import로 제공
 __all__ = []
 
+
 def __getattr__(name: str):
     """Lazy import for utility modules"""
     if name == "research":
         from . import research
+
         return research
     elif name == "templates":
         from . import templates
+
         return templates
     elif name == "converters":
         from . import converters
+
         return converters
     else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -1,7 +1,7 @@
 from .pianoroll import PianoRoll
 
 # Core component is always available
-__all__ = ['PianoRoll']
+__all__ = ["PianoRoll"]
 
 # Optional utilities - users can import explicitly if needed
 # Example usage:
@@ -11,7 +11,8 @@ __all__ = ['PianoRoll']
 # Provide easy access to utils if needed
 try:
     from . import utils
-    __all__.append('utils')
+
+    __all__.append("utils")
 except ImportError:
     # utils might not be available in minimal installations
     pass

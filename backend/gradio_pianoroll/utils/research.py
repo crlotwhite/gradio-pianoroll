@@ -19,9 +19,12 @@ from ..data_models import PianoRollData, Note, clean_piano_roll_data
 # 1. 빠른 생성 함수들 (Quick Creation)
 # =============================================================================
 
-def from_notes(notes: List[Tuple[int, float, float]],
-               tempo: int = 120,
-               lyrics: Optional[List[str]] = None) -> PianoRollData:
+
+def from_notes(
+    notes: List[Tuple[int, float, float]],
+    tempo: int = 120,
+    lyrics: Optional[List[str]] = None,
+) -> PianoRollData:
     """
     간단한 노트 리스트에서 피아노롤 데이터 생성
 
@@ -65,15 +68,18 @@ def from_notes(notes: List[Tuple[int, float, float]],
         "timeSignature": {"numerator": 4, "denominator": 4},
         "editMode": "select",
         "snapSetting": "1/4",
-        "pixelsPerBeat": pixels_per_beat
+        "pixelsPerBeat": pixels_per_beat,
     }
 
     return clean_piano_roll_data(result)
 
-def from_midi_numbers(midi_notes: List[int],
-                     durations: Optional[List[float]] = None,
-                     start_times: Optional[List[float]] = None,
-                     tempo: int = 120) -> PianoRollData:
+
+def from_midi_numbers(
+    midi_notes: List[int],
+    durations: Optional[List[float]] = None,
+    start_times: Optional[List[float]] = None,
+    tempo: int = 120,
+) -> PianoRollData:
     """
     MIDI 노트 번호 리스트에서 피아노롤 생성
 
@@ -96,10 +102,13 @@ def from_midi_numbers(midi_notes: List[int],
     notes = list(zip(midi_notes, start_times, durations))
     return from_notes(notes, tempo)
 
-def from_frequencies(frequencies: List[float],
-                    durations: Optional[List[float]] = None,
-                    start_times: Optional[List[float]] = None,
-                    tempo: int = 120) -> PianoRollData:
+
+def from_frequencies(
+    frequencies: List[float],
+    durations: Optional[List[float]] = None,
+    start_times: Optional[List[float]] = None,
+    tempo: int = 120,
+) -> PianoRollData:
     """
     주파수(Hz) 리스트에서 피아노롤 생성
 
@@ -118,14 +127,18 @@ def from_frequencies(frequencies: List[float],
     midi_notes = [int(round(69 + 12 * np.log2(f / 440))) for f in frequencies]
     return from_midi_numbers(midi_notes, durations, start_times, tempo)
 
+
 # =============================================================================
 # 2. 모델 출력 변환 함수들 (Model Output Conversion)
 # =============================================================================
 
-def from_tts_output(text: str,
-                    alignment: List[Tuple[str, float, float]],
-                    f0_data: Optional[List[float]] = None,
-                    tempo: int = 120) -> Dict:
+
+def from_tts_output(
+    text: str,
+    alignment: List[Tuple[str, float, float]],
+    f0_data: Optional[List[float]] = None,
+    tempo: int = 120,
+) -> Dict:
     """
     TTS 모델의 정렬 결과를 피아노롤로 변환
 
@@ -166,7 +179,7 @@ def from_tts_output(text: str,
             "duration": duration * (tempo / 60) * pixels_per_beat,
             "pitch": max(0, min(127, pitch)),  # MIDI 범위로 제한
             "velocity": 100,
-            "lyric": word
+            "lyric": word,
         }
         notes.append(note)
 
@@ -176,7 +189,7 @@ def from_tts_output(text: str,
         "timeSignature": {"numerator": 4, "denominator": 4},
         "editMode": "select",
         "snapSetting": "1/4",
-        "pixelsPerBeat": pixels_per_beat
+        "pixelsPerBeat": pixels_per_beat,
     }
 
     # F0 곡선 데이터 추가
@@ -187,8 +200,8 @@ def from_tts_output(text: str,
 
     return result
 
-def from_midi_generation(generated_sequence: List[Dict],
-                        tempo: int = 120) -> Dict:
+
+def from_midi_generation(generated_sequence: List[Dict], tempo: int = 120) -> Dict:
     """
     MIDI 생성 모델 출력을 피아노롤로 변환
 
@@ -212,7 +225,7 @@ def from_midi_generation(generated_sequence: List[Dict],
             "start": note_data["start"] * (tempo / 60) * pixels_per_beat,
             "duration": note_data["duration"] * (tempo / 60) * pixels_per_beat,
             "pitch": note_data["pitch"],
-            "velocity": note_data.get("velocity", 100)
+            "velocity": note_data.get("velocity", 100),
         }
 
         # 가사나 추가 정보가 있으면 포함
@@ -229,13 +242,13 @@ def from_midi_generation(generated_sequence: List[Dict],
         "timeSignature": {"numerator": 4, "denominator": 4},
         "editMode": "select",
         "snapSetting": "1/4",
-        "pixelsPerBeat": pixels_per_beat
+        "pixelsPerBeat": pixels_per_beat,
     }
 
-def _create_f0_line_data(f0_values: List[float],
-                        total_duration: float,
-                        tempo: int,
-                        pixels_per_beat: int) -> Dict:
+
+def _create_f0_line_data(
+    f0_values: List[float], total_duration: float, tempo: int, pixels_per_beat: int
+) -> Dict:
     """F0 데이터를 LineLayer 형식으로 변환"""
     data_points = []
 
@@ -258,13 +271,15 @@ def _create_f0_line_data(f0_values: List[float],
             "yMax": 2560,
             "position": "overlay",
             "renderMode": "piano_grid",
-            "data": data_points
+            "data": data_points,
         }
     }
+
 
 # =============================================================================
 # 3. 템플릿 생성 함수들 (Template Creation)
 # =============================================================================
+
 
 def create_pianoroll_with_data(data: Dict, **component_kwargs) -> gr.Blocks:
     """
@@ -285,10 +300,13 @@ def create_pianoroll_with_data(data: Dict, **component_kwargs) -> gr.Blocks:
 
     return demo
 
-def quick_demo(notes: List[Tuple[int, float, float]],
-               title: str = "Quick Piano Roll Demo",
-               tempo: int = 120,
-               **component_kwargs) -> gr.Blocks:
+
+def quick_demo(
+    notes: List[Tuple[int, float, float]],
+    title: str = "Quick Piano Roll Demo",
+    tempo: int = 120,
+    **component_kwargs,
+) -> gr.Blocks:
     """
     3줄로 피아노롤 데모 만들기
 
@@ -318,9 +336,11 @@ def quick_demo(notes: List[Tuple[int, float, float]],
 
     return demo
 
+
 # =============================================================================
 # 4. 분석 도구들 (Analysis Tools)
 # =============================================================================
+
 
 def analyze_notes(piano_roll_data: Dict) -> Dict:
     """피아노롤에서 노트 통계 추출"""
@@ -344,25 +364,34 @@ def analyze_notes(piano_roll_data: Dict) -> Dict:
         "음역대": {
             "최저음": min(pitches),
             "최고음": max(pitches),
-            "음역": max(pitches) - min(pitches)
+            "음역": max(pitches) - min(pitches),
         },
         "평균_피치": round(np.mean(pitches), 1),
         "평균_벨로시티": round(np.mean(velocities), 1),
         "평균_노트_길이_초": round(np.mean(durations_sec), 2),
-        "총_재생시간_초": round(max([n["start"] + n["duration"] for n in notes]) / pixels_per_beat * 60 / tempo, 2),
+        "총_재생시간_초": round(
+            max([n["start"] + n["duration"] for n in notes])
+            / pixels_per_beat
+            * 60
+            / tempo,
+            2,
+        ),
         "리듬_분석": {
             "최단_노트_초": round(min(durations_sec), 3),
             "최장_노트_초": round(max(durations_sec), 3),
-            "표준편차": round(np.std(durations_sec), 3)
-        }
+            "표준편차": round(np.std(durations_sec), 3),
+        },
     }
+
 
 # =============================================================================
 # 5. 자동 분석 함수
 # =============================================================================
 
-def auto_analyze(model_output_data: Union[List, Dict],
-                output_type: str = "auto") -> Dict:
+
+def auto_analyze(
+    model_output_data: Union[List, Dict], output_type: str = "auto"
+) -> Dict:
     """
     모델 출력을 자동으로 분석해서 피아노롤 형식으로 변환
 
@@ -376,10 +405,16 @@ def auto_analyze(model_output_data: Union[List, Dict],
     if output_type == "auto":
         # 데이터 형식을 보고 자동 감지
         if isinstance(model_output_data, list) and len(model_output_data) > 0:
-            if isinstance(model_output_data[0], (tuple, list)) and len(model_output_data[0]) >= 3:
+            if (
+                isinstance(model_output_data[0], (tuple, list))
+                and len(model_output_data[0]) >= 3
+            ):
                 # (pitch, time, duration) 형식으로 추정
                 return from_notes(model_output_data)
-            elif isinstance(model_output_data[0], dict) and "pitch" in model_output_data[0]:
+            elif (
+                isinstance(model_output_data[0], dict)
+                and "pitch" in model_output_data[0]
+            ):
                 # MIDI 생성 모델 출력으로 추정
                 return from_midi_generation(model_output_data)
 

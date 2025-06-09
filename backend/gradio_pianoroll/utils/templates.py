@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 from .research import from_notes, from_midi_numbers, from_frequencies
 
+
 def create_basic_template() -> gr.Blocks:
     """기본 피아노롤 템플릿 (3줄로 만들기)"""
     import gradio as gr
@@ -24,9 +25,10 @@ def create_basic_template() -> gr.Blocks:
         piano_roll.change(
             lambda x: f"Notes: {len(x.get('notes', []))}",
             inputs=piano_roll,
-            outputs=gr.Textbox()
+            outputs=gr.Textbox(),
         )
     return demo
+
 
 def create_tts_template() -> gr.Blocks:
     """TTS 연구자용 템플릿"""
@@ -38,27 +40,32 @@ def create_tts_template() -> gr.Blocks:
         words = text_input.split()
         notes = []
         for i, word in enumerate(words):
-            notes.append({
-                "id": f"note_{i}",
-                "start": i * 160,
-                "duration": 160,
-                "pitch": 60 + (i % 12),
-                "velocity": 100,
-                "lyric": word
-            })
+            notes.append(
+                {
+                    "id": f"note_{i}",
+                    "start": i * 160,
+                    "duration": 160,
+                    "pitch": 60 + (i % 12),
+                    "velocity": 100,
+                    "lyric": word,
+                }
+            )
         return {"notes": notes, "tempo": 120}
 
     with gr.Blocks(title="TTS 연구자용 피아노롤") as demo:
         gr.Markdown("## 🎤 TTS 모델 결과 시각화")
 
         with gr.Row():
-            text_input = gr.Textbox(label="입력 텍스트", placeholder="안녕하세요 피아노롤입니다")
+            text_input = gr.Textbox(
+                label="입력 텍스트", placeholder="안녕하세요 피아노롤입니다"
+            )
             generate_btn = gr.Button("생성", variant="primary")
 
         piano_roll = PianoRoll(height=400)
         generate_btn.click(visualize_tts_output, inputs=text_input, outputs=piano_roll)
 
     return demo
+
 
 def create_midi_generation_template() -> gr.Blocks:
     """MIDI 생성 연구자용 템플릿"""
@@ -71,13 +78,15 @@ def create_midi_generation_template() -> gr.Blocks:
         scale = [60, 62, 64, 65, 67, 69, 71, 72]  # C major scale
 
         for i in range(length):
-            notes.append({
-                "id": f"generated_{i}",
-                "start": i * 80,
-                "duration": 80,
-                "pitch": scale[i % len(scale)],
-                "velocity": np.random.randint(80, 120)
-            })
+            notes.append(
+                {
+                    "id": f"generated_{i}",
+                    "start": i * 80,
+                    "duration": 80,
+                    "pitch": scale[i % len(scale)],
+                    "velocity": np.random.randint(80, 120),
+                }
+            )
 
         return {"notes": notes, "tempo": 120}
 
@@ -92,10 +101,11 @@ def create_midi_generation_template() -> gr.Blocks:
         generate_btn.click(
             lambda length: generate_midi_sequence([], length),
             inputs=length_slider,
-            outputs=piano_roll
+            outputs=piano_roll,
         )
 
     return demo
+
 
 def create_audio_analysis_template() -> gr.Blocks:
     """오디오 분석 연구자용 템플릿"""
@@ -120,16 +130,14 @@ def create_audio_analysis_template() -> gr.Blocks:
                 "yMax": 2560,
                 "position": "overlay",
                 "renderMode": "piano_grid",
-                "data": [{"x": t * 80, "y": (127 - (69 + 12 * np.log2(f / 440))) * 20}
-                        for t, f in zip(time_points, f0_values)]
+                "data": [
+                    {"x": t * 80, "y": (127 - (69 + 12 * np.log2(f / 440))) * 20}
+                    for t, f in zip(time_points, f0_values)
+                ],
             }
         }
 
-        return {
-            "notes": [],
-            "tempo": 120,
-            "line_data": line_data
-        }
+        return {"notes": [], "tempo": 120, "line_data": line_data}
 
     with gr.Blocks(title="오디오 분석 연구자용") as demo:
         gr.Markdown("## 📊 오디오 F0 분석 시각화")
@@ -141,6 +149,7 @@ def create_audio_analysis_template() -> gr.Blocks:
 
     return demo
 
+
 def create_paper_figure_template() -> gr.Blocks:
     """연구 논문용 Figure 생성 템플릿"""
     import gradio as gr
@@ -148,17 +157,15 @@ def create_paper_figure_template() -> gr.Blocks:
 
     def create_paper_figure(title, notes_data):
         """논문용 깔끔한 피아노롤 Figure"""
-        return {
-            "notes": notes_data.get("notes", []),
-            "tempo": 120,
-            "title": title
-        }
+        return {"notes": notes_data.get("notes", []), "tempo": 120, "title": title}
 
     with gr.Blocks(title="논문 Figure 생성용") as demo:
         gr.Markdown("## 📄 연구 논문용 피아노롤 Figure")
 
         with gr.Row():
-            title_input = gr.Textbox(label="Figure 제목", value="Model Output Visualization")
+            title_input = gr.Textbox(
+                label="Figure 제목", value="Model Output Visualization"
+            )
             export_btn = gr.Button("PNG로 내보내기")
 
         piano_roll = PianoRoll(
@@ -166,25 +173,42 @@ def create_paper_figure_template() -> gr.Blocks:
             width=800,
             value={
                 "notes": [
-                    {"id": "1", "start": 0, "duration": 160, "pitch": 60, "velocity": 100, "lyric": "Example"},
-                    {"id": "2", "start": 160, "duration": 160, "pitch": 64, "velocity": 100, "lyric": "Data"}
+                    {
+                        "id": "1",
+                        "start": 0,
+                        "duration": 160,
+                        "pitch": 60,
+                        "velocity": 100,
+                        "lyric": "Example",
+                    },
+                    {
+                        "id": "2",
+                        "start": 160,
+                        "duration": 160,
+                        "pitch": 64,
+                        "velocity": 100,
+                        "lyric": "Data",
+                    },
                 ]
-            }
+            },
         )
 
     return demo
+
 
 def create_all_templates() -> gr.Blocks:
     """모든 템플릿을 탭으로 보여주는 통합 데모"""
     import gradio as gr
 
     with gr.Blocks(title="🎹 연구자용 피아노롤 템플릿들") as demo:
-        gr.Markdown("""
+        gr.Markdown(
+            """
         # 🎹 연구자용 피아노롤 템플릿
 
         각 탭은 서로 다른 연구 분야에 맞는 간단한 시작 템플릿을 제공합니다.
         필요한 템플릿의 코드를 복사해서 사용하세요!
-        """)
+        """
+        )
 
         with gr.Tabs():
             with gr.Tab("🎯 기본"):
