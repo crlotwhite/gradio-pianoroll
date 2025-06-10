@@ -61,9 +61,7 @@ markdown_extensions:
   - tables
   - attr_list
   - md_in_html
-  - pymdownx.emoji:
-      emoji_index: "material.extensions.emoji.twemoji"
-      emoji_generator: "material.extensions.emoji.to_svg"
+
   - pymdownx.keys
   - pymdownx.mark
   - pymdownx.smartsymbols
