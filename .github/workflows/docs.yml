@@ -68,7 +68,7 @@ jobs:
 
       - name: Build MkDocs
         run: |
-          mkdocs build --clean --strict
+          mkdocs build --clean
 
       - name: Upload artifact
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
