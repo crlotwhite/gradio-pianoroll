@@ -257,18 +257,71 @@
   }
 
   function handleBackendAudioPlay() {
+    // playhead 업데이트를 위한 참조 객체들 생성
+    const isPlayingRef = { value: isPlaying };
+    const currentFlicksRef = { value: currentFlicks };
+    
     backendAudioEngine.startBackendAudioPlayback(currentFlicks, () => {
       isPlaying = false;
+      // playhead 업데이트 정지
+      if (backendAudioEngine.backendPlayheadInterval) {
+        clearInterval(backendAudioEngine.backendPlayheadInterval);
+        backendAudioEngine.backendPlayheadInterval = null;
+      }
     });
+    
+    // 재생 상태 업데이트
+    isPlaying = true;
+    
+    // playhead 업데이트 시작
+    backendAudioEngine.updateBackendPlayhead(
+      isPlayingRef,
+      currentFlicksRef,
+      () => {
+        // 재생 완료 시 콜백
+        isPlaying = false;
+        currentFlicks = 0;
+      }
+    );
+    
+    // playhead 실시간 업데이트를 위한 추가 interval
+    const playheadUpdateInterval = setInterval(() => {
+      if (isPlaying && backendAudioEngine.backendAudioContext && backendAudioEngine.backendAudioBuffer) {
+        const elapsedTime = backendAudioEngine.backendAudioContext.currentTime - backendAudioEngine.backendPlayStartTime;
+        const newFlicks = Math.round(elapsedTime * 705600000);
+        
+        // currentFlicks를 실시간으로 업데이트
+        currentFlicks = newFlicks;
+        
+        // 재생이 끝났는지 확인
+        if (elapsedTime >= backendAudioEngine.backendAudioBuffer.duration) {
+          isPlaying = false;
+          currentFlicks = 0;
+          clearInterval(playheadUpdateInterval);
+        }
+      } else if (!isPlaying) {
+        // 재생이 중지되면 interval 정리
+        clearInterval(playheadUpdateInterval);
+      }
+    }, 16); // 60fps로 업데이트
   }
 
   function handleBackendAudioPause() {
-    backendAudioEngine.pauseBackendAudio({ value: currentFlicks });
+    // 현재 위치를 참조 객체로 전달
+    const currentFlicksRef = { value: currentFlicks };
+    backendAudioEngine.pauseBackendAudio(currentFlicksRef);
+    
+    // 업데이트된 위치를 반영
+    currentFlicks = currentFlicksRef.value;
     isPlaying = false;
   }
 
   function handleBackendAudioStop() {
-    backendAudioEngine.stopBackendAudio({ value: currentFlicks });
+    // 현재 위치를 참조 객체로 전달
+    const currentFlicksRef = { value: currentFlicks };
+    backendAudioEngine.stopBackendAudio(currentFlicksRef);
+    
+    // 위치를 0으로 리셋
     isPlaying = false;
     currentFlicks = 0;
   }
