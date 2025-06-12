@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gradio_pianoroll"
-version = "0.0.8"
+version = "0.0.9"
 description = "A PianoRoll Component for Gradio."
 readme = "README.md"
 license = "apache-2.0"
@@ -69,6 +69,9 @@ artifacts = ["/backend/gradio_pianoroll/templates", "*.pyi"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["/backend/gradio_pianoroll"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["backend", "frontend", "pyproject.toml", "README.md", "mkdocs.yml", "DEPLOYMENT.md"]
 
 # mypy 타입 체크 설정
 [tool.mypy]
