@@ -7,6 +7,7 @@ Piano Roll 데이터 모델과 유효성 검사 함수들
 from __future__ import annotations
 from typing import TypedDict, Optional, List, Dict, Any, Union
 import warnings
+import dataclasses
 
 
 class TimeSignature(TypedDict):
@@ -94,7 +95,151 @@ class PianoRollData(TypedDict, total=False):
     waveform_data: Optional[List[Dict[str, float]]]
 
 
-def validate_note(note: Dict[str, Any]) -> List[str]:
+@dataclasses.dataclass
+class TimeSignatureData:
+    numerator: int
+    denominator: int
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TimeSignatureData":
+        return cls(
+            numerator=data.get("numerator", 4),
+            denominator=data.get("denominator", 4),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass
+class NoteData:
+    id: str
+    start: float
+    duration: float
+    pitch: int
+    velocity: int
+    startFlicks: Optional[float] = None
+    durationFlicks: Optional[float] = None
+    startSeconds: Optional[float] = None
+    durationSeconds: Optional[float] = None
+    endSeconds: Optional[float] = None
+    startBeats: Optional[float] = None
+    durationBeats: Optional[float] = None
+    startTicks: Optional[int] = None
+    durationTicks: Optional[int] = None
+    startSample: Optional[int] = None
+    durationSamples: Optional[int] = None
+    lyric: Optional[str] = None
+    phoneme: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "NoteData":
+        field_names = {f.name for f in dataclasses.fields(cls)}
+        filtered = {k: data.get(k) for k in field_names}
+        return cls(**filtered)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass
+class LineDataPointData:
+    x: float
+    y: float
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LineDataPointData":
+        return cls(x=data.get("x", 0.0), y=data.get("y", 0.0))
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass
+class LineLayerConfigData:
+    color: str
+    lineWidth: float
+    yMin: float
+    yMax: float
+    position: Optional[str] = None
+    renderMode: Optional[str] = None
+    visible: Optional[bool] = None
+    opacity: Optional[float] = None
+    dataType: Optional[str] = None
+    unit: Optional[str] = None
+    originalRange: Optional[Dict[str, Any]] = None
+    data: List[LineDataPointData] = dataclasses.field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LineLayerConfigData":
+        points = [LineDataPointData.from_dict(p) for p in data.get("data", [])]
+        field_names = {f.name for f in dataclasses.fields(cls) if f.name != "data"}
+        filtered = {k: data.get(k) for k in field_names}
+        return cls(data=points, **filtered)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass
+class PianoRollDataClass:
+    notes: List[NoteData]
+    tempo: int
+    timeSignature: TimeSignatureData
+    editMode: str
+    snapSetting: str
+    pixelsPerBeat: Optional[float] = None
+    sampleRate: Optional[int] = None
+    ppqn: Optional[int] = None
+    audio_data: Optional[str] = None
+    curve_data: Optional[Dict[str, Any]] = None
+    segment_data: Optional[List[Dict[str, Any]]] = None
+    line_data: Optional[Dict[str, LineLayerConfigData]] = None
+    use_backend_audio: Optional[bool] = None
+    waveform_data: Optional[List[Dict[str, float]]] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "PianoRollDataClass":
+        notes = [
+            n if isinstance(n, NoteData) else NoteData.from_dict(n)
+            for n in data.get("notes", [])
+        ]
+        ts_data = data.get("timeSignature", {})
+        time_sig = (
+            ts_data
+            if isinstance(ts_data, TimeSignatureData)
+            else TimeSignatureData.from_dict(ts_data)
+        )
+        line_data_src = data.get("line_data")
+        if line_data_src is not None:
+            line_data = {
+                k: v if isinstance(v, LineLayerConfigData) else LineLayerConfigData.from_dict(v)
+                for k, v in line_data_src.items()
+            }
+        else:
+            line_data = None
+        return cls(
+            notes=notes,
+            tempo=data.get("tempo", 120),
+            timeSignature=time_sig,
+            editMode=data.get("editMode", "select"),
+            snapSetting=data.get("snapSetting", "1/4"),
+            pixelsPerBeat=data.get("pixelsPerBeat"),
+            sampleRate=data.get("sampleRate"),
+            ppqn=data.get("ppqn"),
+            audio_data=data.get("audio_data"),
+            curve_data=data.get("curve_data"),
+            segment_data=data.get("segment_data"),
+            line_data=line_data,
+            use_backend_audio=data.get("use_backend_audio"),
+            waveform_data=data.get("waveform_data"),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+def validate_note(note: Union[Dict[str, Any], NoteData]) -> List[str]:
     """
     노트 데이터 유효성 검사
 
@@ -104,6 +249,9 @@ def validate_note(note: Dict[str, Any]) -> List[str]:
     Returns:
         오류 메시지 리스트 (빈 리스트면 유효)
     """
+    if dataclasses.is_dataclass(note):
+        note = dataclasses.asdict(note)
+
     errors = []
 
     # 필수 필드 검사
@@ -135,7 +283,7 @@ def validate_note(note: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def validate_piano_roll_data(data: Dict[str, Any]) -> List[str]:
+def validate_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) -> List[str]:
     """
     피아노롤 데이터 전체 유효성 검사
 
@@ -145,6 +293,9 @@ def validate_piano_roll_data(data: Dict[str, Any]) -> List[str]:
     Returns:
         오류 메시지 리스트 (빈 리스트면 유효)
     """
+    if dataclasses.is_dataclass(data):
+        data = dataclasses.asdict(data)
+
     errors = []
 
     if not isinstance(data, dict):
@@ -174,6 +325,8 @@ def validate_piano_roll_data(data: Dict[str, Any]) -> List[str]:
     # timeSignature 검사
     if "timeSignature" in data:
         ts = data["timeSignature"]
+        if dataclasses.is_dataclass(ts):
+            ts = dataclasses.asdict(ts)
         if not isinstance(ts, dict):
             errors.append("'timeSignature' must be a dictionary")
         else:
@@ -194,8 +347,8 @@ def validate_piano_roll_data(data: Dict[str, Any]) -> List[str]:
 
 
 def validate_and_warn(
-    data: Dict[str, Any], context: str = "Piano roll data"
-) -> Dict[str, Any]:
+    data: Union[Dict[str, Any], PianoRollDataClass], context: str = "Piano roll data"
+) -> Union[Dict[str, Any], PianoRollDataClass]:
     """
     데이터 유효성 검사하고 경고 출력
 
@@ -218,21 +371,21 @@ def validate_and_warn(
     return data
 
 
-def create_default_piano_roll_data() -> PianoRollData:
+def create_default_piano_roll_data() -> PianoRollDataClass:
     """기본 피아노롤 데이터 생성"""
-    return {
-        "notes": [],
-        "tempo": 120,
-        "timeSignature": {"numerator": 4, "denominator": 4},
-        "editMode": "select",
-        "snapSetting": "1/4",
-        "pixelsPerBeat": 80,
-        "sampleRate": 44100,
-        "ppqn": 480,
-    }
+    return PianoRollDataClass(
+        notes=[],
+        tempo=120,
+        timeSignature=TimeSignatureData(4, 4),
+        editMode="select",
+        snapSetting="1/4",
+        pixelsPerBeat=80,
+        sampleRate=44100,
+        ppqn=480,
+    )
 
 
-def ensure_note_ids(data: Dict[str, Any]) -> Dict[str, Any]:
+def ensure_note_ids(data: Union[Dict[str, Any], PianoRollDataClass]) -> Union[Dict[str, Any], PianoRollDataClass]:
     """
     노트들에 ID가 없으면 자동 생성
 
@@ -242,26 +395,35 @@ def ensure_note_ids(data: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         ID가 보장된 데이터
     """
-    if "notes" not in data:
+    notes = None
+    if dataclasses.is_dataclass(data):
+        notes = data.notes
+    else:
+        notes = data.get("notes") if isinstance(data, dict) else None
+
+    if notes is None:
         return data
 
     from .timing_utils import generate_note_id
 
-    modified = False
-    for note in data["notes"]:
-        if "id" not in note or not note["id"]:
-            note["id"] = generate_note_id()
-            modified = True
+    missing_count = 0
+    for note in notes:
+        if dataclasses.is_dataclass(note):
+            if not getattr(note, "id", None):
+                note.id = generate_note_id()
+                missing_count += 1
+        else:
+            if "id" not in note or not note["id"]:
+                note["id"] = generate_note_id()
+                missing_count += 1
 
-    if modified:
-        print(
-            f"🔧 Auto-generated IDs for {sum(1 for note in data['notes'] if not note.get('id'))} notes"
-        )
+    if missing_count:
+        print(f"🔧 Auto-generated IDs for {missing_count} notes")
 
     return data
 
 
-def clean_piano_roll_data(data: Dict[str, Any]) -> Dict[str, Any]:
+def clean_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) -> PianoRollDataClass:
     """
     피아노롤 데이터 정리 (None 값 제거, 기본값 설정 등)
 
@@ -273,6 +435,9 @@ def clean_piano_roll_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     if not data:
         return create_default_piano_roll_data()
+
+    if dataclasses.is_dataclass(data):
+        data = dataclasses.asdict(data)
 
     # 기본값 설정
     cleaned = {
@@ -300,4 +465,4 @@ def clean_piano_roll_data(data: Dict[str, Any]) -> Dict[str, Any]:
         if field in data and data[field] is not None:
             cleaned[field] = data[field]
 
-    return cleaned
+    return PianoRollDataClass.from_dict(cleaned)
