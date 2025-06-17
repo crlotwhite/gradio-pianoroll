@@ -5,6 +5,7 @@ import base64
 import wave
 import tempfile
 import os
+import dataclasses
 from gradio_pianoroll import PianoRoll
 
 # Additional imports for F0 analysis
@@ -59,6 +60,27 @@ def initialize_phoneme_map():
 
 # Initialize phoneme mapping at program start
 initialize_phoneme_map()
+
+# Utility functions for handling both dict and dataclass notes
+def get_note_field(note, field, default=None):
+    """Get field value from note (supports both dict and dataclass)"""
+    if dataclasses.is_dataclass(note):
+        # For dataclass, use hasattr to check if field exists, then getattr
+        if hasattr(note, field):
+            value = getattr(note, field)
+            # Return default if value is None and default is provided
+            return value if value is not None else default
+        else:
+            return default
+    else:
+        return note.get(field, default)
+
+def set_note_field(note, field, value):
+    """Set field value in note (supports both dict and dataclass)"""
+    if dataclasses.is_dataclass(note):
+        setattr(note, field, value)
+    else:
+        note[field] = value
 
 def get_phoneme_mapping_for_dataframe():
     """Return phoneme mapping list for DataFrame"""
@@ -427,7 +449,7 @@ def clear_all_phonemes(piano_roll):
     notes = piano_roll['notes'].copy()
 
     for note in notes:
-        note['phoneme'] = None
+        set_note_field(note, 'phoneme', None)
 
     updated_piano_roll = piano_roll.copy()
     updated_piano_roll['notes'] = notes
@@ -447,10 +469,10 @@ def auto_generate_all_phonemes(piano_roll):
 
     updated_count = 0
     for note in notes:
-        lyric = note.get('lyric')
+        lyric = get_note_field(note, 'lyric')
         if lyric:
             phoneme = mock_g2p(lyric)
-            note['phoneme'] = phoneme
+            set_note_field(note, 'phoneme', phoneme)
             updated_count += 1
             print(f"Auto-generated: '{lyric}' -> '{phoneme}'")
 
@@ -1515,11 +1537,17 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         changes_made = 0
 
         for note in notes:
-            note_copy = note.copy()
+            if dataclasses.is_dataclass(note):
+                # For dataclass notes, copy by creating new instance
+                import copy
+                note_copy = copy.copy(note)
+            else:
+                # For dict notes, use dict copy
+                note_copy = note.copy()
 
             # Process if lyric exists
-            lyric = note.get('lyric', '').strip()
-            current_phoneme = note.get('phoneme', '').strip()
+            lyric = (get_note_field(note, 'lyric', '') or '').strip()
+            current_phoneme = (get_note_field(note, 'phoneme', '') or '').strip()
 
             if lyric:
                 # Run G2P to create new phoneme
@@ -1527,13 +1555,13 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
 
                 # Update if different from existing phoneme or missing
                 if not current_phoneme or current_phoneme != new_phoneme:
-                    note_copy['phoneme'] = new_phoneme
+                    set_note_field(note_copy, 'phoneme', new_phoneme)
                     changes_made += 1
                     print(f"   - G2P applied: '{lyric}' -> '{new_phoneme}'")
             else:
                 # Remove phoneme if lyric is missing
                 if current_phoneme:
-                    note_copy['phoneme'] = None
+                    set_note_field(note_copy, 'phoneme', None)
                     changes_made += 1
                     print(f"   - Phoneme removed (no lyric)")
 
