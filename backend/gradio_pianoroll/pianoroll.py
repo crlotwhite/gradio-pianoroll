@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Dict, Union
@@ -173,6 +174,8 @@ class PianoRoll(Component):
 
             # ID 보장 및 타이밍 데이터 생성
             self.value = ensure_note_ids(validated_value)
+            if dataclasses.is_dataclass(self.value):
+                self.value = dataclasses.asdict(self.value)
 
             # Ensure all notes have timing values, generate them if missing
             if "notes" in self.value and self.value["notes"]:
@@ -242,6 +245,8 @@ class PianoRoll(Component):
             cleaned_payload, "Frontend piano roll data"
         )
 
+        if dataclasses.is_dataclass(validated_payload):
+            return dataclasses.asdict(validated_payload)
         return validated_payload
 
     def postprocess(self, value):
@@ -253,6 +258,9 @@ class PianoRoll(Component):
         Returns:
             The postprocessed data (with all required fields).
         """
+        if dataclasses.is_dataclass(value):
+            value = dataclasses.asdict(value)
+
         # Ensure all notes have IDs and all timing values when sending to frontend
         if value and "notes" in value and value["notes"]:
             pixels_per_beat = value.get("pixelsPerBeat", 80)

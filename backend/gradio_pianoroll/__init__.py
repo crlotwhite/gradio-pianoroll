@@ -4,6 +4,13 @@ import logging
 import os
 
 from .pianoroll import PianoRoll
+from .data_models import (
+    TimeSignatureData,
+    NoteData,
+    LineDataPointData,
+    LineLayerConfigData,
+    PianoRollDataClass,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +24,14 @@ level_str = os.environ.get("GRADIO_PIANOROLL_LOG_LEVEL", "WARNING").upper()
 logger.setLevel(getattr(logging, level_str, logging.WARNING))
 
 # Core component is always available
-__all__ = ["PianoRoll"]
+__all__ = [
+    "PianoRoll",
+    "TimeSignatureData",
+    "NoteData",
+    "LineDataPointData",
+    "LineLayerConfigData",
+    "PianoRollDataClass",
+]
 
 # Optional utilities - users can import explicitly if needed
 # Example usage:
