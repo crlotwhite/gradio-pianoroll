@@ -397,4 +397,17 @@ def on_change(data):
 piano_roll.change(on_change, piano_roll, piano_roll)
 ```
 
+### 초기화 유틸리티
+
+`gradio_pianoroll.utils.research` 모듈에는 노트 목록이나 MIDI 번호 배열을
+간단히 피아노롤 데이터로 변환하는 `from_notes()`와 `from_midi_numbers()` 함수가
+제공됩니다.
+
+```python
+from gradio_pianoroll.utils import research
+
+data = research.from_midi_numbers([60, 62, 64])
+piano_roll = PianoRoll(value=data)
+```
+
 이 API 참조를 통해 Gradio PianoRoll의 모든 기능을 완전히 활용할 수 있습니다.

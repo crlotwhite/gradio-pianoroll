@@ -1,8 +1,7 @@
 import gradio as gr
+from common_utils import convert_basic
 from gradio_pianoroll import PianoRoll
-from common_utils import (
-    convert_basic,
-)
+from gradio_pianoroll.utils import research
 
 # Gradio interface
 with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
@@ -12,35 +11,16 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
 
     with gr.Row():
         with gr.Column():
-            # Set initial value
-            initial_value_basic = {
-                "notes": [
-                    {
-                        "start": 80,
-                        "duration": 80,
-                        "pitch": 60,
-                        "velocity": 100,
-                        "lyric": "안녕"
-                    },
-                    {
-                        "start": 160,
-                        "duration": 160,
-                        "pitch": 64,
-                        "velocity": 90,
-                        "lyric": "하세요"
-                    }
-                ],
-                "tempo": 120,
-                "timeSignature": {"numerator": 4, "denominator": 4},
-                "editMode": "select",
-                "snapSetting": "1/4"
-            }
+            # Set initial value using research utilities
+            notes = [(60, 0.5, 0.5), (64, 1.0, 1.0)]
+            lyrics = ["안녕", "하세요"]
+            initial_value_basic = research.from_notes(notes, tempo=120, lyrics=lyrics)
             piano_roll_basic = PianoRoll(
                 height=600,
                 width=1000,
                 value=initial_value_basic,
                 elem_id="piano_roll_basic",  # Unique ID
-                use_backend_audio=False  # Use frontend audio engine
+                use_backend_audio=False,  # Use frontend audio engine
             )
 
     with gr.Row():
@@ -56,7 +36,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         fn=convert_basic,
         inputs=piano_roll_basic,
         outputs=output_json_basic,
-        show_progress=True
+        show_progress=True,
     )
 
 if __name__ == "__main__":

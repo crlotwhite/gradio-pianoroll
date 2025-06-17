@@ -1,9 +1,7 @@
 import gradio as gr
+from common_utils import clear_and_regenerate_waveform, synthesize_and_play
 from gradio_pianoroll import PianoRoll
-from common_utils import (
-    synthesize_and_play,
-    clear_and_regenerate_waveform,
-)
+from gradio_pianoroll.utils import research
 
 # Gradio interface
 with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
@@ -11,55 +9,31 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
     gr.Markdown("Test PianoRoll component and synthesizer functionality!")
     with gr.TabItem("🎵 Synthesizer Demo"):
         gr.Markdown("## 🎹 PianoRoll with Synthesizer Demo")
-        gr.Markdown("Edit notes and click '🎶 Synthesize Audio' to generate audio and play it!")
+        gr.Markdown(
+            "Edit notes and click '🎶 Synthesize Audio' to generate audio and play it!"
+        )
 
         with gr.Row():
             with gr.Column(scale=3):
-                # Synthesizer initial value
-                initial_value_synth = {
-                    "notes": [
-                        {
-                            "start": 0,
-                            "duration": 160,
-                            "pitch": 60,  # C4
-                            "velocity": 100,
-                            "lyric": "도"
-                        },
-                        {
-                            "start": 160,
-                            "duration": 160,
-                            "pitch": 62,  # D4
-                            "velocity": 100,
-                            "lyric": "레"
-                        },
-                        {
-                            "start": 320,
-                            "duration": 160,
-                            "pitch": 64,  # E4
-                            "velocity": 100,
-                            "lyric": "미"
-                        },
-                        {
-                            "start": 480,
-                            "duration": 160,
-                            "pitch": 65,  # F4
-                            "velocity": 100,
-                            "lyric": "파"
-                        }
-                    ],
-                    "tempo": 120,
-                    "timeSignature": {"numerator": 4, "denominator": 4},
-                    "editMode": "select",
-                    "snapSetting": "1/4",
-                    "curve_data": {},  # Initial empty curve data
-                    "use_backend_audio": False  # Initially disable backend audio
-                }
+                # Synthesizer initial value using research utilities
+                notes = [
+                    (60, 0.0, 0.5),
+                    (62, 0.5, 0.5),
+                    (64, 1.0, 0.5),
+                    (65, 1.5, 0.5),
+                ]
+                lyrics = ["도", "레", "미", "파"]
+                initial_value_synth = research.from_notes(
+                    notes, tempo=120, lyrics=lyrics
+                )
+                initial_value_synth["curve_data"] = {}
+                initial_value_synth["use_backend_audio"] = False
                 piano_roll_synth = PianoRoll(
                     height=600,
                     width=1000,
                     value=initial_value_synth,
                     elem_id="piano_roll_synth",  # Unique ID
-                    use_backend_audio=False  # Initially use frontend engine, switch to backend for synthesize
+                    use_backend_audio=False,  # Initially use frontend engine, switch to backend for synthesize
                 )
 
             with gr.Column(scale=1):
@@ -69,28 +43,28 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                     maximum=1.0,
                     value=0.01,
                     step=0.001,
-                    label="Attack (seconds)"
+                    label="Attack (seconds)",
                 )
                 decay_slider = gr.Slider(
                     minimum=0.001,
                     maximum=1.0,
                     value=0.1,
                     step=0.001,
-                    label="Decay (seconds)"
+                    label="Decay (seconds)",
                 )
                 sustain_slider = gr.Slider(
                     minimum=0.0,
                     maximum=1.0,
                     value=0.7,
                     step=0.01,
-                    label="Sustain (level)"
+                    label="Sustain (level)",
                 )
                 release_slider = gr.Slider(
                     minimum=0.001,
                     maximum=2.0,
                     value=0.3,
                     step=0.001,
-                    label="Release (seconds)"
+                    label="Release (seconds)",
                 )
 
                 gr.Markdown("### 🎵 Waveform Settings")
@@ -102,21 +76,25 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         ("Sawtooth Wave (Sawtooth)", "sawtooth"),
                         ("Square Wave (Square)", "square"),
                         ("Triangle Wave (Triangle)", "triangle"),
-                        ("Sine Wave (Sine)", "sine")
+                        ("Sine Wave (Sine)", "sine"),
                     ],
                     value="complex",
                     label="Waveform Type",
-                    info="Each note uses different waveforms cyclically"
+                    info="Each note uses different waveforms cyclically",
                 )
 
         with gr.Row():
             with gr.Column():
-                btn_synthesize = gr.Button("🎶 Synthesize Audio", variant="primary", size="lg")
+                btn_synthesize = gr.Button(
+                    "🎶 Synthesize Audio", variant="primary", size="lg"
+                )
                 status_text = gr.Textbox(label="Status", interactive=False)
 
         with gr.Row():
             with gr.Column():
-                btn_regenerate = gr.Button("🔄 Regenerate Waveform", variant="secondary", size="lg")
+                btn_regenerate = gr.Button(
+                    "🔄 Regenerate Waveform", variant="secondary", size="lg"
+                )
 
         # Add gradio Audio component for comparison
         with gr.Row():
@@ -125,7 +103,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 gradio_audio_output = gr.Audio(
                     label="Backend-generated audio (comparison)",
                     type="filepath",
-                    interactive=False
+                    interactive=False,
                 )
 
         with gr.Row():
@@ -141,10 +119,10 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 decay_slider,
                 sustain_slider,
                 release_slider,
-                wave_type_dropdown
+                wave_type_dropdown,
             ],
             outputs=[piano_roll_synth, status_text, gradio_audio_output],
-            show_progress=True
+            show_progress=True,
         )
 
         # Waveform regeneration button event
@@ -156,10 +134,10 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 decay_slider,
                 sustain_slider,
                 release_slider,
-                wave_type_dropdown
+                wave_type_dropdown,
             ],
             outputs=[piano_roll_synth, status_text, gradio_audio_output],
-            show_progress=True
+            show_progress=True,
         )
 
         # Event listener settings
@@ -187,7 +165,9 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         piano_roll_synth.input(handle_synth_input, outputs=status_text)
 
         # Update JSON output when note changes
-        piano_roll_synth.change(lambda x: x, inputs=piano_roll_synth, outputs=output_json_synth)
+        piano_roll_synth.change(
+            lambda x: x, inputs=piano_roll_synth, outputs=output_json_synth
+        )
 
 if __name__ == "__main__":
     demo.launch()

@@ -9,6 +9,7 @@
 ```python
 import gradio as gr
 from gradio_pianoroll import PianoRoll
+from gradio_pianoroll.utils import research
 
 def save_midi_data(piano_roll_data):
     """MIDI 데이터를 파일로 저장"""
@@ -22,10 +23,13 @@ def save_midi_data(piano_roll_data):
 
 with gr.Blocks(title="MIDI 작곡 도구") as demo:
     with gr.Row():
+        example_notes = [(60, 0.0, 0.5), (64, 0.5, 0.5), (67, 1.0, 0.5)]
+        initial_value = research.from_notes(example_notes, tempo=120)
         piano_roll = PianoRoll(
             label="🎼 MIDI 에디터",
             height=500,
-            width=1200
+            width=1200,
+            value=initial_value
         )
     
     with gr.Row():
