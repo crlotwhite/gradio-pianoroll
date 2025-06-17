@@ -5,8 +5,12 @@ Piano Roll 데이터 모델과 유효성 검사 함수들
 """
 
 from __future__ import annotations
-from typing import TypedDict, Optional, List, Dict, Any, Union
+
+import logging
 import warnings
+from typing import Any, Dict, List, Optional, TypedDict, Union
+
+logger = logging.getLogger(__name__)
 
 
 class TimeSignature(TypedDict):
@@ -254,8 +258,9 @@ def ensure_note_ids(data: Dict[str, Any]) -> Dict[str, Any]:
             modified = True
 
     if modified:
-        print(
-            f"🔧 Auto-generated IDs for {sum(1 for note in data['notes'] if not note.get('id'))} notes"
+        logger.debug(
+            "🔧 Auto-generated IDs for %d notes",
+            sum(1 for note in data["notes"] if not note.get("id")),
         )
 
     return data

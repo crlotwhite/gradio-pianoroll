@@ -1,4 +1,20 @@
+from __future__ import annotations
+
+import logging
+import os
+
 from .pianoroll import PianoRoll
+
+logger = logging.getLogger(__name__)
+
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("[%(levelname)s] %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+level_str = os.environ.get("GRADIO_PIANOROLL_LOG_LEVEL", "WARNING").upper()
+logger.setLevel(getattr(logging, level_str, logging.WARNING))
 
 # Core component is always available
 __all__ = ["PianoRoll"]
