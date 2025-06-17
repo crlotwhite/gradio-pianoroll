@@ -1542,8 +1542,8 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
             note_copy = note.copy()
 
             # Process if lyric exists
-            lyric = note.get('lyric', '').strip()
-            current_phoneme = note.get('phoneme', '').strip()
+            lyric = (note.get('lyric') or '').strip()
+            current_phoneme = (note.get('phoneme') or '').strip()
 
             if lyric:
                 # Run G2P to create new phoneme
