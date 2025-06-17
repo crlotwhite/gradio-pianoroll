@@ -5,7 +5,13 @@ import base64
 import wave
 import tempfile
 import os
-from gradio_pianoroll import PianoRoll
+import dataclasses
+from gradio_pianoroll import (
+    PianoRoll,
+    NoteData,
+    TimeSignatureData,
+    PianoRollDataClass,
+)
 
 # Additional imports for F0 analysis
 try:
@@ -19,6 +25,11 @@ except ImportError:
 # Synthesizer settings
 SAMPLE_RATE = 44100
 MAX_DURATION = 10.0  # Maximum 10 seconds
+
+
+def asdict_if_dataclass(obj):
+    """Convert dataclass instance to dict if necessary."""
+    return dataclasses.asdict(obj) if dataclasses.is_dataclass(obj) else obj
 
 # User-defined phoneme mapping (global state)
 user_phoneme_map = {}
@@ -192,6 +203,8 @@ def generate_complex_wave(frequency, duration, sample_rate, wave_type='complex')
 
 def synthesize_audio(piano_roll_data, attack=0.01, decay=0.1, sustain=0.7, release=0.3, wave_type='complex'):
     """Synthesize audio from PianoRoll data"""
+    piano_roll_data = asdict_if_dataclass(piano_roll_data)
+
     if not piano_roll_data or 'notes' not in piano_roll_data or not piano_roll_data['notes']:
         return None
 
@@ -421,6 +434,8 @@ def clear_all_phonemes(piano_roll):
     """
     print("=== Clear All Phonemes ===")
 
+    piano_roll = asdict_if_dataclass(piano_roll)
+
     if not piano_roll or 'notes' not in piano_roll:
         return piano_roll, "Piano roll data is missing."
 
@@ -439,6 +454,8 @@ def auto_generate_all_phonemes(piano_roll):
     Automatically generate phoneme for all lyrics
     """
     print("=== Auto Generate All Phonemes ===")
+
+    piano_roll = asdict_if_dataclass(piano_roll)
 
     if not piano_roll or 'notes' not in piano_roll:
         return piano_roll, "Piano roll data is missing."
@@ -1008,6 +1025,8 @@ def synthesize_and_analyze_features(piano_roll, attack, decay, sustain, release,
     print(f"Wave Type: {wave_type}")
     print(f"Include F0: {include_f0}, Include Loudness: {include_loudness}, Include Voicing: {include_voicing}")
 
+    piano_roll = asdict_if_dataclass(piano_roll)
+
     # First synthesize audio
     audio_data = synthesize_audio(piano_roll, attack, decay, sustain, release, wave_type)
 
@@ -1105,6 +1124,8 @@ def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, inc
     print(f"Audio file: {audio_file}")
     print(f"Include F0: {include_f0}, Include Loudness: {include_loudness}, Include Voicing: {include_voicing}")
 
+    piano_roll = asdict_if_dataclass(piano_roll)
+
     if not audio_file:
         return piano_roll, "Please upload an audio file.", None
 
@@ -1186,51 +1207,51 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
 
     with gr.Row():
         with gr.Column(scale=3):
-            # Audio feature analysis initial value
-            initial_value = {
-                "notes": [
-                    {
-                        "id": "note_0",
-                        "start": 0,
-                        "duration": 160,
-                        "pitch": 60,  # C4
-                        "velocity": 100,
-                        "lyric": "안녕",
-                        "phoneme": "aa n ny eo ng"  # Pre-set phoneme
-                    },
-                    {
-                        "id": "note_1",
-                        "start": 160,
-                        "duration": 160,
-                        "pitch": 62,  # D4
-                        "velocity": 100,
-                        "lyric": "하세요",
-                        "phoneme": "h a s e y o"
-                    },
-                    {
-                        "id": "note_2",
-                        "start": 320,
-                        "duration": 160,
-                        "pitch": 64,  # E4
-                        "velocity": 100,
-                        "lyric": "음악",
-                        "phoneme": "eu m a k"
-                    },
-                    {
-                        "id": "note_3",
-                        "start": 480,
-                        "duration": 160,
-                        "pitch": 65,  # F4
-                        "velocity": 100,
-                        "lyric": "피아노"
-                    }
+            # Audio feature analysis initial value using dataclasses
+            initial_value = PianoRollDataClass(
+                notes=[
+                    NoteData(
+                        id="note_0",
+                        start=0,
+                        duration=160,
+                        pitch=60,
+                        velocity=100,
+                        lyric="안녕",
+                        phoneme="aa n ny eo ng",
+                    ),
+                    NoteData(
+                        id="note_1",
+                        start=160,
+                        duration=160,
+                        pitch=62,
+                        velocity=100,
+                        lyric="하세요",
+                        phoneme="h a s e y o",
+                    ),
+                    NoteData(
+                        id="note_2",
+                        start=320,
+                        duration=160,
+                        pitch=64,
+                        velocity=100,
+                        lyric="음악",
+                        phoneme="eu m a k",
+                    ),
+                    NoteData(
+                        id="note_3",
+                        start=480,
+                        duration=160,
+                        pitch=65,
+                        velocity=100,
+                        lyric="피아노",
+                    ),
                 ],
-                "tempo": 120,
-                "timeSignature": {"numerator": 4, "denominator": 4},
-                "editMode": "select",
-                "snapSetting": "1/4",
-                "pixelsPerBeat": 80
-            }
+                tempo=120,
+                timeSignature=TimeSignatureData(4, 4),
+                editMode="select",
+                snapSetting="1/4",
+                pixelsPerBeat=80,
+            )
 
             piano_roll = PianoRoll(
                 height=800,
@@ -1499,6 +1520,8 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         print("🗣️ Phoneme tab - Input event triggered")
         print(f"   - Piano roll data: {type(piano_roll_data)}")
 
+        piano_roll_data = asdict_if_dataclass(piano_roll_data)
+
         if not piano_roll_data or 'notes' not in piano_roll_data:
             return piano_roll_data, "Piano roll data is missing."
 
@@ -1506,6 +1529,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
 
     def auto_generate_missing_phonemes(piano_roll_data):
         """Automatically generate phoneme for notes with lyrics but no phoneme"""
+        piano_roll_data = asdict_if_dataclass(piano_roll_data)
         if not piano_roll_data or 'notes' not in piano_roll_data:
             return piano_roll_data, "Piano roll data is missing."
 

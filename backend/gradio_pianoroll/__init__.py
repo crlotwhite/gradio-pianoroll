@@ -1,7 +1,21 @@
 from .pianoroll import PianoRoll
+from .data_models import (
+    TimeSignatureData,
+    NoteData,
+    LineDataPointData,
+    LineLayerConfigData,
+    PianoRollDataClass,
+)
 
 # Core component is always available
-__all__ = ["PianoRoll"]
+__all__ = [
+    "PianoRoll",
+    "TimeSignatureData",
+    "NoteData",
+    "LineDataPointData",
+    "LineLayerConfigData",
+    "PianoRollDataClass",
+]
 
 # Optional utilities - users can import explicitly if needed
 # Example usage:

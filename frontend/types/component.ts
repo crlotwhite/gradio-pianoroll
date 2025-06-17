@@ -1,4 +1,5 @@
 // Svelte component props types
+import type { PianoRollData, Note, LineLayerConfig, TimeSignature } from './piano_roll_data';
 
 export interface PianoRollProps {
   width?: number;
@@ -7,35 +8,16 @@ export interface PianoRollProps {
   timelineHeight?: number;
   elem_id?: string;
   audio_data?: string | null;
-  curve_data?: object | null;
+  curve_data?: Record<string, any> | null;
   segment_data?: Array<any> | null;
-  line_data?: object | null;
+  line_data?: Record<string, LineLayerConfig> | null;
   use_backend_audio?: boolean;
-  notes?: Array<{
-    id: string;
-    start: number;
-    duration: number;
-    startFlicks?: number;
-    durationFlicks?: number;
-    startSeconds?: number;
-    durationSeconds?: number;
-    endSeconds?: number;
-    startBeats?: number;
-    durationBeats?: number;
-    startTicks?: number;
-    durationTicks?: number;
-    startSample?: number;
-    durationSamples?: number;
-    pitch: number;
-    velocity: number;
-    lyric?: string;
-    phoneme?: string;
-  }>;
+  notes?: Note[];
 }
 
 export interface ToolbarProps {
   tempo?: number;
-  timeSignature?: { numerator: number; denominator: number };
+  timeSignature?: TimeSignature;
   editMode?: string;
   snapSetting?: string;
   isPlaying?: boolean;
@@ -50,15 +32,7 @@ export interface LayerControlPanelProps {
 export interface DebugComponentProps {
   currentFlicks?: number;
   tempo?: number;
-  notes?: Array<{
-    id: string;
-    start: number;
-    duration: number;
-    pitch: number;
-    velocity: number;
-    lyric?: string;
-    phoneme?: string;
-  }>;
+  notes?: Note[];
   isPlaying?: boolean;
   isRendering?: boolean;
 }

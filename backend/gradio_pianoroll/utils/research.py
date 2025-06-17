@@ -13,7 +13,11 @@ if TYPE_CHECKING:
     import gradio as gr
 
 from ..timing_utils import generate_note_id
-from ..data_models import PianoRollData, Note, clean_piano_roll_data
+from ..data_models import (
+    PianoRollDataClass,
+    NoteData,
+    clean_piano_roll_data,
+)
 
 # =============================================================================
 # 1. 빠른 생성 함수들 (Quick Creation)
@@ -24,7 +28,7 @@ def from_notes(
     notes: List[Tuple[int, float, float]],
     tempo: int = 120,
     lyrics: Optional[List[str]] = None,
-) -> PianoRollData:
+) -> PianoRollDataClass:
     """
     간단한 노트 리스트에서 피아노롤 데이터 생성
 
@@ -62,7 +66,7 @@ def from_notes(
 
         piano_roll_notes.append(note_data)
 
-    result: PianoRollData = {
+    result: dict = {
         "notes": piano_roll_notes,
         "tempo": tempo,
         "timeSignature": {"numerator": 4, "denominator": 4},
@@ -79,7 +83,7 @@ def from_midi_numbers(
     durations: Optional[List[float]] = None,
     start_times: Optional[List[float]] = None,
     tempo: int = 120,
-) -> PianoRollData:
+) -> PianoRollDataClass:
     """
     MIDI 노트 번호 리스트에서 피아노롤 생성
 
@@ -108,7 +112,7 @@ def from_frequencies(
     durations: Optional[List[float]] = None,
     start_times: Optional[List[float]] = None,
     tempo: int = 120,
-) -> PianoRollData:
+) -> PianoRollDataClass:
     """
     주파수(Hz) 리스트에서 피아노롤 생성
 
@@ -138,7 +142,7 @@ def from_tts_output(
     alignment: List[Tuple[str, float, float]],
     f0_data: Optional[List[float]] = None,
     tempo: int = 120,
-) -> Dict:
+) -> PianoRollDataClass:
     """
     TTS 모델의 정렬 결과를 피아노롤로 변환
 
@@ -198,10 +202,10 @@ def from_tts_output(
             f0_data, alignment[-1][2], tempo, pixels_per_beat
         )
 
-    return result
+    return clean_piano_roll_data(result)
 
 
-def from_midi_generation(generated_sequence: List[Dict], tempo: int = 120) -> Dict:
+def from_midi_generation(generated_sequence: List[Dict], tempo: int = 120) -> PianoRollDataClass:
     """
     MIDI 생성 모델 출력을 피아노롤로 변환
 
@@ -236,7 +240,7 @@ def from_midi_generation(generated_sequence: List[Dict], tempo: int = 120) -> Di
 
         notes.append(note)
 
-    return {
+    result = {
         "notes": notes,
         "tempo": tempo,
         "timeSignature": {"numerator": 4, "denominator": 4},
@@ -244,6 +248,8 @@ def from_midi_generation(generated_sequence: List[Dict], tempo: int = 120) -> Di
         "snapSetting": "1/4",
         "pixelsPerBeat": pixels_per_beat,
     }
+
+    return clean_piano_roll_data(result)
 
 
 def _create_f0_line_data(
@@ -391,7 +397,7 @@ def analyze_notes(piano_roll_data: Dict) -> Dict:
 
 def auto_analyze(
     model_output_data: Union[List, Dict], output_type: str = "auto"
-) -> Dict:
+) -> PianoRollDataClass:
     """
     모델 출력을 자동으로 분석해서 피아노롤 형식으로 변환
 
