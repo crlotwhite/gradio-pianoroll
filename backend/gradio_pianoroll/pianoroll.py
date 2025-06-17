@@ -1,29 +1,31 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Dict, Union
+
+logger = logging.getLogger(__name__)
 
 from gradio.components.base import Component
 from gradio.events import Events
 from gradio.i18n import I18nData
 
-from .timing_utils import (
-    generate_note_id,
-    pixels_to_flicks,
-    pixels_to_seconds,
-    pixels_to_beats,
-    pixels_to_ticks,
-    pixels_to_samples,
-    calculate_all_timing_data,
-    create_note_with_timing,
-)
-
 from .data_models import (
     PianoRollData,
-    validate_and_warn,
     clean_piano_roll_data,
     ensure_note_ids,
+    validate_and_warn,
+)
+from .timing_utils import (
+    calculate_all_timing_data,
+    create_note_with_timing,
+    generate_note_id,
+    pixels_to_beats,
+    pixels_to_flicks,
+    pixels_to_samples,
+    pixels_to_seconds,
+    pixels_to_ticks,
 )
 
 if TYPE_CHECKING:
@@ -329,11 +331,15 @@ class PianoRoll(Component):
                     value["use_backend_audio"] = False
 
             # Add debug logging
-            print(f"🔊 [postprocess] Backend audio data processed:")
-            print(f"   - audio_data present: {bool(value.get('audio_data'))}")
-            print(f"   - use_backend_audio: {value.get('use_backend_audio', False)}")
-            print(f"   - curve_data present: {bool(value.get('curve_data'))}")
-            print(f"   - segment_data present: {bool(value.get('segment_data'))}")
+            logger.debug("🔊 [postprocess] Backend audio data processed:")
+            logger.debug("   - audio_data present: %s", bool(value.get("audio_data")))
+            logger.debug(
+                "   - use_backend_audio: %s", value.get("use_backend_audio", False)
+            )
+            logger.debug("   - curve_data present: %s", bool(value.get("curve_data")))
+            logger.debug(
+                "   - segment_data present: %s", bool(value.get("segment_data"))
+            )
 
         return value
 
