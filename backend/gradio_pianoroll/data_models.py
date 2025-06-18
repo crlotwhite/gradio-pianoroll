@@ -422,10 +422,7 @@ def ensure_note_ids(data: Union[Dict[str, Any], PianoRollDataClass]) -> Union[Di
                 missing_count += 1
 
     if missing_count:
-        logger.debug(
-            "🔧 Auto-generated IDs for %d notes",
-            sum(1 for note in data["notes"] if not note.get("id")),
-        )
+        logger.debug("🔧 Auto-generated IDs for %d notes", missing_count)
 
     return data
 

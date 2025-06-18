@@ -1,16 +1,19 @@
+import base64
+import dataclasses
+import io
+import os
+import tempfile
+import wave
+
 import gradio as gr
 import numpy as np
-import io
-import base64
-import wave
-import tempfile
-import os
-import dataclasses
-from gradio_pianoroll import PianoRoll
+from gradio_pianoroll import PianoRoll, PianoRollData
+
 
 # Additional imports for F0 analysis
 try:
     import librosa
+
     LIBROSA_AVAILABLE = True
     print("✅ librosa available")
 except ImportError:
@@ -24,39 +27,50 @@ MAX_DURATION = 10.0  # Maximum 10 seconds
 # User-defined phoneme mapping (global state)
 user_phoneme_map = {}
 
+
+def pr_to_dict(data):
+    """Convert PianoRollData dataclass to dict if needed."""
+    if isinstance(data, PianoRollData):
+        return data.to_dict()
+    if dataclasses.is_dataclass(data):
+        return dataclasses.asdict(data)
+    return data
+
+
 def initialize_phoneme_map():
     """Initialize with default Korean phoneme mapping"""
     global user_phoneme_map
     user_phoneme_map = {
-        '가': 'g a',
-        '나': 'n a',
-        '다': 'd a',
-        '라': 'l aa',
-        '마': 'm a',
-        '바': 'b a',
-        '사': 's a',
-        '아': 'aa',
-        '자': 'j a',
-        '차': 'ch a',
-        '카': 'k a',
-        '타': 't a',
-        '파': 'p a',
-        '하': 'h a',
-        '도': 'd o',
-        '레': 'l e',
-        '미': 'm i',
-        '파': 'p aa',
-        '솔': 's o l',
-        '라': 'l aa',
-        '시': 's i',
-        '안녕': 'aa n ny eo ng',
-        '하세요': 'h a s e y o',
-        '노래': 'n o l ae',
-        '사랑': 's a l a ng',
-        '행복': 'h ae ng b o k',
-        '음악': 'eu m a k',
-        '피아노': 'p i a n o'
+        "가": "g a",
+        "나": "n a",
+        "다": "d a",
+        "라": "l aa",
+        "마": "m a",
+        "바": "b a",
+        "사": "s a",
+        "아": "aa",
+        "자": "j a",
+        "차": "ch a",
+        "카": "k a",
+        "타": "t a",
+        "파": "p a",
+        "하": "h a",
+        "도": "d o",
+        "레": "l e",
+        "미": "m i",
+        "파": "p aa",
+        "솔": "s o l",
+        "라": "l aa",
+        "시": "s i",
+        "안녕": "aa n ny eo ng",
+        "하세요": "h a s e y o",
+        "노래": "n o l ae",
+        "사랑": "s a l a ng",
+        "행복": "h ae ng b o k",
+        "음악": "eu m a k",
+        "피아노": "p i a n o",
     }
+
 
 # Initialize phoneme mapping at program start
 initialize_phoneme_map()
@@ -87,20 +101,30 @@ def get_phoneme_mapping_for_dataframe():
     global user_phoneme_map
     return [[k, v] for k, v in user_phoneme_map.items()]
 
+
 def add_phoneme_mapping(lyric: str, phoneme: str):
     """Add new phoneme mapping"""
     global user_phoneme_map
     user_phoneme_map[lyric.strip()] = phoneme.strip()
-    return get_phoneme_mapping_for_dataframe(), f"'{lyric}' → '{phoneme}' mapping added."
+    return (
+        get_phoneme_mapping_for_dataframe(),
+        f"'{lyric}' → '{phoneme}' mapping added.",
+    )
+
 
 def reset_phoneme_mapping():
     """Reset phoneme mapping to default values"""
     initialize_phoneme_map()
-    return get_phoneme_mapping_for_dataframe(), "Phoneme mapping reset to default values."
+    return (
+        get_phoneme_mapping_for_dataframe(),
+        "Phoneme mapping reset to default values.",
+    )
+
 
 def midi_to_frequency(midi_note):
     """Convert MIDI note number to frequency (A4 = 440Hz)"""
     return 440.0 * (2.0 ** ((midi_note - 69) / 12.0))
+
 
 def create_adsr_envelope(attack, decay, sustain, release, duration, sample_rate):
     """Generate ADSR envelope"""
@@ -140,10 +164,12 @@ def create_adsr_envelope(attack, decay, sustain, release, duration, sample_rate)
 
     return envelope
 
+
 def generate_sine_wave(frequency, duration, sample_rate):
     """Generate sine wave"""
     t = np.linspace(0, duration, int(duration * sample_rate), False)
     return np.sin(2 * np.pi * frequency * t)
+
 
 def generate_sawtooth_wave(frequency, duration, sample_rate):
     """Generate sawtooth wave"""
@@ -151,15 +177,18 @@ def generate_sawtooth_wave(frequency, duration, sample_rate):
     # 2 * (t * frequency - np.floor(0.5 + t * frequency))
     return 2 * (t * frequency % 1) - 1
 
+
 def generate_square_wave(frequency, duration, sample_rate):
     """Generate square wave"""
     t = np.linspace(0, duration, int(duration * sample_rate), False)
     return np.sign(np.sin(2 * np.pi * frequency * t))
 
+
 def generate_triangle_wave(frequency, duration, sample_rate):
     """Generate triangle wave"""
     t = np.linspace(0, duration, int(duration * sample_rate), False)
     return 2 * np.abs(2 * (t * frequency % 1) - 1) - 1
+
 
 def generate_harmonic_wave(frequency, duration, sample_rate, harmonics=5):
     """Generate complex waveform with harmonics"""
@@ -178,6 +207,7 @@ def generate_harmonic_wave(frequency, duration, sample_rate, harmonics=5):
     wave = wave / np.max(np.abs(wave))
     return wave
 
+
 def generate_fm_wave(frequency, duration, sample_rate, mod_freq=5.0, mod_depth=2.0):
     """Generate FM waveform"""
     t = np.linspace(0, duration, int(duration * sample_rate), False)
@@ -190,43 +220,73 @@ def generate_fm_wave(frequency, duration, sample_rate, mod_freq=5.0, mod_depth=2
 
     return carrier
 
-def generate_complex_wave(frequency, duration, sample_rate, wave_type='complex'):
+
+def generate_complex_wave(frequency, duration, sample_rate, wave_type="complex"):
     """Generate complex waveform (combination of multiple techniques)"""
-    if wave_type == 'sine':
+    if wave_type == "sine":
         return generate_sine_wave(frequency, duration, sample_rate)
-    elif wave_type == 'sawtooth':
+    elif wave_type == "sawtooth":
         return generate_sawtooth_wave(frequency, duration, sample_rate)
-    elif wave_type == 'square':
+    elif wave_type == "square":
         return generate_square_wave(frequency, duration, sample_rate)
-    elif wave_type == 'triangle':
+    elif wave_type == "triangle":
         return generate_triangle_wave(frequency, duration, sample_rate)
-    elif wave_type == 'harmonic':
+    elif wave_type == "harmonic":
         return generate_harmonic_wave(frequency, duration, sample_rate, harmonics=7)
-    elif wave_type == 'fm':
-        return generate_fm_wave(frequency, duration, sample_rate, mod_freq=frequency * 0.1, mod_depth=3.0)
+    elif wave_type == "fm":
+        return generate_fm_wave(
+            frequency, duration, sample_rate, mod_freq=frequency * 0.1, mod_depth=3.0
+        )
     else:  # 'complex' - combination of multiple waveforms
         # Basic sawtooth + harmonics + some FM
         base = generate_sawtooth_wave(frequency, duration, sample_rate) * 0.6
-        harmonic = generate_harmonic_wave(frequency, duration, sample_rate, harmonics=4) * 0.3
-        fm = generate_fm_wave(frequency, duration, sample_rate, mod_freq=frequency * 0.05, mod_depth=1.0) * 0.1
+        harmonic = (
+            generate_harmonic_wave(frequency, duration, sample_rate, harmonics=4) * 0.3
+        )
+        fm = (
+            generate_fm_wave(
+                frequency,
+                duration,
+                sample_rate,
+                mod_freq=frequency * 0.05,
+                mod_depth=1.0,
+            )
+            * 0.1
+        )
 
         return base + harmonic + fm
 
-def synthesize_audio(piano_roll_data, attack=0.01, decay=0.1, sustain=0.7, release=0.3, wave_type='complex'):
+
+def synthesize_audio(
+    piano_roll_data,
+    attack=0.01,
+    decay=0.1,
+    sustain=0.7,
+    release=0.3,
+    wave_type="complex",
+):
     """Synthesize audio from PianoRoll data"""
-    if not piano_roll_data or 'notes' not in piano_roll_data or not piano_roll_data['notes']:
+    piano_roll_data = pr_to_dict(piano_roll_data)
+    if (
+        not piano_roll_data
+        or "notes" not in piano_roll_data
+        or not piano_roll_data["notes"]
+    ):
         return None
 
-    notes = piano_roll_data['notes']
-    tempo = piano_roll_data.get('tempo', 120)
-    pixels_per_beat = piano_roll_data.get('pixelsPerBeat', 80)
+    notes = piano_roll_data["notes"]
+    tempo = piano_roll_data.get("tempo", 120)
+    pixels_per_beat = piano_roll_data.get("pixelsPerBeat", 80)
 
     # Calculate total length (up to the end of the last note)
     max_end_time = 0
     for note in notes:
+        # Skip None notes
+        if note is None:
+            continue
         # Convert pixels to seconds (considering tempo and pixels per beat)
-        start_seconds = (note['start'] / pixels_per_beat) * (60.0 / tempo)
-        duration_seconds = (note['duration'] / pixels_per_beat) * (60.0 / tempo)
+        start_seconds = (note["start"] / pixels_per_beat) * (60.0 / tempo)
+        duration_seconds = (note["duration"] / pixels_per_beat) * (60.0 / tempo)
         end_time = start_seconds + duration_seconds
         max_end_time = max(max_end_time, end_time)
 
@@ -239,14 +299,18 @@ def synthesize_audio(piano_roll_data, attack=0.01, decay=0.1, sustain=0.7, relea
 
     # Process each note
     for i, note in enumerate(notes):
+        # Skip None notes
+        if note is None:
+            print(f"   - Warning: Skipping None note at index {i}")
+            continue
         try:
             # Note properties
-            pitch = note['pitch']
-            velocity = note.get('velocity', 100)
+            pitch = note["pitch"]
+            velocity = note.get("velocity", 100)
 
             # Calculate time
-            start_seconds = (note['start'] / pixels_per_beat) * (60.0 / tempo)
-            duration_seconds = (note['duration'] / pixels_per_beat) * (60.0 / tempo)
+            start_seconds = (note["start"] / pixels_per_beat) * (60.0 / tempo)
+            duration_seconds = (note["duration"] / pixels_per_beat) * (60.0 / tempo)
 
             # Check range
             if start_seconds >= total_duration:
@@ -267,7 +331,9 @@ def synthesize_audio(piano_roll_data, attack=0.01, decay=0.1, sustain=0.7, relea
 
             # Use same waveform type for all notes (consistency)
             # Generate complex waveform
-            base_wave = generate_complex_wave(frequency, duration_seconds, SAMPLE_RATE, wave_type)
+            base_wave = generate_complex_wave(
+                frequency, duration_seconds, SAMPLE_RATE, wave_type
+            )
 
             # Additional effect: Vibrato (frequency modulation)
             t = np.linspace(0, duration_seconds, len(base_wave), False)
@@ -287,11 +353,15 @@ def synthesize_audio(piano_roll_data, attack=0.01, decay=0.1, sustain=0.7, relea
             final_wave = vibrato_wave * tremolo
 
             # Apply ADSR envelope
-            envelope = create_adsr_envelope(attack, decay, sustain, release, duration_seconds, SAMPLE_RATE)
+            envelope = create_adsr_envelope(
+                attack, decay, sustain, release, duration_seconds, SAMPLE_RATE
+            )
 
             # Adjust envelope and waveform length
             min_length = min(len(final_wave), len(envelope))
-            note_audio = final_wave[:min_length] * envelope[:min_length] * volume * 0.25  # Adjust volume
+            note_audio = (
+                final_wave[:min_length] * envelope[:min_length] * volume * 0.25
+            )  # Adjust volume
 
             # Add to audio buffer
             start_sample = int(start_seconds * SAMPLE_RATE)
@@ -315,6 +385,7 @@ def synthesize_audio(piano_roll_data, attack=0.01, decay=0.1, sustain=0.7, relea
 
     return audio_buffer
 
+
 def audio_to_base64_wav(audio_data, sample_rate):
     """Convert audio data to base64 encoded WAV"""
     if audio_data is None or len(audio_data) == 0:
@@ -325,7 +396,7 @@ def audio_to_base64_wav(audio_data, sample_rate):
 
     # Create WAV file in memory
     buffer = io.BytesIO()
-    with wave.open(buffer, 'wb') as wav_file:
+    with wave.open(buffer, "wb") as wav_file:
         wav_file.setnchannels(1)  # Mono
         wav_file.setsampwidth(2)  # 16-bit
         wav_file.setframerate(sample_rate)
@@ -334,9 +405,10 @@ def audio_to_base64_wav(audio_data, sample_rate):
     # base64 encoding
     buffer.seek(0)
     wav_data = buffer.read()
-    base64_data = base64.b64encode(wav_data).decode('utf-8')
+    base64_data = base64.b64encode(wav_data).decode("utf-8")
 
     return f"data:audio/wav;base64,{base64_data}"
+
 
 def calculate_waveform_data(audio_data, pixels_per_beat, tempo, target_width=1000):
     """Calculate waveform visualization data from audio data"""
@@ -374,13 +446,10 @@ def calculate_waveform_data(audio_data, pixels_per_beat, tempo, target_width=100
             # Time information (pixel position)
             time_position = pixel
 
-            waveform_points.append({
-                'x': time_position,
-                'min': min_val,
-                'max': max_val
-            })
+            waveform_points.append({"x": time_position, "min": min_val, "max": max_val})
 
     return waveform_points
+
 
 def create_temp_wav_file(audio_data, sample_rate):
     """Create temporary WAV file for gradio Audio component"""
@@ -392,9 +461,9 @@ def create_temp_wav_file(audio_data, sample_rate):
         audio_16bit = (audio_data * 32767).astype(np.int16)
 
         # Create temporary file
-        temp_fd, temp_path = tempfile.mkstemp(suffix='.wav')
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".wav")
 
-        with wave.open(temp_path, 'wb') as wav_file:
+        with wave.open(temp_path, "wb") as wav_file:
             wav_file.setnchannels(1)  # Mono
             wav_file.setsampwidth(2)  # 16-bit
             wav_file.setframerate(sample_rate)
@@ -407,6 +476,7 @@ def create_temp_wav_file(audio_data, sample_rate):
     except Exception as e:
         print(f"Error creating temporary WAV file: {e}")
         return None
+
 
 # G2P (Grapheme-to-Phoneme) function (using custom mapping)
 def mock_g2p(text: str) -> str:
@@ -431,10 +501,7 @@ def mock_g2p(text: str) -> str:
             # Unknown characters are returned as is
             result.append(char)
 
-    return ' '.join(result)
-
-
-
+    return " ".join(result)
 
 
 def clear_all_phonemes(piano_roll):
@@ -443,18 +510,24 @@ def clear_all_phonemes(piano_roll):
     """
     print("=== Clear All Phonemes ===")
 
-    if not piano_roll or 'notes' not in piano_roll:
+    piano_roll = pr_to_dict(piano_roll)
+    if not piano_roll or "notes" not in piano_roll:
         return piano_roll, "Piano roll data is missing."
 
-    notes = piano_roll['notes'].copy()
+    notes = piano_roll["notes"].copy()
 
     for note in notes:
-        set_note_field(note, 'phoneme', None)
+        # Skip None notes
+        if note is None:
+            print("   - Warning: Skipping None note")
+            continue
+        note["phoneme"] = None
 
     updated_piano_roll = piano_roll.copy()
-    updated_piano_roll['notes'] = notes
+    updated_piano_roll["notes"] = notes
 
     return updated_piano_roll, "All phonemes cleared."
+
 
 def auto_generate_all_phonemes(piano_roll):
     """
@@ -462,24 +535,30 @@ def auto_generate_all_phonemes(piano_roll):
     """
     print("=== Auto Generate All Phonemes ===")
 
-    if not piano_roll or 'notes' not in piano_roll:
+    piano_roll = pr_to_dict(piano_roll)
+    if not piano_roll or "notes" not in piano_roll:
         return piano_roll, "Piano roll data is missing."
 
-    notes = piano_roll['notes'].copy()
+    notes = piano_roll["notes"].copy()
 
     updated_count = 0
     for note in notes:
-        lyric = get_note_field(note, 'lyric')
+        # Skip None notes
+        if note is None:
+            print("   - Warning: Skipping None note")
+            continue
+        lyric = note.get("lyric")
         if lyric:
             phoneme = mock_g2p(lyric)
-            set_note_field(note, 'phoneme', phoneme)
+            note["phoneme"] = phoneme
             updated_count += 1
             print(f"Auto-generated: '{lyric}' -> '{phoneme}'")
 
     updated_piano_roll = piano_roll.copy()
-    updated_piano_roll['notes'] = notes
+    updated_piano_roll["notes"] = notes
 
     return updated_piano_roll, f"{updated_count} notes' phoneme auto-generated"
+
 
 # Functions for analyzing F0 and audio features
 def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
@@ -503,8 +582,8 @@ def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
             f0, voiced_flag, voiced_probs = librosa.pyin(
                 y,
                 sr=sr,
-                fmin=librosa.note_to_hz('C2'),  # Approx. 65Hz
-                fmax=librosa.note_to_hz('C7')   # Approx. 2093Hz
+                fmin=librosa.note_to_hz("C2"),  # Approx. 65Hz
+                fmax=librosa.note_to_hz("C7"),  # Approx. 2093Hz
             )
         else:
             # Fundamental pitch extraction
@@ -518,7 +597,9 @@ def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
 
         # Calculate time axis
         hop_length = 512  # librosa default
-        frame_times = librosa.frames_to_time(np.arange(len(f0)), sr=sr, hop_length=hop_length)
+        frame_times = librosa.frames_to_time(
+            np.arange(len(f0)), sr=sr, hop_length=hop_length
+        )
 
         # Handle NaN values and smoothing
         valid_indices = ~np.isnan(f0)
@@ -534,25 +615,29 @@ def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
 
         # Return voiced/unvoiced information as well
         result_data = {
-            'times': frame_times,  # Full time axis
-            'f0_values': f0,  # Full F0 (includes NaN)
-            'valid_times': valid_times,  # Only valid times
-            'valid_f0_values': valid_f0,  # Only valid F0
-            'sample_rate': sr,
-            'duration': len(y) / sr,
-            'hop_length': hop_length
+            "times": frame_times,  # Full time axis
+            "f0_values": f0,  # Full F0 (includes NaN)
+            "valid_times": valid_times,  # Only valid times
+            "valid_f0_values": valid_f0,  # Only valid F0
+            "sample_rate": sr,
+            "duration": len(y) / sr,
+            "hop_length": hop_length,
         }
 
         # Add voiced information from PYIN
-        if f0_method == "pyin" and 'voiced_flag' in locals() and 'voiced_probs' in locals():
-            result_data['voiced_flag'] = voiced_flag
-            result_data['voiced_probs'] = voiced_probs
+        if (
+            f0_method == "pyin"
+            and "voiced_flag" in locals()
+            and "voiced_probs" in locals()
+        ):
+            result_data["voiced_flag"] = voiced_flag
+            result_data["voiced_probs"] = voiced_probs
         else:
             # For other methods, estimate voiced based on F0 existence
             voiced_flag = ~np.isnan(f0)
             voiced_probs = voiced_flag.astype(float)
-            result_data['voiced_flag'] = voiced_flag
-            result_data['voiced_probs'] = voiced_probs
+            result_data["voiced_flag"] = voiced_flag
+            result_data["voiced_probs"] = voiced_probs
 
         return result_data, "F0 extraction completed"
 
@@ -560,12 +645,16 @@ def extract_f0_from_audio(audio_file_path, f0_method="pyin"):
         print(f"❌ F0 extraction error: {e}")
         return None, f"F0 extraction error: {str(e)}"
 
+
 def extract_loudness_from_audio(audio_file_path):
     """
     Extract loudness (volume) from audio file
     """
     if not LIBROSA_AVAILABLE:
-        return None, "librosa is not installed, so loudness analysis cannot be performed"
+        return (
+            None,
+            "librosa is not installed, so loudness analysis cannot be performed",
+        )
 
     try:
         print(f"🔊 Loudness extraction started: {audio_file_path}")
@@ -580,7 +669,9 @@ def extract_loudness_from_audio(audio_file_path):
         rms_energy = librosa.feature.rms(y=y, hop_length=hop_length)[0]
 
         # Calculate time axis
-        frame_times = librosa.frames_to_time(np.arange(len(rms_energy)), sr=sr, hop_length=hop_length)
+        frame_times = librosa.frames_to_time(
+            np.arange(len(rms_energy)), sr=sr, hop_length=hop_length
+        )
 
         # Convert to dB (reference value: maximum RMS)
         max_rms = np.max(rms_energy)
@@ -596,28 +687,34 @@ def extract_loudness_from_audio(audio_file_path):
 
         print(f"   - Extracted Loudness points: {len(loudness_normalized)}")
         print(f"   - RMS range: {np.min(rms_energy):.6f} ~ {np.max(rms_energy):.6f}")
-        print(f"   - dB range: {np.min(loudness_db):.1f}dB ~ {np.max(loudness_db):.1f}dB")
+        print(
+            f"   - dB range: {np.min(loudness_db):.1f}dB ~ {np.max(loudness_db):.1f}dB"
+        )
 
         return {
-            'times': frame_times,
-            'rms_values': rms_energy,
-            'loudness_db': loudness_db,
-            'loudness_normalized': loudness_normalized,
-            'sample_rate': sr,
-            'duration': len(y) / sr,
-            'hop_length': hop_length
+            "times": frame_times,
+            "rms_values": rms_energy,
+            "loudness_db": loudness_db,
+            "loudness_normalized": loudness_normalized,
+            "sample_rate": sr,
+            "duration": len(y) / sr,
+            "hop_length": hop_length,
         }, "Loudness extraction completed"
 
     except Exception as e:
         print(f"❌ Loudness extraction error: {e}")
         return None, f"Loudness extraction error: {str(e)}"
 
+
 def extract_voicing_from_audio(audio_file_path, f0_method="pyin"):
     """
     Extract voice/unvoice information from audio file
     """
     if not LIBROSA_AVAILABLE:
-        return None, "librosa is not installed, so voice/unvoice analysis cannot be performed"
+        return (
+            None,
+            "librosa is not installed, so voice/unvoice analysis cannot be performed",
+        )
 
     try:
         print(f"🗣️ Voice/Unvoice extraction started: {audio_file_path}")
@@ -626,12 +723,15 @@ def extract_voicing_from_audio(audio_file_path, f0_method="pyin"):
         f0_data, f0_status = extract_f0_from_audio(audio_file_path, f0_method)
 
         if f0_data is None:
-            return None, f"F0 analysis failed, so voice/unvoice extraction is not possible: {f0_status}"
+            return (
+                None,
+                f"F0 analysis failed, so voice/unvoice extraction is not possible: {f0_status}",
+            )
 
         # Extract voiced information
-        times = f0_data['times']
-        voiced_flag = f0_data['voiced_flag']
-        voiced_probs = f0_data['voiced_probs']
+        times = f0_data["times"]
+        voiced_flag = f0_data["voiced_flag"]
+        voiced_probs = f0_data["voiced_probs"]
 
         print(f"   - Extracted Voice/Unvoice points: {len(voiced_flag)}")
 
@@ -639,28 +739,40 @@ def extract_voicing_from_audio(audio_file_path, f0_method="pyin"):
         voiced_frames = np.sum(voiced_flag)
         voiced_ratio = voiced_frames / len(voiced_flag) if len(voiced_flag) > 0 else 0
         print(f"   - Voiced section: {voiced_frames} frames ({voiced_ratio:.1%})")
-        print(f"   - Unvoiced section: {len(voiced_flag) - voiced_frames} frames ({1-voiced_ratio:.1%})")
+        print(
+            f"   - Unvoiced section: {len(voiced_flag) - voiced_frames} frames ({1-voiced_ratio:.1%})"
+        )
 
         return {
-            'times': times,
-            'voiced_flag': voiced_flag,
-            'voiced_probs': voiced_probs,
-            'sample_rate': f0_data['sample_rate'],
-            'duration': f0_data['duration'],
-            'hop_length': f0_data['hop_length'],
-            'voiced_ratio': voiced_ratio
+            "times": times,
+            "voiced_flag": voiced_flag,
+            "voiced_probs": voiced_probs,
+            "sample_rate": f0_data["sample_rate"],
+            "duration": f0_data["duration"],
+            "hop_length": f0_data["hop_length"],
+            "voiced_ratio": voiced_ratio,
         }, "Voice/Unvoice extraction completed"
 
     except Exception as e:
         print(f"❌ Voice/Unvoice extraction error: {e}")
         return None, f"Voice/Unvoice extraction error: {str(e)}"
 
-def extract_audio_features(audio_file_path, f0_method="pyin", include_f0=True, include_loudness=True, include_voicing=True):
+
+def extract_audio_features(
+    audio_file_path,
+    f0_method="pyin",
+    include_f0=True,
+    include_loudness=True,
+    include_voicing=True,
+):
     """
     Extract F0, loudness, and voice/unvoice from audio file
     """
     if not LIBROSA_AVAILABLE:
-        return None, "librosa is not installed, so audio feature analysis cannot be performed"
+        return (
+            None,
+            "librosa is not installed, so audio feature analysis cannot be performed",
+        )
 
     features = {}
     status_messages = []
@@ -672,40 +784,46 @@ def extract_audio_features(audio_file_path, f0_method="pyin", include_f0=True, i
         if include_f0:
             f0_data, f0_status = extract_f0_from_audio(audio_file_path, f0_method)
             if f0_data:
-                features['f0'] = f0_data
+                features["f0"] = f0_data
                 status_messages.append(f0_status)
             else:
                 status_messages.append(f"F0 extraction failed: {f0_status}")
 
         # Extract Loudness
         if include_loudness:
-            loudness_data, loudness_status = extract_loudness_from_audio(audio_file_path)
+            loudness_data, loudness_status = extract_loudness_from_audio(
+                audio_file_path
+            )
             if loudness_data:
-                features['loudness'] = loudness_data
+                features["loudness"] = loudness_data
                 status_messages.append(loudness_status)
             else:
                 status_messages.append(f"Loudness extraction failed: {loudness_status}")
 
         # Extract Voice/Unvoice
         if include_voicing:
-            voicing_data, voicing_status = extract_voicing_from_audio(audio_file_path, f0_method)
+            voicing_data, voicing_status = extract_voicing_from_audio(
+                audio_file_path, f0_method
+            )
             if voicing_data:
-                features['voicing'] = voicing_data
+                features["voicing"] = voicing_data
                 status_messages.append(voicing_status)
             else:
-                status_messages.append(f"Voice/Unvoice extraction failed: {voicing_status}")
+                status_messages.append(
+                    f"Voice/Unvoice extraction failed: {voicing_status}"
+                )
 
         if features:
             # Add common information
-            if 'f0' in features:
-                features['duration'] = features['f0']['duration']
-                features['sample_rate'] = features['f0']['sample_rate']
-            elif 'loudness' in features:
-                features['duration'] = features['loudness']['duration']
-                features['sample_rate'] = features['loudness']['sample_rate']
-            elif 'voicing' in features:
-                features['duration'] = features['voicing']['duration']
-                features['sample_rate'] = features['voicing']['sample_rate']
+            if "f0" in features:
+                features["duration"] = features["f0"]["duration"]
+                features["sample_rate"] = features["f0"]["sample_rate"]
+            elif "loudness" in features:
+                features["duration"] = features["loudness"]["duration"]
+                features["sample_rate"] = features["loudness"]["sample_rate"]
+            elif "voicing" in features:
+                features["duration"] = features["voicing"]["duration"]
+                features["sample_rate"] = features["voicing"]["sample_rate"]
 
             return features, " | ".join(status_messages)
         else:
@@ -714,6 +832,7 @@ def extract_audio_features(audio_file_path, f0_method="pyin", include_f0=True, i
     except Exception as e:
         print(f"❌ Audio feature analysis error: {e}")
         return None, f"Audio feature analysis error: {str(e)}"
+
 
 def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
     """
@@ -724,8 +843,8 @@ def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
         return None
 
     try:
-        times = f0_data['times']
-        f0_values = f0_data['f0_values']
+        times = f0_data["times"]
+        f0_values = f0_data["f0_values"]
 
         # Piano roll constants (same as GridComponent)
         NOTE_HEIGHT = 20
@@ -739,7 +858,7 @@ def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
 
         def midi_to_y_coordinate(midi_note):
             """Convert MIDI note number to piano roll Y coordinate (same as GridComponent)"""
-            return (TOTAL_NOTES - 1 - midi_note) * NOTE_HEIGHT + NOTE_HEIGHT/2
+            return (TOTAL_NOTES - 1 - midi_note) * NOTE_HEIGHT + NOTE_HEIGHT / 2
 
         # Create data points (using piano roll coordinate system)
         data_points = []
@@ -758,10 +877,7 @@ def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
                     # Convert MIDI to piano roll Y coordinate
                     y_pixel = midi_to_y_coordinate(midi_note)
 
-                    data_points.append({
-                        "x": float(x_pixel),
-                        "y": float(y_pixel)
-                    })
+                    data_points.append({"x": float(x_pixel), "y": float(y_pixel)})
                     valid_f0_values.append(f0)
 
         if not data_points:
@@ -796,8 +912,8 @@ def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
                     "minHz": min_f0,
                     "maxHz": max_f0,
                     "minMidi": min_midi,
-                    "maxMidi": max_midi
-                }
+                    "maxMidi": max_midi,
+                },
             }
         }
 
@@ -812,7 +928,10 @@ def create_f0_line_data(f0_data, tempo=120, pixelsPerBeat=80):
         print(f"❌ F0 LineData creation error: {e}")
         return None
 
-def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=None, y_max=None, use_db=True):
+
+def create_loudness_line_data(
+    loudness_data, tempo=120, pixelsPerBeat=80, y_min=None, y_max=None, use_db=True
+):
     """
     Convert Loudness data to line_data format for LineLayer
     Has independent Y range and is displayed separately from the piano roll grid
@@ -821,16 +940,16 @@ def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=
         return None
 
     try:
-        times = loudness_data['times']
+        times = loudness_data["times"]
 
         # Select loudness value to use (dB or normalized)
         if use_db:
-            values = loudness_data['loudness_db']
+            values = loudness_data["loudness_db"]
             unit = "dB"
             default_y_min = -60
             default_y_max = 0
         else:
-            values = loudness_data['loudness_normalized']
+            values = loudness_data["loudness_normalized"]
             unit = "normalized"
             default_y_min = 0
             default_y_max = 1
@@ -849,12 +968,16 @@ def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=
 
                 # Convert Loudness value to 0-2560 pixel range (using full grid canvas height)
                 normalized_value = (value - actual_y_min) / y_range
-                y_pixel = normalized_value * 2560  # 0-2560 pixel range (128 notes * 20 pixels height)
+                y_pixel = (
+                    normalized_value * 2560
+                )  # 0-2560 pixel range (128 notes * 20 pixels height)
 
-                data_points.append({
-                    "x": float(x_pixel),
-                    "y": float(max(0, min(2560, y_pixel)))  # Range limit
-                })
+                data_points.append(
+                    {
+                        "x": float(x_pixel),
+                        "y": float(max(0, min(2560, y_pixel))),  # Range limit
+                    }
+                )
 
         if not data_points:
             print("⚠️ No valid Loudness data points")
@@ -882,8 +1005,8 @@ def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=
                     "min": min_value,
                     "max": max_value,
                     "y_min": actual_y_min,
-                    "y_max": actual_y_max
-                }
+                    "y_max": actual_y_max,
+                },
             }
         }
 
@@ -898,6 +1021,7 @@ def create_loudness_line_data(loudness_data, tempo=120, pixelsPerBeat=80, y_min=
         print(f"❌ Loudness LineData creation error: {e}")
         return None
 
+
 def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_probs=True):
     """
     Convert Voice/Unvoice data to line_data format for LineLayer
@@ -907,14 +1031,14 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
         return None
 
     try:
-        times = voicing_data['times']
+        times = voicing_data["times"]
 
         # Select voicing value to use (probability or binary)
-        if use_probs and 'voiced_probs' in voicing_data:
-            values = voicing_data['voiced_probs']
+        if use_probs and "voiced_probs" in voicing_data:
+            values = voicing_data["voiced_probs"]
             unit = "probability"
         else:
-            values = voicing_data['voiced_flag'].astype(float)
+            values = voicing_data["voiced_flag"].astype(float)
             unit = "binary"
 
         # Create data points
@@ -927,10 +1051,12 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
                 # Convert Voice/Unvoice value to 0-2560 pixel range (using full grid canvas height)
                 y_pixel = value * 2560  # Convert 0-1 range to 0-2560 pixels
 
-                data_points.append({
-                    "x": float(x_pixel),
-                    "y": float(max(0, min(2560, y_pixel)))  # Range limit
-                })
+                data_points.append(
+                    {
+                        "x": float(x_pixel),
+                        "y": float(max(0, min(2560, y_pixel))),  # Range limit
+                    }
+                )
 
         if not data_points:
             print("⚠️ No valid Voice/Unvoice data points")
@@ -939,7 +1065,7 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
         # Actual value range
         min_value = float(np.min(values))
         max_value = float(np.max(values))
-        voiced_ratio = voicing_data.get('voiced_ratio', 0.0)
+        voiced_ratio = voicing_data.get("voiced_ratio", 0.0)
 
         line_data = {
             "voicing_curve": {
@@ -960,8 +1086,8 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
                     "max": max_value,
                     "voiced_ratio": voiced_ratio,
                     "y_min": 0,
-                    "y_max": 1
-                }
+                    "y_max": 1,
+                },
             }
         }
 
@@ -976,9 +1102,16 @@ def create_voicing_line_data(voicing_data, tempo=120, pixelsPerBeat=80, use_prob
         print(f"❌ Voice/Unvoice LineData creation error: {e}")
         return None
 
-def create_multi_feature_line_data(features, tempo=120, pixelsPerBeat=80,
-                                   loudness_y_min=None, loudness_y_max=None,
-                                   loudness_use_db=True, voicing_use_probs=True):
+
+def create_multi_feature_line_data(
+    features,
+    tempo=120,
+    pixelsPerBeat=80,
+    loudness_y_min=None,
+    loudness_y_max=None,
+    loudness_use_db=True,
+    voicing_use_probs=True,
+):
     """
     Combine multiple audio features (F0, Loudness, Voice/Unvoice) into a single line_data
     """
@@ -986,24 +1119,28 @@ def create_multi_feature_line_data(features, tempo=120, pixelsPerBeat=80,
 
     try:
         # Add F0 curve
-        if 'f0' in features:
-            f0_line_data = create_f0_line_data(features['f0'], tempo, pixelsPerBeat)
+        if "f0" in features:
+            f0_line_data = create_f0_line_data(features["f0"], tempo, pixelsPerBeat)
             if f0_line_data:
                 combined_line_data.update(f0_line_data)
 
         # Add Loudness curve
-        if 'loudness' in features:
+        if "loudness" in features:
             loudness_line_data = create_loudness_line_data(
-                features['loudness'], tempo, pixelsPerBeat,
-                loudness_y_min, loudness_y_max, loudness_use_db
+                features["loudness"],
+                tempo,
+                pixelsPerBeat,
+                loudness_y_min,
+                loudness_y_max,
+                loudness_use_db,
             )
             if loudness_line_data:
                 combined_line_data.update(loudness_line_data)
 
         # Add Voice/Unvoice curve
-        if 'voicing' in features:
+        if "voicing" in features:
             voicing_line_data = create_voicing_line_data(
-                features['voicing'], tempo, pixelsPerBeat, voicing_use_probs
+                features["voicing"], tempo, pixelsPerBeat, voicing_use_probs
             )
             if voicing_line_data:
                 combined_line_data.update(voicing_line_data)
@@ -1019,19 +1156,39 @@ def create_multi_feature_line_data(features, tempo=120, pixelsPerBeat=80,
         print(f"❌ Combined LineData creation error: {e}")
         return None
 
-def synthesize_and_analyze_features(piano_roll, attack, decay, sustain, release, wave_type='complex',
-                                  include_f0=True, include_loudness=True, include_voicing=True, f0_method="pyin",
-                                  loudness_y_min=None, loudness_y_max=None, loudness_use_db=True, voicing_use_probs=True):
+
+def synthesize_and_analyze_features(
+    piano_roll,
+    attack,
+    decay,
+    sustain,
+    release,
+    wave_type="complex",
+    include_f0=True,
+    include_loudness=True,
+    include_voicing=True,
+    f0_method="pyin",
+    loudness_y_min=None,
+    loudness_y_max=None,
+    loudness_use_db=True,
+    voicing_use_probs=True,
+):
     """
     Synthesize audio from piano roll, analyze F0, loudness, and voice/unvoice from synthesized audio, and visualize the results
     """
     print("=== Synthesize and Analyze Features ===")
     print(f"ADSR: A={attack}, D={decay}, S={sustain}, R={release}")
     print(f"Wave Type: {wave_type}")
-    print(f"Include F0: {include_f0}, Include Loudness: {include_loudness}, Include Voicing: {include_voicing}")
+    print(
+        f"Include F0: {include_f0}, Include Loudness: {include_loudness}, Include Voicing: {include_voicing}"
+    )
+
+    piano_roll = pr_to_dict(piano_roll)
 
     # First synthesize audio
-    audio_data = synthesize_audio(piano_roll, attack, decay, sustain, release, wave_type)
+    audio_data = synthesize_audio(
+        piano_roll, attack, decay, sustain, release, wave_type
+    )
 
     if audio_data is None:
         return piano_roll, "Audio synthesis failed", None
@@ -1048,27 +1205,36 @@ def synthesize_and_analyze_features(piano_roll, attack, decay, sustain, release,
         )
 
         if features is None:
-            return piano_roll, f"Audio feature analysis failed: {analysis_status}", temp_audio_path
+            return (
+                piano_roll,
+                f"Audio feature analysis failed: {analysis_status}",
+                temp_audio_path,
+            )
 
         # Update piano roll
         updated_piano_roll = piano_roll.copy() if piano_roll else {}
 
         # Add backend audio data
         audio_base64 = audio_to_base64_wav(audio_data, SAMPLE_RATE)
-        updated_piano_roll['audio_data'] = audio_base64
-        updated_piano_roll['use_backend_audio'] = True
+        updated_piano_roll["audio_data"] = audio_base64
+        updated_piano_roll["use_backend_audio"] = True
 
         # Add tempo and pixels per beat information
-        tempo = updated_piano_roll.get('tempo', 120)
-        pixels_per_beat = updated_piano_roll.get('pixelsPerBeat', 80)
+        tempo = updated_piano_roll.get("tempo", 120)
+        pixels_per_beat = updated_piano_roll.get("pixelsPerBeat", 80)
 
         # Calculate waveform data (for backend audio)
         waveform_data = calculate_waveform_data(audio_data, pixels_per_beat, tempo)
 
         # Create curve data (audio feature analysis results)
         line_data = create_multi_feature_line_data(
-            features, tempo, pixels_per_beat,
-            loudness_y_min, loudness_y_max, loudness_use_db, voicing_use_probs
+            features,
+            tempo,
+            pixels_per_beat,
+            loudness_y_min,
+            loudness_y_max,
+            loudness_use_db,
+            voicing_use_probs,
         )
 
         # Set combined curve data (audio features + waveform)
@@ -1080,16 +1246,16 @@ def synthesize_and_analyze_features(piano_roll, attack, decay, sustain, release,
 
         # Add waveform data
         if waveform_data:
-            curve_data['waveform_data'] = waveform_data
+            curve_data["waveform_data"] = waveform_data
             print(f"Waveform data created: {len(waveform_data)} points")
 
         # Set curve data for piano roll
         if curve_data:
-            updated_piano_roll['curve_data'] = curve_data
+            updated_piano_roll["curve_data"] = curve_data
 
         # Set line_data separately (for LineLayer)
         if line_data:
-            updated_piano_roll['line_data'] = line_data
+            updated_piano_roll["line_data"] = line_data
 
         print(f"🔊 [synthesize_and_analyze_features] Setting backend audio data:")
         print(f"   - audio_data length: {len(audio_base64) if audio_base64 else 0}")
@@ -1098,10 +1264,15 @@ def synthesize_and_analyze_features(piano_roll, attack, decay, sustain, release,
         print(f"   - feature curves: {len(line_data) if line_data else 0}")
 
         # Create status message
-        status_parts = [f"Audio synthesis completed ({wave_type} waveform)", analysis_status]
+        status_parts = [
+            f"Audio synthesis completed ({wave_type} waveform)",
+            analysis_status,
+        ]
 
         if waveform_data:
-            status_parts.append(f"Waveform visualization completed ({len(waveform_data)} points)")
+            status_parts.append(
+                f"Waveform visualization completed ({len(waveform_data)} points)"
+            )
 
         if line_data:
             curve_count = len(line_data)
@@ -1117,21 +1288,39 @@ def synthesize_and_analyze_features(piano_roll, attack, decay, sustain, release,
         return piano_roll, error_message, temp_audio_path
     # Temporary file is cleaned up after use (gradio automatically manages)
 
-def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, include_loudness=True, include_voicing=True,
-                                  f0_method="pyin", loudness_y_min=None, loudness_y_max=None,
-                                  loudness_use_db=True, voicing_use_probs=True):
+
+def analyze_uploaded_audio_features(
+    piano_roll,
+    audio_file,
+    include_f0=True,
+    include_loudness=True,
+    include_voicing=True,
+    f0_method="pyin",
+    loudness_y_min=None,
+    loudness_y_max=None,
+    loudness_use_db=True,
+    voicing_use_probs=True,
+):
     """
     Analyze F0, loudness, and voice/unvoice from uploaded audio file and display on piano roll
     """
     print("=== Analyze Uploaded Audio Features ===")
     print(f"Audio file: {audio_file}")
-    print(f"Include F0: {include_f0}, Include Loudness: {include_loudness}, Include Voicing: {include_voicing}")
+    print(
+        f"Include F0: {include_f0}, Include Loudness: {include_loudness}, Include Voicing: {include_voicing}"
+    )
+
+    piano_roll = pr_to_dict(piano_roll)
 
     if not audio_file:
         return piano_roll, "Please upload an audio file.", None
 
     if not LIBROSA_AVAILABLE:
-        return piano_roll, "librosa is not installed, so audio feature analysis cannot be performed. Please install it with 'pip install librosa'.", None
+        return (
+            piano_roll,
+            "librosa is not installed, so audio feature analysis cannot be performed. Please install it with 'pip install librosa'.",
+            None,
+        )
 
     try:
         # Analyze audio features
@@ -1140,29 +1329,42 @@ def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, inc
         )
 
         if features is None:
-            return piano_roll, f"Audio feature analysis failed: {analysis_status}", audio_file
+            return (
+                piano_roll,
+                f"Audio feature analysis failed: {analysis_status}",
+                audio_file,
+            )
 
         # Update piano roll data
-        updated_piano_roll = piano_roll.copy() if piano_roll else {
-            "notes": [],
-            "tempo": 120,
-            "timeSignature": {"numerator": 4, "denominator": 4},
-            "editMode": "select",
-            "snapSetting": "1/4",
-            "pixelsPerBeat": 80
-        }
+        updated_piano_roll = (
+            piano_roll.copy()
+            if piano_roll
+            else {
+                "notes": [],
+                "tempo": 120,
+                "timeSignature": {"numerator": 4, "denominator": 4},
+                "editMode": "select",
+                "snapSetting": "1/4",
+                "pixelsPerBeat": 80,
+            }
+        )
 
         # Create curve data
-        tempo = updated_piano_roll.get('tempo', 120)
-        pixels_per_beat = updated_piano_roll.get('pixelsPerBeat', 80)
+        tempo = updated_piano_roll.get("tempo", 120)
+        pixels_per_beat = updated_piano_roll.get("pixelsPerBeat", 80)
 
         line_data = create_multi_feature_line_data(
-            features, tempo, pixels_per_beat,
-            loudness_y_min, loudness_y_max, loudness_use_db, voicing_use_probs
+            features,
+            tempo,
+            pixels_per_beat,
+            loudness_y_min,
+            loudness_y_max,
+            loudness_use_db,
+            voicing_use_probs,
         )
 
         if line_data:
-            updated_piano_roll['line_data'] = line_data
+            updated_piano_roll["line_data"] = line_data
 
         # Create status message
         status_parts = [analysis_status]
@@ -1170,23 +1372,33 @@ def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, inc
         if line_data:
             curve_count = len(line_data)
             curve_types = list(line_data.keys())
-            status_parts.append(f"{curve_count} curves ({', '.join(curve_types)}) visualization completed")
+            status_parts.append(
+                f"{curve_count} curves ({', '.join(curve_types)}) visualization completed"
+            )
 
             # Add range information for each feature
             for curve_name, curve_info in line_data.items():
-                if 'originalRange' in curve_info:
-                    range_info = curve_info['originalRange']
-                    if 'minHz' in range_info:  # F0
-                        status_parts.append(f"F0: {range_info['minHz']:.1f}~{range_info['maxHz']:.1f}Hz")
-                    elif 'min' in range_info and 'voiced_ratio' not in range_info:  # Loudness
-                        unit = curve_info.get('unit', '')
-                        status_parts.append(f"Loudness: {range_info['min']:.1f}~{range_info['max']:.1f}{unit}")
-                    elif 'voiced_ratio' in range_info:  # Voice/Unvoice
-                        unit = curve_info.get('unit', '')
-                        voiced_ratio = range_info['voiced_ratio']
-                        status_parts.append(f"Voicing: {voiced_ratio:.1%} voiced ({unit})")
+                if "originalRange" in curve_info:
+                    range_info = curve_info["originalRange"]
+                    if "minHz" in range_info:  # F0
+                        status_parts.append(
+                            f"F0: {range_info['minHz']:.1f}~{range_info['maxHz']:.1f}Hz"
+                        )
+                    elif (
+                        "min" in range_info and "voiced_ratio" not in range_info
+                    ):  # Loudness
+                        unit = curve_info.get("unit", "")
+                        status_parts.append(
+                            f"Loudness: {range_info['min']:.1f}~{range_info['max']:.1f}{unit}"
+                        )
+                    elif "voiced_ratio" in range_info:  # Voice/Unvoice
+                        unit = curve_info.get("unit", "")
+                        voiced_ratio = range_info["voiced_ratio"]
+                        status_parts.append(
+                            f"Voicing: {voiced_ratio:.1%} voiced ({unit})"
+                        )
 
-        duration = features.get('duration', 0)
+        duration = features.get("duration", 0)
         status_parts.append(f"⏱️ {duration:.2f} seconds")
 
         status_message = " | ".join(status_parts)
@@ -1198,13 +1410,16 @@ def analyze_uploaded_audio_features(piano_roll, audio_file, include_f0=True, inc
         print(f"❌ {error_message}")
         return piano_roll, error_message, audio_file
 
+
 # Gradio interface
 with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
     gr.Markdown("# 🎹 Gradio PianoRoll with Synthesizer")
     gr.Markdown("Test PianoRoll component and synthesizer functionality!")
 
     if not LIBROSA_AVAILABLE:
-        gr.Markdown("⚠️ **librosa is not installed**: Run `pip install librosa` to install it.")
+        gr.Markdown(
+            "⚠️ **librosa is not installed**: Run `pip install librosa` to install it."
+        )
 
     with gr.Row():
         with gr.Column(scale=3):
@@ -1218,7 +1433,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         "pitch": 60,  # C4
                         "velocity": 100,
                         "lyric": "안녕",
-                        "phoneme": "aa n ny eo ng"  # Pre-set phoneme
+                        "phoneme": "aa n ny eo ng",  # Pre-set phoneme
                     },
                     {
                         "id": "note_1",
@@ -1227,7 +1442,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         "pitch": 62,  # D4
                         "velocity": 100,
                         "lyric": "하세요",
-                        "phoneme": "h a s e y o"
+                        "phoneme": "h a s e y o",
                     },
                     {
                         "id": "note_2",
@@ -1236,7 +1451,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         "pitch": 64,  # E4
                         "velocity": 100,
                         "lyric": "음악",
-                        "phoneme": "eu m a k"
+                        "phoneme": "eu m a k",
                     },
                     {
                         "id": "note_3",
@@ -1244,29 +1459,31 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                         "duration": 160,
                         "pitch": 65,  # F4
                         "velocity": 100,
-                        "lyric": "피아노"
-                    }
+                        "lyric": "피아노",
+                    },
                 ],
                 "tempo": 120,
                 "timeSignature": {"numerator": 4, "denominator": 4},
                 "editMode": "select",
                 "snapSetting": "1/4",
-                "pixelsPerBeat": 80
+                "pixelsPerBeat": 80,
             }
+
+            initial_value = PianoRollData.from_dict(initial_value)
 
             piano_roll = PianoRoll(
                 height=800,
                 width=1000,
                 value=initial_value,
                 elem_id="piano_roll",  # Unique ID
-                use_backend_audio=True  # Use backend audio engine
+                use_backend_audio=True,  # Use backend audio engine
             )
 
             btn_analyze_generated = gr.Button(
                 "🎶 Create Audio from Notes & Analyze",
                 variant="primary",
                 size="lg",
-                interactive=LIBROSA_AVAILABLE
+                interactive=LIBROSA_AVAILABLE,
             )
 
         with gr.Column(scale=1):
@@ -1279,29 +1496,31 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 value=get_phoneme_mapping_for_dataframe(),
                 label="Current Phoneme Mapping",
                 interactive=True,
-                wrap=True
+                wrap=True,
             )
 
             gr.Markdown("#### ➕ Add New Mapping")
             with gr.Row():
                 add_lyric_input = gr.Textbox(
-                    label="Lyric",
-                    placeholder="Example: 라",
-                    scale=1
+                    label="Lyric", placeholder="Example: 라", scale=1
                 )
                 add_phoneme_input = gr.Textbox(
-                    label="Phoneme",
-                    placeholder="Example: l aa",
-                    scale=1
+                    label="Phoneme", placeholder="Example: l aa", scale=1
                 )
             btn_add_mapping = gr.Button("➕ Add Mapping", variant="primary", size="sm")
 
             gr.Markdown("### 🔧 Batch Operations")
             with gr.Row():
-                btn_auto_generate = gr.Button("🤖 Auto-generate All Phonemes", variant="primary")
-                btn_clear_phonemes = gr.Button("🗑️ Clear All Phonemes", variant="secondary")
+                btn_auto_generate = gr.Button(
+                    "🤖 Auto-generate All Phonemes", variant="primary"
+                )
+                btn_clear_phonemes = gr.Button(
+                    "🗑️ Clear All Phonemes", variant="secondary"
+                )
 
-            btn_reset_mapping = gr.Button("🔄 Reset Mapping to Default", variant="secondary")
+            btn_reset_mapping = gr.Button(
+                "🔄 Reset Mapping to Default", variant="secondary"
+            )
 
     with gr.Row():
         with gr.Column(scale=1):
@@ -1313,28 +1532,24 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 maximum=1.0,
                 value=0.01,
                 step=0.001,
-                label="Attack (seconds)"
+                label="Attack (seconds)",
             )
             decay_features = gr.Slider(
                 minimum=0.001,
                 maximum=1.0,
                 value=0.1,
                 step=0.001,
-                label="Decay (seconds)"
+                label="Decay (seconds)",
             )
             sustain_features = gr.Slider(
-                minimum=0.0,
-                maximum=1.0,
-                value=0.7,
-                step=0.01,
-                label="Sustain (level)"
+                minimum=0.0, maximum=1.0, value=0.7, step=0.01, label="Sustain (level)"
             )
             release_features = gr.Slider(
                 minimum=0.001,
                 maximum=2.0,
                 value=0.3,
                 step=0.001,
-                label="Release (seconds)"
+                label="Release (seconds)",
             )
 
             # Waveform settings
@@ -1346,89 +1561,77 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                     ("Sawtooth", "sawtooth"),
                     ("Square", "square"),
                     ("Triangle", "triangle"),
-                    ("Sine", "sine")
+                    ("Sine", "sine"),
                 ],
                 value="complex",
-                label="Waveform Type"
+                label="Waveform Type",
             )
         with gr.Column():
             gr.Markdown("### 📊 Analysis Settings")
 
             # Select features to analyze
             include_f0_features = gr.Checkbox(
-                label="F0 (fundamental frequency) analysis",
-                value=True
+                label="F0 (fundamental frequency) analysis", value=True
             )
             include_loudness_features = gr.Checkbox(
-                label="Loudness (loudness) analysis",
-                value=True
+                label="Loudness (loudness) analysis", value=True
             )
             include_voicing_features = gr.Checkbox(
-                label="Voice/Unvoice (voiced/unvoiced) analysis",
-                value=True
+                label="Voice/Unvoice (voiced/unvoiced) analysis", value=True
             )
 
             # F0 analysis method
             f0_method_features = gr.Dropdown(
                 choices=[
                     ("PYIN (accurate, slow)", "pyin"),
-                    ("PipTrack (fast, less accurate)", "piptrack")
+                    ("PipTrack (fast, less accurate)", "piptrack"),
                 ],
                 value="pyin",
-                label="F0 Extraction Method"
+                label="F0 Extraction Method",
             )
 
             # Loudness settings
             loudness_use_db_features = gr.Checkbox(
-                label="Display Loudness in dB",
-                value=True
+                label="Display Loudness in dB", value=True
             )
             with gr.Row():
                 loudness_y_min_features = gr.Number(
-                    label="Loudness minimum value (auto if empty)",
-                    value=None
+                    label="Loudness minimum value (auto if empty)", value=None
                 )
                 loudness_y_max_features = gr.Number(
-                    label="Loudness maximum value (auto if empty)",
-                    value=None
+                    label="Loudness maximum value (auto if empty)", value=None
                 )
 
             # Voice/Unvoice settings
             voicing_use_probs_features = gr.Checkbox(
                 label="Display Voice/Unvoice as probabilities",
                 value=True,
-                info="Unchecked: Display as binary (0/1)"
+                info="Unchecked: Display as binary (0/1)",
             )
         with gr.Column():
             gr.Markdown("### 🎤 Upload Audio")
             audio_upload_features = gr.Audio(
-                label="Audio file to analyze",
-                type="filepath",
-                interactive=True
+                label="Audio file to analyze", type="filepath", interactive=True
             )
 
             btn_analyze_uploaded = gr.Button(
                 "📤 Analyze Uploaded Audio",
                 variant="secondary",
                 size="lg",
-                interactive=LIBROSA_AVAILABLE
+                interactive=LIBROSA_AVAILABLE,
             )
 
     with gr.Row():
         with gr.Column():
             features_status_text = gr.Textbox(
-                label="Analysis Status",
-                interactive=False,
-                lines=4
+                label="Analysis Status", interactive=False, lines=4
             )
 
     with gr.Row():
         with gr.Column():
             # Reference audio playback
             reference_audio_features = gr.Audio(
-                label="Analyzed Audio (reference)",
-                type="filepath",
-                interactive=False
+                label="Analyzed Audio (reference)", type="filepath", interactive=False
             )
     with gr.Row():
         with gr.Column():
@@ -1461,10 +1664,10 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
             loudness_y_min_features,
             loudness_y_max_features,
             loudness_use_db_features,
-            voicing_use_probs_features
+            voicing_use_probs_features,
         ],
         outputs=[piano_roll, features_status_text, reference_audio_features],
-        show_progress=True
+        show_progress=True,
     )
 
     # Analyze uploaded audio button
@@ -1480,10 +1683,10 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
             loudness_y_min_features,
             loudness_y_max_features,
             loudness_use_db_features,
-            voicing_use_probs_features
+            voicing_use_probs_features,
         ],
         outputs=[piano_roll, features_status_text, reference_audio_features],
-        show_progress=True
+        show_progress=True,
     )
 
     # Update JSON output when note changes
@@ -1494,7 +1697,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         fn=update_features_json_output,
         inputs=[piano_roll],
         outputs=[output_json_features],
-        show_progress=False
+        show_progress=False,
     )
 
     # Add mapping
@@ -1502,17 +1705,17 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         fn=add_phoneme_mapping,
         inputs=[add_lyric_input, add_phoneme_input],
         outputs=[phoneme_mapping_dataframe, phoneme_status_text],
-        show_progress=False
+        show_progress=False,
     ).then(
         fn=lambda: ["", ""],  # Reset input fields
-        outputs=[add_lyric_input, add_phoneme_input]
+        outputs=[add_lyric_input, add_phoneme_input],
     )
 
     # Reset
     btn_reset_mapping.click(
         fn=reset_phoneme_mapping,
         outputs=[phoneme_mapping_dataframe, phoneme_status_text],
-        show_progress=False
+        show_progress=False,
     )
 
     # Automatic G2P processing when lyric is input
@@ -1521,33 +1724,34 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         print("🗣️ Phoneme tab - Input event triggered")
         print(f"   - Piano roll data: {type(piano_roll_data)}")
 
-        if not piano_roll_data or 'notes' not in piano_roll_data:
+        piano_roll_data = pr_to_dict(piano_roll_data)
+        if not piano_roll_data or "notes" not in piano_roll_data:
             return piano_roll_data, "Piano roll data is missing."
 
         return auto_generate_missing_phonemes(piano_roll_data)
 
     def auto_generate_missing_phonemes(piano_roll_data):
         """Automatically generate phoneme for notes with lyrics but no phoneme"""
-        if not piano_roll_data or 'notes' not in piano_roll_data:
+        piano_roll_data = pr_to_dict(piano_roll_data)
+        if not piano_roll_data or "notes" not in piano_roll_data:
             return piano_roll_data, "Piano roll data is missing."
 
         # Copy current notes
-        notes = piano_roll_data['notes'].copy()
+        notes = piano_roll_data["notes"].copy()
         updated_notes = []
         changes_made = 0
 
         for note in notes:
-            if dataclasses.is_dataclass(note):
-                # For dataclass notes, copy by creating new instance
-                import copy
-                note_copy = copy.copy(note)
-            else:
-                # For dict notes, use dict copy
-                note_copy = note.copy()
+            # Skip None notes
+            if note is None:
+                print("   - Warning: Skipping None note")
+                continue
+                
+            note_copy = note.copy()
 
             # Process if lyric exists
-            lyric = (get_note_field(note, 'lyric', '') or '').strip()
-            current_phoneme = (get_note_field(note, 'phoneme', '') or '').strip()
+            lyric = note.get("lyric", "").strip() if note.get("lyric") is not None else ""
+            current_phoneme = note.get("phoneme", "").strip() if note.get("phoneme") is not None else ""
 
             if lyric:
                 # Run G2P to create new phoneme
@@ -1555,13 +1759,14 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
 
                 # Update if different from existing phoneme or missing
                 if not current_phoneme or current_phoneme != new_phoneme:
-                    set_note_field(note_copy, 'phoneme', new_phoneme)
+                    note_copy["phoneme"] = new_phoneme
                     changes_made += 1
                     print(f"   - G2P applied: '{lyric}' -> '{new_phoneme}'")
             else:
                 # Remove phoneme if lyric is missing
                 if current_phoneme:
-                    set_note_field(note_copy, 'phoneme', None)
+                    note_copy["phoneme"] = None
+
                     changes_made += 1
                     print(f"   - Phoneme removed (no lyric)")
 
@@ -1570,8 +1775,11 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         if changes_made > 0:
             # Return updated piano roll data
             updated_piano_roll = piano_roll_data.copy()
-            updated_piano_roll['notes'] = updated_notes
-            return updated_piano_roll, f"Automatic G2P completed: {changes_made} notes updated"
+            updated_piano_roll["notes"] = updated_notes
+            return (
+                updated_piano_roll,
+                f"Automatic G2P completed: {changes_made} notes updated",
+            )
         else:
             return piano_roll_data, "No changes to apply G2P."
 
@@ -1579,7 +1787,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         fn=handle_phoneme_input_event,
         inputs=[piano_roll],
         outputs=[piano_roll, phoneme_status_text],
-        show_progress=False
+        show_progress=False,
     )
 
     # Automatic phoneme generation when note changes
@@ -1591,7 +1799,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         fn=handle_phoneme_change_event,
         inputs=[piano_roll],
         outputs=[piano_roll, phoneme_status_text],
-        show_progress=False
+        show_progress=False,
     )
 
     # Automatic phoneme generation (manual button)
@@ -1599,7 +1807,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         fn=auto_generate_all_phonemes,
         inputs=[piano_roll],
         outputs=[piano_roll, phoneme_status_text],
-        show_progress=True
+        show_progress=True,
     )
 
     # Clear all phonemes
@@ -1607,7 +1815,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         fn=clear_all_phonemes,
         inputs=[piano_roll],
         outputs=[piano_roll, phoneme_status_text],
-        show_progress=False
+        show_progress=False,
     )
 
     # Update JSON output when note changes (separate from automatic phoneme processing)
@@ -1618,7 +1826,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         fn=update_json_output,
         inputs=[piano_roll],
         outputs=[piano_roll],
-        show_progress=False
+        show_progress=False,
     )
 
     # Log play event
