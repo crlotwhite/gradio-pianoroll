@@ -12,7 +12,7 @@ from gradio.events import Events
 from gradio.i18n import I18nData
 
 from .data_models import (
-    PianoRollData,
+    PianoRollDataClass as PianoRollData,
     clean_piano_roll_data,
     ensure_note_ids,
     validate_and_warn,
@@ -58,6 +58,8 @@ class PianoRoll(Component):
         Events.stop,
         Events.clear,
     ]
+
+    data_model = PianoRollData
 
     def __init__(
         self,
@@ -239,14 +241,14 @@ class PianoRoll(Component):
         if payload is None:
             return payload
 
-        # 데이터 정리 및 유효성 검사
+        if not isinstance(payload, PianoRollData):
+            payload = PianoRollData.from_dict(payload)
+
         cleaned_payload = clean_piano_roll_data(payload)
         validated_payload = validate_and_warn(
             cleaned_payload, "Frontend piano roll data"
         )
 
-        if dataclasses.is_dataclass(validated_payload):
-            return dataclasses.asdict(validated_payload)
         return validated_payload
 
     def postprocess(self, value):
@@ -258,90 +260,60 @@ class PianoRoll(Component):
         Returns:
             The postprocessed data (with all required fields).
         """
-        if dataclasses.is_dataclass(value):
-            value = dataclasses.asdict(value)
+        if not isinstance(value, PianoRollData):
+            value = PianoRollData.from_dict(value)
 
-        # Ensure all notes have IDs and all timing values when sending to frontend
-        if value and "notes" in value and value["notes"]:
-            pixels_per_beat = value.get("pixelsPerBeat", 80)
-            tempo = value.get("tempo", 120)
-            sample_rate = value.get("sampleRate", 44100)
-            ppqn = value.get("ppqn", 480)
+        if value.notes:
+            pixels_per_beat = value.pixelsPerBeat or 80
+            tempo = value.tempo
+            sample_rate = value.sampleRate or 44100
+            ppqn = value.ppqn or 480
 
-            for note in value["notes"]:
-                if "id" not in note or not note["id"]:
-                    note["id"] = generate_note_id()
+            for note in value.notes:
+                if not note.id:
+                    note.id = generate_note_id()
 
-                # Add all timing values if missing
-                if "startFlicks" not in note or "startSeconds" not in note:
+                if note.startFlicks is None or note.startSeconds is None:
                     start_timing = calculate_all_timing_data(
-                        note["start"], pixels_per_beat, tempo, sample_rate, ppqn
+                        note.start, pixels_per_beat, tempo, sample_rate, ppqn
                     )
-                    note.update(
-                        {
-                            "startFlicks": start_timing["flicks"],
-                            "startSeconds": start_timing["seconds"],
-                            "startBeats": start_timing["beats"],
-                            "startTicks": start_timing["ticks"],
-                            "startSample": start_timing["samples"],
-                        }
-                    )
+                    note.startFlicks = start_timing["flicks"]
+                    note.startSeconds = start_timing["seconds"]
+                    note.startBeats = start_timing["beats"]
+                    note.startTicks = start_timing["ticks"]
+                    note.startSample = start_timing["samples"]
 
-                if "durationFlicks" not in note or "durationSeconds" not in note:
+                if note.durationFlicks is None or note.durationSeconds is None:
                     duration_timing = calculate_all_timing_data(
-                        note["duration"], pixels_per_beat, tempo, sample_rate, ppqn
+                        note.duration, pixels_per_beat, tempo, sample_rate, ppqn
                     )
-                    note.update(
-                        {
-                            "durationFlicks": duration_timing["flicks"],
-                            "durationSeconds": duration_timing["seconds"],
-                            "durationBeats": duration_timing["beats"],
-                            "durationTicks": duration_timing["ticks"],
-                            "durationSamples": duration_timing["samples"],
-                        }
-                    )
+                    note.durationFlicks = duration_timing["flicks"]
+                    note.durationSeconds = duration_timing["seconds"]
+                    note.durationBeats = duration_timing["beats"]
+                    note.durationTicks = duration_timing["ticks"]
+                    note.durationSamples = duration_timing["samples"]
 
-                # Calculate end time if missing
-                if "endSeconds" not in note:
-                    note["endSeconds"] = note.get("startSeconds", 0) + note.get(
-                        "durationSeconds", 0
+                if note.endSeconds is None:
+                    note.endSeconds = (note.startSeconds or 0) + (
+                        note.durationSeconds or 0
                     )
 
-        # Send backend data attributes along with the value
-        if value and isinstance(value, dict):
-            # Prioritize backend data already in value, otherwise get from component attributes
-            # This allows for independent backend settings per component instance
+        if value.audio_data is None and getattr(self, "audio_data", None):
+            value.audio_data = self.audio_data
+        if value.curve_data is None and getattr(self, "curve_data", None):
+            value.curve_data = self.curve_data
+        if value.segment_data is None and getattr(self, "segment_data", None):
+            value.segment_data = self.segment_data
+        if value.use_backend_audio is None:
+            value.use_backend_audio = getattr(self, "use_backend_audio", False)
 
-            if "audio_data" not in value or value["audio_data"] is None:
-                if hasattr(self, "audio_data") and self.audio_data:
-                    value["audio_data"] = self.audio_data
+        logger.debug("🔊 [postprocess] Backend audio data processed:")
+        logger.debug("   - audio_data present: %s", bool(value.audio_data))
+        logger.debug("   - use_backend_audio: %s", value.use_backend_audio)
+        logger.debug("   - curve_data present: %s", bool(value.curve_data))
+        logger.debug("   - segment_data present: %s", bool(value.segment_data))
 
-            if "curve_data" not in value or value["curve_data"] is None:
-                if hasattr(self, "curve_data") and self.curve_data:
-                    value["curve_data"] = self.curve_data
-
-            if "segment_data" not in value or value["segment_data"] is None:
-                if hasattr(self, "segment_data") and self.segment_data:
-                    value["segment_data"] = self.segment_data
-
-            if "use_backend_audio" not in value:
-                if hasattr(self, "use_backend_audio"):
-                    value["use_backend_audio"] = self.use_backend_audio
-                else:
-                    value["use_backend_audio"] = False
-
-            # Add debug logging
-            logger.debug("🔊 [postprocess] Backend audio data processed:")
-            logger.debug("   - audio_data present: %s", bool(value.get("audio_data")))
-            logger.debug(
-                "   - use_backend_audio: %s", value.get("use_backend_audio", False)
-            )
-            logger.debug("   - curve_data present: %s", bool(value.get("curve_data")))
-            logger.debug(
-                "   - segment_data present: %s", bool(value.get("segment_data"))
-            )
-
-        return value
+        return value.to_dict()
 
     def example_payload(self):
         """

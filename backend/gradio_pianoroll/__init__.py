@@ -9,7 +9,7 @@ from .data_models import (
     NoteData,
     LineDataPointData,
     LineLayerConfigData,
-    PianoRollDataClass,
+    PianoRollDataClass as PianoRollData,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ __all__ = [
     "NoteData",
     "LineDataPointData",
     "LineLayerConfigData",
-    "PianoRollDataClass",
+    "PianoRollData",
 ]
 
 # Optional utilities - users can import explicitly if needed
