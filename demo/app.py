@@ -9,6 +9,7 @@ import gradio as gr
 import numpy as np
 from gradio_pianoroll import PianoRoll, PianoRollData
 
+
 # Additional imports for F0 analysis
 try:
     import librosa
@@ -74,6 +75,26 @@ def initialize_phoneme_map():
 # Initialize phoneme mapping at program start
 initialize_phoneme_map()
 
+# Utility functions for handling both dict and dataclass notes
+def get_note_field(note, field, default=None):
+    """Get field value from note (supports both dict and dataclass)"""
+    if dataclasses.is_dataclass(note):
+        # For dataclass, use hasattr to check if field exists, then getattr
+        if hasattr(note, field):
+            value = getattr(note, field)
+            # Return default if value is None and default is provided
+            return value if value is not None else default
+        else:
+            return default
+    else:
+        return note.get(field, default)
+
+def set_note_field(note, field, value):
+    """Set field value in note (supports both dict and dataclass)"""
+    if dataclasses.is_dataclass(note):
+        setattr(note, field, value)
+    else:
+        note[field] = value
 
 def get_phoneme_mapping_for_dataframe():
     """Return phoneme mapping list for DataFrame"""
@@ -1745,6 +1766,7 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
                 # Remove phoneme if lyric is missing
                 if current_phoneme:
                     note_copy["phoneme"] = None
+
                     changes_made += 1
                     print(f"   - Phoneme removed (no lyric)")
 
