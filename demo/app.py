@@ -260,6 +260,9 @@ def synthesize_audio(
     # Calculate total length (up to the end of the last note)
     max_end_time = 0
     for note in notes:
+        # Skip None notes
+        if note is None:
+            continue
         # Convert pixels to seconds (considering tempo and pixels per beat)
         start_seconds = (note["start"] / pixels_per_beat) * (60.0 / tempo)
         duration_seconds = (note["duration"] / pixels_per_beat) * (60.0 / tempo)
@@ -275,6 +278,10 @@ def synthesize_audio(
 
     # Process each note
     for i, note in enumerate(notes):
+        # Skip None notes
+        if note is None:
+            print(f"   - Warning: Skipping None note at index {i}")
+            continue
         try:
             # Note properties
             pitch = note["pitch"]
@@ -489,6 +496,10 @@ def clear_all_phonemes(piano_roll):
     notes = piano_roll["notes"].copy()
 
     for note in notes:
+        # Skip None notes
+        if note is None:
+            print("   - Warning: Skipping None note")
+            continue
         note["phoneme"] = None
 
     updated_piano_roll = piano_roll.copy()
@@ -511,6 +522,10 @@ def auto_generate_all_phonemes(piano_roll):
 
     updated_count = 0
     for note in notes:
+        # Skip None notes
+        if note is None:
+            print("   - Warning: Skipping None note")
+            continue
         lyric = note.get("lyric")
         if lyric:
             phoneme = mock_g2p(lyric)
@@ -1706,11 +1721,16 @@ with gr.Blocks(title="PianoRoll with Synthesizer Demo") as demo:
         changes_made = 0
 
         for note in notes:
+            # Skip None notes
+            if note is None:
+                print("   - Warning: Skipping None note")
+                continue
+                
             note_copy = note.copy()
 
             # Process if lyric exists
-            lyric = note.get("lyric", "").strip()
-            current_phoneme = note.get("phoneme", "").strip()
+            lyric = note.get("lyric", "").strip() if note.get("lyric") is not None else ""
+            current_phoneme = note.get("phoneme", "").strip() if note.get("phoneme") is not None else ""
 
             if lyric:
                 # Run G2P to create new phoneme
