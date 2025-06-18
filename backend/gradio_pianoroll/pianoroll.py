@@ -59,7 +59,6 @@ class PianoRoll(Component):
         Events.clear,
     ]
 
-    data_model = PianoRollData
 
     def __init__(
         self,
