@@ -7,7 +7,7 @@
   import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks, calculateAllTimingData } from '../utils/flicks';
   import { LayerManager, GridLayer, NotesLayer, WaveformLayer, LineLayer } from '../utils/layers';
   import LayerControlPanel from './LayerControlPanel.svelte';
-  import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint } from '../types/layer';
+  import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint } from '../types';
   import { AudioEngineManager } from '../utils/audioEngine';
   import { NOTE_HEIGHT, TOTAL_NOTES, DEFAULT_VELOCITY, DEFAULT_LYRIC } from '../utils/constants';
   import { getSubdivisionsFromSnapSetting as getSnapSubdivisions, getGridSizeFromSnap, getInitialNoteDuration, getMinimumNoteSize, snapToGrid as snapValueToGrid, snapDurationToGrid } from '../utils/snapUtils';

@@ -3,8 +3,7 @@
  */
 
 import { BaseLayer, LayerZIndex } from '../LayerSystem';
-import type { LayerRenderContext } from '../../types/layer';
-import type { Note } from '../../types/layer';
+import type { LayerRenderContext, Note } from '../../types';
 
 export class NotesLayer extends BaseLayer {
   // Note colors and styling

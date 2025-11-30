@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import { flicksToBeats, formatFlicks } from '../utils/flicks';
-  import type { DebugComponentProps } from '../types/component';
+  import type { DebugComponentProps } from '../types';
   type NoteType = NonNullable<DebugComponentProps['notes']>[number];
 
   // Props

@@ -1,4 +1,4 @@
-import type { LayerRenderContext, LayerProps } from '../types/layer';
+import type { LayerRenderContext, LayerProps } from '../types';
 
 /**
  * Layer System for Piano Roll Canvas Rendering

@@ -3,8 +3,7 @@
  */
 
 import { BaseLayer, LayerZIndex } from '../LayerSystem';
-import type { LayerRenderContext } from '../../types/layer';
-import type { LineDataPoint, LineLayerConfig } from '../../types/layer';
+import type { LayerRenderContext, LineDataPoint, LineLayerConfig } from '../../types';
 
 export class LineLayer extends BaseLayer {
   private data: LineDataPoint[] = [];
