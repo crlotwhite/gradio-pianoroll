@@ -7,6 +7,7 @@
   import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks, calculateAllTimingData } from '../utils/flicks';
   import { LayerManager, GridLayer, NotesLayer, WaveformLayer, LineLayer } from '../utils/layers';
   import LayerControlPanel from './LayerControlPanel.svelte';
+  import LyricEditor from './LyricEditor.svelte';
   import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint, CoordinateConfig, MouseHandlerConfig, MouseState, EditMode } from '../types';
   import { AudioEngineManager } from '../utils/audioEngine';
   import { NOTE_HEIGHT, TOTAL_NOTES, DEFAULT_VELOCITY, DEFAULT_LYRIC } from '../utils/constants';
@@ -160,11 +161,15 @@
   // Keep track of the previous zoom level for scaling
   let previousPixelsPerBeat = pixelsPerBeat;
 
-  // Lyric editing state
-  let isEditingLyric = false;
-  let editedNoteId: string | null = null;
-  let lyricInputValue = '';
-  let lyricInputPosition = { x: 0, y: 0, width: 0 };
+  // Lyric editing state (used by LyricEditor component)
+  let lyricEditorState = {
+    isEditing: false,
+    noteId: null as string | null,
+    value: '',
+    x: 0,
+    y: 0,
+    width: 40
+  };
 
   const dispatch = createEventDispatcher();
 
@@ -320,61 +325,46 @@
     const clickedNote = findNoteAtPosition(x, y);
 
     if (clickedNote) {
-      // Set up lyric editing state
-      editedNoteId = clickedNote.id;
-      lyricInputValue = clickedNote.lyric || '';
-
       // Calculate screen position for the input field
       const noteY = pitchToY(clickedNote.pitch) - verticalScroll;
 
-      lyricInputPosition = {
+      // Update lyric editor state
+      lyricEditorState = {
+        isEditing: true,
+        noteId: clickedNote.id,
+        value: clickedNote.lyric || '',
         x: clickedNote.start - horizontalScroll,
         y: noteY,
-        width: clickedNote.duration
+        width: Math.max(40, clickedNote.duration) // Minimum width for usability
       };
-
-      isEditingLyric = true;
-
-      // Set a timeout to focus the input element once it's rendered
-      setTimeout(() => {
-        const input = document.getElementById('lyric-input');
-        if (input) {
-          input.focus();
-        }
-      }, 10);
     }
   }
 
-  // Save the edited lyric
-  function saveLyric() {
-    if (!editedNoteId) return;
-
-    // Save old and new lyrics
-    const oldNote = notes.find(note => note.id === editedNoteId);
-    const oldLyric = oldNote?.lyric || '';
-    const newLyric = lyricInputValue;
+  // Handle lyric save from LyricEditor component
+  function handleLyricSave(event: CustomEvent<{ noteId: string; oldValue: string; newValue: string }>) {
+    const { noteId, oldValue, newValue } = event.detail;
 
     // Update the note with the new lyric
     notes = notes.map(note => {
-      if (note.id === editedNoteId) {
+      if (note.id === noteId) {
         return {
           ...note,
-          lyric: newLyric
+          lyric: newValue
         };
       }
       return note;
     });
 
     // Dispatch event only if lyric actually changed
-    if (oldLyric !== newLyric) {
+    if (oldValue !== newValue) {
       // Dispatch input event first (for G2P execution)
       dispatch('lyricInput', {
         notes,
         lyricData: {
-          noteId: editedNoteId,
-          oldLyric,
-          newLyric,
-          note: notes.find(note => note.id === editedNoteId)
+          noteId,
+          oldLyric: oldValue,
+          newLyric: newValue,
+          note: notes.find(note => note.id === noteId)
         }
       });
     } else {
@@ -383,22 +373,15 @@
     }
 
     // Reset editing state
-    isEditingLyric = false;
-    editedNoteId = null;
+    lyricEditorState = { ...lyricEditorState, isEditing: false, noteId: null };
 
     // Redraw with updated lyrics
     renderLayers();
   }
 
-  // Handle keydown in the lyric input
-  function handleLyricInputKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
-      saveLyric();
-    } else if (event.key === 'Escape') {
-      // Cancel editing
-      isEditingLyric = false;
-      editedNoteId = null;
-    }
+  // Handle lyric cancel from LyricEditor component
+  function handleLyricCancel() {
+    lyricEditorState = { ...lyricEditorState, isEditing: false, noteId: null };
   }
 
   // Handle global keyboard shortcuts
@@ -937,26 +920,17 @@
     />
   {/if}
 
-  {#if isEditingLyric}
-    <div
-      class="lyric-input-container"
-      style="
-        left: {lyricInputPosition.x}px;
-        top: {lyricInputPosition.y}px;
-        width: {lyricInputPosition.width}px;
-      "
-    >
-      <input
-        id="lyric-input"
-        type="text"
-        bind:value={lyricInputValue}
-        on:keydown={handleLyricInputKeydown}
-        on:blur={saveLyric}
-        class="lyric-input"
-        aria-label="Edit note lyrics"
-      />
-    </div>
-  {/if}
+  <!-- Lyric Editor Component -->
+  <LyricEditor
+    isEditing={lyricEditorState.isEditing}
+    noteId={lyricEditorState.noteId}
+    value={lyricEditorState.value}
+    x={lyricEditorState.x}
+    y={lyricEditorState.y}
+    width={lyricEditorState.width}
+    on:save={handleLyricSave}
+    on:cancel={handleLyricCancel}
+  />
 
   <!-- Position info display -->
   <div class="position-info" aria-live="polite">
@@ -1057,27 +1031,5 @@
 
   .grid-canvas.resize-possible {
     cursor: ew-resize; /* Left-right resize cursor when hovering over note edges */
-  }
-
-  .lyric-input-container {
-    position: absolute;
-    z-index: 10;
-  }
-
-  .lyric-input {
-    width: 100%;
-    height: 18px;
-    background-color: #fff;
-    border: 1px solid #1976D2;
-    border-radius: 2px;
-    font-size: 10px;
-    padding: 0 4px;
-    color: #333;
-    box-sizing: border-box;
-  }
-
-  .lyric-input:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.4);
   }
 </style>
