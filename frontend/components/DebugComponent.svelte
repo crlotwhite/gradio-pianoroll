@@ -19,7 +19,7 @@
   /** @type {boolean} */
   export let isRendering: boolean = false;
 
-  // 내부 계산값
+  // Internal calculated values
   $: currentBeats = flicksToBeats(currentFlicks, tempo);
   $: currentMeasure = Math.floor(currentBeats / 4) + 1;
   $: currentBeat = (currentBeats % 4) + 1;

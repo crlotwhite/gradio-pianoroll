@@ -371,7 +371,7 @@ class AudioEngine {
     return this.renderBuffer;
   }
 
-  // WAV 파일로 내보내기
+  // Export to WAV file
   exportToWav(): Blob | null {
     if (!this.renderBuffer) {
       console.warn('No rendered audio buffer available for export');
@@ -381,7 +381,7 @@ class AudioEngine {
     return this.audioBufferToWav(this.renderBuffer);
   }
 
-  // 오디오 다운로드
+  // Download audio
   downloadAudio(filename: string = 'piano_roll_audio.wav'): void {
     const wavBlob = this.exportToWav();
     if (!wavBlob) {
@@ -389,22 +389,22 @@ class AudioEngine {
       return;
     }
 
-    // 다운로드 링크 생성
+    // Create download link
     const url = URL.createObjectURL(wavBlob);
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
 
-    // 임시로 DOM에 추가하고 클릭하여 다운로드 시작
+    // Temporarily add to DOM and click to start download
     document.body.appendChild(link);
     link.click();
 
-    // 정리
+    // Cleanup
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }
 
-  // AudioBuffer를 WAV Blob으로 변환
+  // Convert AudioBuffer to WAV Blob
   private audioBufferToWav(buffer: AudioBuffer): Blob {
     const length = buffer.length;
     const numberOfChannels = buffer.numberOfChannels;
@@ -416,7 +416,7 @@ class AudioEngine {
     const dataSize = length * blockAlign;
     const bufferSize = 44 + dataSize;
 
-    // WAV 헤더 생성
+    // Create WAV header
     const arrayBuffer = new ArrayBuffer(bufferSize);
     const view = new DataView(arrayBuffer);
 
@@ -439,12 +439,12 @@ class AudioEngine {
     this.writeString(view, 36, 'data');
     view.setUint32(40, dataSize, true);
 
-    // 오디오 데이터 쓰기
+    // Write audio data
     let offset = 44;
     for (let i = 0; i < length; i++) {
       for (let channel = 0; channel < numberOfChannels; channel++) {
         const channelData = buffer.getChannelData(channel);
-        // 부동소수점을 16비트 정수로 변환
+        // Convert floating point to 16-bit integer
         const sample = Math.max(-1, Math.min(1, channelData[i]));
         const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
         view.setInt16(offset, intSample, true);
@@ -455,7 +455,7 @@ class AudioEngine {
     return new Blob([arrayBuffer], { type: 'audio/wav' });
   }
 
-  // 문자열을 DataView에 쓰기
+  // Write string to DataView
   private writeString(view: DataView, offset: number, string: string): void {
     for (let i = 0; i < string.length; i++) {
       view.setUint8(offset + i, string.charCodeAt(i));
@@ -463,7 +463,7 @@ class AudioEngine {
   }
 }
 
-// AudioEngine 인스턴스 관리자
+// AudioEngine instance manager
 class AudioEngineManager {
   private static instances: Map<string, AudioEngine> = new Map();
 
@@ -488,8 +488,8 @@ class AudioEngineManager {
   }
 }
 
-// 기본 인스턴스 (하위 호환성을 위해)
+// Default instance (for backward compatibility)
 export const audioEngine = AudioEngineManager.getInstance('default');
 
-// 인스턴스 관리자 내보내기
+// Export instance manager
 export { AudioEngineManager };

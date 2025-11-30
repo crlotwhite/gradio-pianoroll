@@ -235,7 +235,7 @@
    * Skips rendering if backend audio is enabled.
    */
   async function renderAudio() {
-    // 백엔드 오디오를 사용하는 경우 렌더링하지 않음
+    // Skip rendering when using backend audio
     if (use_backend_audio) {
       console.log("🎵 Backend audio enabled - skipping frontend rendering");
       return;
@@ -260,11 +260,11 @@
     }
   }
 
-  // 기존 backendAudioContext, backendAudioBuffer, backendAudioSource, backendPlayStartTime, backendPlayheadInterval 등 상태 제거
+  // Removed existing backendAudioContext, backendAudioBuffer, backendAudioSource, backendPlayStartTime, backendPlayheadInterval states
 
-  // 기존 initBackendAudio, decodeBackendAudio, startBackendAudioPlayback, pauseBackendAudio, stopBackendAudio, updateBackendPlayhead, downloadBackendAudio 함수 제거
+  // Removed existing initBackendAudio, decodeBackendAudio, startBackendAudioPlayback, pauseBackendAudio, stopBackendAudio, updateBackendPlayhead, downloadBackendAudio functions
 
-  // 기존 함수 대체
+  // Replacement functions
   async function handleBackendAudioInit() {
     if (audio_data) {
       await backendAudioEngine.initBackendAudio();
@@ -273,71 +273,71 @@
   }
 
   function handleBackendAudioPlay() {
-    // playhead 업데이트를 위한 참조 객체들 생성
+    // Create reference objects for playhead updates
     const isPlayingRef = { value: isPlaying };
     const currentFlicksRef = { value: currentFlicks };
     
     backendAudioEngine.startBackendAudioPlayback(currentFlicks, () => {
       isPlaying = false;
-      // playhead 업데이트 정지
+      // Stop playhead updates
       if (backendAudioEngine.backendPlayheadInterval) {
         clearInterval(backendAudioEngine.backendPlayheadInterval);
         backendAudioEngine.backendPlayheadInterval = null;
       }
     });
     
-    // 재생 상태 업데이트
+    // Update playback state
     isPlaying = true;
     
-    // playhead 업데이트 시작
+    // Start playhead updates
     backendAudioEngine.updateBackendPlayhead(
       isPlayingRef,
       currentFlicksRef,
       () => {
-        // 재생 완료 시 콜백
+        // Callback on playback completion
         isPlaying = false;
         currentFlicks = 0;
       }
     );
     
-    // playhead 실시간 업데이트를 위한 추가 interval
+    // Additional interval for real-time playhead updates
     const playheadUpdateInterval = setInterval(() => {
       if (isPlaying && backendAudioEngine.backendAudioContext && backendAudioEngine.backendAudioBuffer) {
         const elapsedTime = backendAudioEngine.backendAudioContext.currentTime - backendAudioEngine.backendPlayStartTime;
         const newFlicks = Math.round(elapsedTime * 705600000);
         
-        // currentFlicks를 실시간으로 업데이트
+        // Update currentFlicks in real-time
         currentFlicks = newFlicks;
         
-        // 재생이 끝났는지 확인
+        // Check if playback has ended
         if (elapsedTime >= backendAudioEngine.backendAudioBuffer.duration) {
           isPlaying = false;
           currentFlicks = 0;
           clearInterval(playheadUpdateInterval);
         }
       } else if (!isPlaying) {
-        // 재생이 중지되면 interval 정리
+        // Clean up interval when playback stops
         clearInterval(playheadUpdateInterval);
       }
-    }, 16); // 60fps로 업데이트
+    }, 16); // Update at 60fps
   }
 
   function handleBackendAudioPause() {
-    // 현재 위치를 참조 객체로 전달
+    // Pass current position as reference object
     const currentFlicksRef = { value: currentFlicks };
     backendAudioEngine.pauseBackendAudio(currentFlicksRef);
     
-    // 업데이트된 위치를 반영
+    // Reflect updated position
     currentFlicks = currentFlicksRef.value;
     isPlaying = false;
   }
 
   function handleBackendAudioStop() {
-    // 현재 위치를 참조 객체로 전달
+    // Pass current position as reference object
     const currentFlicksRef = { value: currentFlicks };
     backendAudioEngine.stopBackendAudio(currentFlicksRef);
     
-    // 위치를 0으로 리셋
+    // Reset position to 0
     isPlaying = false;
     currentFlicks = 0;
   }
@@ -348,7 +348,7 @@
     }
   }
 
-  // Zoom level 변경 시 전체 데이터 변경 이벤트 발생
+  // Dispatch data change event when zoom level changes
   $: if (pixelsPerBeat) {
     dispatchDataChange();
   }
@@ -573,7 +573,7 @@
     notes = event.detail.notes;
     // Re-render audio when notes change
     renderAudio();
-    // 노트 변경 이벤트 발생
+    // Dispatch note change event
     dispatchNoteChange();
   }
 
@@ -585,7 +585,7 @@
     tempo = event.detail;
     // Re-render audio when tempo changes
     renderAudio();
-    // 전체 데이터 변경 이벤트 발생
+    // Dispatch data change event
     dispatchDataChange();
   }
 
@@ -613,7 +613,7 @@
     // Set up playhead position update callback
     audioEngine.setPlayheadUpdateCallback(updatePlayheadPosition);
 
-    // Initial audio render - 백엔드 오디오를 사용하지 않는 경우 항상 렌더링
+    // Initial audio render - always render when not using backend audio
     if (!use_backend_audio) {
       console.log("🎵 Initial frontend audio rendering on mount");
       renderAudio();
@@ -622,7 +622,7 @@
 
   onDestroy(() => {
     // Clean up backend audio
-    // backendAudioEngine.dispose(); // 백엔드 오디오 엔진 정리
+    // backendAudioEngine.dispose(); // Clean up backend audio engine
 
     // Clean up component-specific audio engine resources
     if (elem_id) {

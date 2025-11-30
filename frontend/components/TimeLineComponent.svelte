@@ -49,7 +49,7 @@
     }
   }
 
-  // Get subdivisions based on snap setting (음악적 의미에 맞게)
+  // Get subdivisions based on snap setting (according to musical meaning)
   function getSubdivisionsFromSnapSetting(): { count: number, pixelsPerSubdivision: number } {
     if (snapSetting === 'none') {
       // Default to quarter note subdivisions if snap is 'none'
@@ -170,34 +170,34 @@
         continue;
       }
 
-      // Calculate the number of divisions per measure based on snap setting (음악적 의미에 맞게)
+      // Calculate the number of divisions per measure based on snap setting (according to musical meaning)
       let divisionsPerMeasure = 0;
       let pixelsPerDivision = 0;
 
       switch (snapSetting) {
         case '1/1':
-          divisionsPerMeasure = beatsPerMeasure / 4; // 온음표: 4/4에서는 1개
+          divisionsPerMeasure = beatsPerMeasure / 4; // Whole note: 1 per measure in 4/4
           if (divisionsPerMeasure < 1) divisionsPerMeasure = 1;
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         case '1/2':
-          divisionsPerMeasure = beatsPerMeasure / 2; // 2분음표: 4/4에서는 2개
+          divisionsPerMeasure = beatsPerMeasure / 2; // Half note: 2 per measure in 4/4
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         case '1/4':
-          divisionsPerMeasure = beatsPerMeasure; // 4분음표: 4/4에서는 4개
+          divisionsPerMeasure = beatsPerMeasure; // Quarter note: 4 per measure in 4/4
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         case '1/8':
-          divisionsPerMeasure = beatsPerMeasure * 2; // 8분음표: 4/4에서는 8개
+          divisionsPerMeasure = beatsPerMeasure * 2; // Eighth note: 8 per measure in 4/4
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         case '1/16':
-          divisionsPerMeasure = beatsPerMeasure * 4; // 16분음표: 4/4에서는 16개
+          divisionsPerMeasure = beatsPerMeasure * 4; // Sixteenth note: 16 per measure in 4/4
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         case '1/32':
-          divisionsPerMeasure = beatsPerMeasure * 8; // 32분음표: 4/4에서는 32개
+          divisionsPerMeasure = beatsPerMeasure * 8; // Thirty-second note: 32 per measure in 4/4
           pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
           break;
         default:

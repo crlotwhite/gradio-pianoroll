@@ -173,13 +173,13 @@ class PianoRoll(Component):
                 "ppqn": DEFAULT_PPQN,
             }
         else:
-            # 데이터 정리 및 유효성 검사
+            # Clean data and validate
             cleaned_value = clean_piano_roll_data(value)
             validated_value = validate_and_warn(
                 cleaned_value, "Initial piano roll value"
             )
 
-            # ID 보장 및 타이밍 데이터 생성
+            # Ensure IDs and generate timing data
             self.value = ensure_note_ids(validated_value)
             if dataclasses.is_dataclass(self.value):
                 self.value = dataclasses.asdict(self.value)
@@ -202,7 +202,7 @@ class PianoRoll(Component):
                             note["duration"], pixels_per_beat, tempo
                         )
 
-        # 백엔드 데이터 속성들
+        # Backend data attributes
         self.audio_data = audio_data
         self.curve_data = curve_data or {}
         self.segment_data = segment_data or []

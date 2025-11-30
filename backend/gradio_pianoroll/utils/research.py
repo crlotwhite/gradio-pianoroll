@@ -1,8 +1,8 @@
 """
-연구자를 위한 헬퍼 함수 라이브러리
+Helper function library for researchers.
 
-이 모듈은 연구자들이 피아노롤 컴포넌트를 쉽게 사용할 수 있도록
-복잡한 작업들을 간단한 함수 호출로 처리할 수 있게 해줍니다.
+This module enables researchers to easily use the piano roll component
+by processing complex tasks through simple function calls.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from ..data_models import (
 )
 
 # =============================================================================
-# 1. 빠른 생성 함수들 (Quick Creation)
+# 1. Quick Creation Functions
 # =============================================================================
 
 
@@ -30,25 +30,25 @@ def from_notes(
     lyrics: Optional[List[str]] = None,
 ) -> PianoRollDataClass:
     """
-    간단한 노트 리스트에서 피아노롤 데이터 생성
+    Create piano roll data from a simple note list.
 
     Args:
-        notes: (pitch, start_time_sec, duration_sec) 튜플들의 리스트
-        tempo: BPM (기본값: 120)
-        lyrics: 가사 리스트 (선택사항)
+        notes: List of (pitch, start_time_sec, duration_sec) tuples.
+        tempo: BPM (default: 120).
+        lyrics: Lyrics list (optional).
 
     Returns:
-        피아노롤 데이터 딕셔너리
+        Piano roll data dictionary.
 
     Example:
-        notes = [(60, 0, 1), (64, 1, 1), (67, 2, 1)]  # C-E-G 코드
+        notes = [(60, 0, 1), (64, 1, 1), (67, 2, 1)]  # C-E-G chord
         data = from_notes(notes, tempo=120)
     """
     pixels_per_beat = 80
 
     piano_roll_notes = []
     for i, (pitch, start_sec, duration_sec) in enumerate(notes):
-        # 초를 픽셀로 변환
+        # Convert seconds to pixels
         start_pixels = start_sec * (tempo / 60) * pixels_per_beat
         duration_pixels = duration_sec * (tempo / 60) * pixels_per_beat
 
@@ -60,7 +60,7 @@ def from_notes(
             "velocity": 100,
         }
 
-        # 가사가 있으면 추가
+        # Add lyrics if available
         if lyrics and i < len(lyrics):
             note_data["lyric"] = lyrics[i]
 
@@ -85,13 +85,13 @@ def from_midi_numbers(
     tempo: int = 120,
 ) -> PianoRollDataClass:
     """
-    MIDI 노트 번호 리스트에서 피아노롤 생성
+    Create piano roll from MIDI note number list.
 
     Args:
-        midi_notes: MIDI 노트 번호들 (0-127)
-        durations: 각 노트의 길이(초). None이면 모두 1초
-        start_times: 각 노트의 시작 시간(초). None이면 순차적 배치
-        tempo: BPM
+        midi_notes: MIDI note numbers (0-127).
+        durations: Duration of each note (seconds). Defaults to 1 second for all.
+        start_times: Start time of each note (seconds). Defaults to sequential placement.
+        tempo: BPM.
 
     Example:
         # C major scale
@@ -114,26 +114,26 @@ def from_frequencies(
     tempo: int = 120,
 ) -> PianoRollDataClass:
     """
-    주파수(Hz) 리스트에서 피아노롤 생성
+    Create piano roll from frequency (Hz) list.
 
     Args:
-        frequencies: 주파수 값들 (Hz)
-        durations: 각 노트의 길이(초)
-        start_times: 각 노트의 시작 시간(초)
-        tempo: BPM
+        frequencies: Frequency values (Hz).
+        durations: Duration of each note (seconds).
+        start_times: Start time of each note (seconds).
+        tempo: BPM.
 
     Example:
         # A4, B4, C5
         frequencies = [440, 493.88, 523.25]
         data = from_frequencies(frequencies)
     """
-    # 주파수를 MIDI 노트 번호로 변환
+    # Convert frequency to MIDI note number
     midi_notes = [int(round(69 + 12 * np.log2(f / 440))) for f in frequencies]
     return from_midi_numbers(midi_notes, durations, start_times, tempo)
 
 
 # =============================================================================
-# 2. 모델 출력 변환 함수들 (Model Output Conversion)
+# 2. Model Output Conversion Functions
 # =============================================================================
 
 
@@ -144,21 +144,21 @@ def from_tts_output(
     tempo: int = 120,
 ) -> PianoRollDataClass:
     """
-    TTS 모델의 정렬 결과를 피아노롤로 변환
+    Convert TTS model alignment result to piano roll.
 
     Args:
-        text: 원본 텍스트
-        alignment: (단어/음소, 시작시간, 종료시간) 튜플들
-        f0_data: F0 곡선 데이터 (선택사항)
-        tempo: BPM
+        text: Original text.
+        alignment: (word/phoneme, start_time, end_time) tuples.
+        f0_data: F0 curve data (optional).
+        tempo: BPM.
 
     Returns:
-        피아노롤 데이터
+        Piano roll data.
 
     Example:
-        alignment = [("안", 0.0, 0.5), ("녕", 0.5, 1.0)]
-        f0_data = [220, 230, 240, 235, 225]  # 5개 프레임의 F0
-        data = from_tts_output("안녕", alignment, f0_data)
+        alignment = [("an", 0.0, 0.5), ("nyeong", 0.5, 1.0)]
+        f0_data = [220, 230, 240, 235, 225]  # 5 frames of F0
+        data = from_tts_output("hello", alignment, f0_data)
     """
     pixels_per_beat = 80
     notes = []
@@ -166,22 +166,22 @@ def from_tts_output(
     for word, start_time, end_time in alignment:
         duration = end_time - start_time
 
-        # F0 데이터가 있으면 해당 구간의 평균 F0를 피치로 사용
+        # If F0 data is available, use average F0 of the segment as pitch
         if f0_data:
-            # 간단한 구간 매핑 (실제로는 더 정교한 매핑 필요)
+            # Simple segment mapping (more sophisticated mapping needed in practice)
             f0_segment_start = int(start_time * len(f0_data) / alignment[-1][2])
             f0_segment_end = int(end_time * len(f0_data) / alignment[-1][2])
             segment_f0 = f0_data[f0_segment_start:f0_segment_end]
             avg_f0 = np.mean([f for f in segment_f0 if f > 0]) if segment_f0 else 220
             pitch = int(round(69 + 12 * np.log2(avg_f0 / 440)))
         else:
-            pitch = 60  # 기본값: C4
+            pitch = 60  # Default: C4
 
         note = {
             "id": generate_note_id(),
             "start": start_time * (tempo / 60) * pixels_per_beat,
             "duration": duration * (tempo / 60) * pixels_per_beat,
-            "pitch": max(0, min(127, pitch)),  # MIDI 범위로 제한
+            "pitch": max(0, min(127, pitch)),  # Clamp to MIDI range
             "velocity": 100,
             "lyric": word,
         }
@@ -196,7 +196,7 @@ def from_tts_output(
         "pixelsPerBeat": pixels_per_beat,
     }
 
-    # F0 곡선 데이터 추가
+    # Add F0 curve data
     if f0_data:
         result["line_data"] = _create_f0_line_data(
             f0_data, alignment[-1][2], tempo, pixels_per_beat
@@ -207,11 +207,11 @@ def from_tts_output(
 
 def from_midi_generation(generated_sequence: List[Dict], tempo: int = 120) -> PianoRollDataClass:
     """
-    MIDI 생성 모델 출력을 피아노롤로 변환
+    Convert MIDI generation model output to piano roll.
 
     Args:
-        generated_sequence: [{"pitch": int, "start": float, "duration": float, "velocity": int}, ...]
-        tempo: BPM
+        generated_sequence: [{"pitch": int, "start": float, "duration": float, "velocity": int}, ...].
+        tempo: BPM.
 
     Example:
         sequence = [
@@ -232,7 +232,7 @@ def from_midi_generation(generated_sequence: List[Dict], tempo: int = 120) -> Pi
             "velocity": note_data.get("velocity", 100),
         }
 
-        # 가사나 추가 정보가 있으면 포함
+        # Include lyrics or additional info if available
         if "lyric" in note_data:
             note["lyric"] = note_data["lyric"]
         if "phoneme" in note_data:
@@ -255,17 +255,17 @@ def from_midi_generation(generated_sequence: List[Dict], tempo: int = 120) -> Pi
 def _create_f0_line_data(
     f0_values: List[float], total_duration: float, tempo: int, pixels_per_beat: int
 ) -> Dict:
-    """F0 데이터를 LineLayer 형식으로 변환"""
+    """Convert F0 data to LineLayer format."""
     data_points = []
 
     for i, f0 in enumerate(f0_values):
-        if f0 > 0:  # 유효한 F0만
+        if f0 > 0:  # Valid F0 only
             time_sec = (i / len(f0_values)) * total_duration
             x_pixel = time_sec * (tempo / 60) * pixels_per_beat
 
-            # F0를 MIDI 노트로 변환 후 Y 좌표로 변환
+            # Convert F0 to MIDI note, then to Y coordinate
             midi_note = 69 + 12 * np.log2(f0 / 440)
-            y_pixel = (127 - midi_note) * 20  # 20은 NOTE_HEIGHT
+            y_pixel = (127 - midi_note) * 20  # 20 is NOTE_HEIGHT
 
             data_points.append({"x": x_pixel, "y": y_pixel})
 
@@ -283,20 +283,20 @@ def _create_f0_line_data(
 
 
 # =============================================================================
-# 3. 템플릿 생성 함수들 (Template Creation)
+# 3. Template Creation Functions
 # =============================================================================
 
 
 def create_pianoroll_with_data(data: Dict, **component_kwargs) -> gr.Blocks:
     """
-    데이터로부터 PianoRoll 컴포넌트가 포함된 Gradio 데모 생성
+    Create a Gradio demo with a PianoRoll component from data.
 
     Args:
-        data: 피아노롤 데이터
-        **component_kwargs: PianoRoll 컴포넌트에 전달할 추가 인자들
+        data: Piano roll data.
+        **component_kwargs: Additional arguments to pass to PianoRoll component.
 
     Returns:
-        Gradio Blocks 데모
+        Gradio Blocks demo.
     """
     import gradio as gr
     from ..pianoroll import PianoRoll
@@ -314,20 +314,20 @@ def quick_demo(
     **component_kwargs,
 ) -> gr.Blocks:
     """
-    3줄로 피아노롤 데모 만들기
+    Create a piano roll demo in 3 lines.
 
     Args:
-        notes: (pitch, start_time, duration) 노트 리스트
-        title: 데모 제목
-        tempo: BPM
-        **component_kwargs: PianoRoll 컴포넌트에 전달할 추가 인자들
+        notes: (pitch, start_time, duration) note list.
+        title: Demo title.
+        tempo: BPM.
+        **component_kwargs: Additional arguments to pass to PianoRoll component.
 
     Returns:
-        Gradio Blocks 데모
+        Gradio Blocks demo.
 
     Example:
         notes = [(60, 0, 1), (64, 1, 1), (67, 2, 1)]
-        demo = quick_demo(notes, "내 TTS 모델 결과")
+        demo = quick_demo(notes, "My TTS Model Result")
         demo.launch()
     """
     import gradio as gr
@@ -338,22 +338,22 @@ def quick_demo(
     with gr.Blocks(title=title) as demo:
         gr.Markdown(f"# {title}")
         piano_roll = PianoRoll(value=data, height=400, **component_kwargs)
-        gr.JSON(label="피아노롤 데이터", value=data)
+        gr.JSON(label="Piano Roll Data", value=data)
 
     return demo
 
 
 # =============================================================================
-# 4. 분석 도구들 (Analysis Tools)
+# 4. Analysis Tools
 # =============================================================================
 
 
 def analyze_notes(piano_roll_data: Dict) -> Dict:
-    """피아노롤에서 노트 통계 추출"""
+    """Extract note statistics from piano roll."""
     notes = piano_roll_data.get("notes", [])
 
     if not notes:
-        return {"error": "노트 데이터가 없습니다"}
+        return {"error": "No note data"}
 
     pitches = [note["pitch"] for note in notes]
     velocities = [note["velocity"] for note in notes]
@@ -362,36 +362,36 @@ def analyze_notes(piano_roll_data: Dict) -> Dict:
     pixels_per_beat = piano_roll_data.get("pixelsPerBeat", 80)
     tempo = piano_roll_data.get("tempo", 120)
 
-    # 픽셀을 초로 변환
+    # Convert pixels to seconds
     durations_sec = [d / pixels_per_beat * 60 / tempo for d in durations]
 
     return {
-        "총_노트_수": len(notes),
-        "음역대": {
-            "최저음": min(pitches),
-            "최고음": max(pitches),
-            "음역": max(pitches) - min(pitches),
+        "total_notes": len(notes),
+        "pitch_range": {
+            "lowest": min(pitches),
+            "highest": max(pitches),
+            "range": max(pitches) - min(pitches),
         },
-        "평균_피치": round(np.mean(pitches), 1),
-        "평균_벨로시티": round(np.mean(velocities), 1),
-        "평균_노트_길이_초": round(np.mean(durations_sec), 2),
-        "총_재생시간_초": round(
+        "avg_pitch": round(np.mean(pitches), 1),
+        "avg_velocity": round(np.mean(velocities), 1),
+        "avg_note_duration_sec": round(np.mean(durations_sec), 2),
+        "total_playback_time_sec": round(
             max([n["start"] + n["duration"] for n in notes])
             / pixels_per_beat
             * 60
             / tempo,
             2,
         ),
-        "리듬_분석": {
-            "최단_노트_초": round(min(durations_sec), 3),
-            "최장_노트_초": round(max(durations_sec), 3),
-            "표준편차": round(np.std(durations_sec), 3),
+        "rhythm_analysis": {
+            "shortest_note_sec": round(min(durations_sec), 3),
+            "longest_note_sec": round(max(durations_sec), 3),
+            "std_deviation": round(np.std(durations_sec), 3),
         },
     }
 
 
 # =============================================================================
-# 5. 자동 분석 함수
+# 5. Auto Analysis Function
 # =============================================================================
 
 
@@ -399,33 +399,33 @@ def auto_analyze(
     model_output_data: Union[List, Dict], output_type: str = "auto"
 ) -> PianoRollDataClass:
     """
-    모델 출력을 자동으로 분석해서 피아노롤 형식으로 변환
+    Automatically analyze model output and convert to piano roll format.
 
     Args:
-        model_output_data: 모델 출력 데이터
-        output_type: "auto", "tts", "midi_generation", "frequencies"
+        model_output_data: Model output data.
+        output_type: "auto", "tts", "midi_generation", "frequencies".
 
     Returns:
-        피아노롤 데이터
+        Piano roll data.
     """
     if output_type == "auto":
-        # 데이터 형식을 보고 자동 감지
+        # Auto-detect by examining data format
         if isinstance(model_output_data, list) and len(model_output_data) > 0:
             if (
                 isinstance(model_output_data[0], (tuple, list))
                 and len(model_output_data[0]) >= 3
             ):
-                # (pitch, time, duration) 형식으로 추정
+                # Assume (pitch, time, duration) format
                 return from_notes(model_output_data)
             elif (
                 isinstance(model_output_data[0], dict)
                 and "pitch" in model_output_data[0]
             ):
-                # MIDI 생성 모델 출력으로 추정
+                # Assume MIDI generation model output
                 return from_midi_generation(model_output_data)
 
     elif output_type == "tts":
-        # TTS 정렬 데이터로 처리
+        # Process as TTS alignment data
         return from_tts_output("", model_output_data)
 
     elif output_type == "midi_generation":
@@ -434,5 +434,5 @@ def auto_analyze(
     elif output_type == "frequencies":
         return from_frequencies(model_output_data)
 
-    # 기본값: 빈 피아노롤 반환
+    # Default: return empty piano roll
     return from_notes([])

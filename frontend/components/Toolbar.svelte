@@ -25,7 +25,7 @@
   export let editMode = 'select'; // 'select', 'draw', 'erase', etc.
   export let snapSetting = '1/4'; // Default snap setting
   export let isPlaying = false; // Playback status
-  export let isRendering = false; // 오디오 렌더링 중인지 여부
+  export let isRendering = false; // Whether audio is currently rendering
 
   const dispatch = createEventDispatcher();
 
@@ -78,7 +78,7 @@
     dispatch('togglePlay');
   }
 
-  // 오디오 다운로드 함수
+  // Audio download function
   function downloadAudio() {
     dispatch('downloadAudio');
   }
@@ -332,7 +332,7 @@
   }
 
   .download-button {
-    color: #4CAF50; /* 다운로드 버튼은 녹색으로 */
+    color: #4CAF50; /* Download button is green */
   }
 
   .download-button:hover {

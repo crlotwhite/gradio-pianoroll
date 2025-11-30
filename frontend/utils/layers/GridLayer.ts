@@ -138,51 +138,51 @@ export class GridLayer extends BaseLayer {
     pixelsPerMeasure: number,
     pixelsPerBeat: number
   ): { divisionsPerMeasure: number, pixelsPerDivision: number } {
-    // 음악적 의미에 맞는 subdivision 계산
-    // 1/1 = 온음표 = 4박자
-    // 1/2 = 2분음표 = 2박자  
-    // 1/4 = 4분음표 = 1박자
-    // 1/8 = 8분음표 = 0.5박자
-    // 1/16 = 16분음표 = 0.25박자
-    // 1/32 = 32분음표 = 0.125박자
+    // Calculate subdivisions based on musical meaning
+    // 1/1 = whole note = 4 beats
+    // 1/2 = half note = 2 beats  
+    // 1/4 = quarter note = 1 beat
+    // 1/8 = eighth note = 0.5 beats
+    // 1/16 = sixteenth note = 0.25 beats
+    // 1/32 = thirty-second note = 0.125 beats
 
     let divisionsPerMeasure = 0;
     let pixelsPerDivision = 0;
 
     switch (snapSetting) {
       case '1/1':
-        // 온음표: 한 마디당 beatsPerMeasure / 4 개의 온음표 (4/4에서는 1개)
+        // Whole note: beatsPerMeasure / 4 whole notes per measure (1 in 4/4)
         divisionsPerMeasure = beatsPerMeasure / 4;
-        if (divisionsPerMeasure < 1) divisionsPerMeasure = 1; // 최소 1개
+        if (divisionsPerMeasure < 1) divisionsPerMeasure = 1; // Minimum 1
         pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
         break;
       case '1/2':
-        // 2분음표: 한 마디당 beatsPerMeasure / 2 개의 2분음표 (4/4에서는 2개)
+        // Half note: beatsPerMeasure / 2 half notes per measure (2 in 4/4)
         divisionsPerMeasure = beatsPerMeasure / 2;
         pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
         break;
       case '1/4':
-        // 4분음표: 한 마디당 beatsPerMeasure 개의 4분음표 (4/4에서는 4개)
+        // Quarter note: beatsPerMeasure quarter notes per measure (4 in 4/4)
         divisionsPerMeasure = beatsPerMeasure;
         pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
         break;
       case '1/8':
-        // 8분음표: 한 마디당 beatsPerMeasure * 2 개의 8분음표 (4/4에서는 8개)
+        // Eighth note: beatsPerMeasure * 2 eighth notes per measure (8 in 4/4)
         divisionsPerMeasure = beatsPerMeasure * 2;
         pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
         break;
       case '1/16':
-        // 16분음표: 한 마디당 beatsPerMeasure * 4 개의 16분음표 (4/4에서는 16개)
+        // Sixteenth note: beatsPerMeasure * 4 sixteenth notes per measure (16 in 4/4)
         divisionsPerMeasure = beatsPerMeasure * 4;
         pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
         break;
       case '1/32':
-        // 32분음표: 한 마디당 beatsPerMeasure * 8 개의 32분음표 (4/4에서는 32개)
+        // Thirty-second note: beatsPerMeasure * 8 thirty-second notes per measure (32 in 4/4)
         divisionsPerMeasure = beatsPerMeasure * 8;
         pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
         break;
       default:
-        // 기본값: 4분음표
+        // Default: quarter note
         divisionsPerMeasure = beatsPerMeasure;
         pixelsPerDivision = pixelsPerMeasure / divisionsPerMeasure;
     }

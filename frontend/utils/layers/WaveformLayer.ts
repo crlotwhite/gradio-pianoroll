@@ -9,7 +9,7 @@ export class WaveformLayer extends BaseLayer {
   // Waveform colors
   private readonly WAVEFORM_COLOR = '#4287f5';
   private readonly BACKEND_WAVEFORM_COLOR = '#4CAF50';
-  private readonly BACKGROUND_COLOR = 'rgba(20, 20, 20, 0.05)'; // 매우 투명한 배경으로 변경
+  private readonly BACKGROUND_COLOR = 'rgba(20, 20, 20, 0.05)'; // Very transparent background
 
   private audioBuffer: AudioBuffer | null = null;
   private preCalculatedWaveform: Array<{x: number, min: number, max: number}> | null = null;
@@ -203,7 +203,7 @@ export class WaveformLayer extends BaseLayer {
     ctx.font = '14px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('웨이브폼이 없습니다. "Synthesize Audio" 버튼을 클릭하세요.', width / 2, top + height / 2);
+    ctx.fillText('No waveform. Click "Synthesize Audio" button.', width / 2, top + height / 2);
   }
 
   // Helper methods

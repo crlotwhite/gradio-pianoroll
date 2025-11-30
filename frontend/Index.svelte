@@ -29,16 +29,16 @@
 	export let loading_status: LoadingStatus;
 	export let gradio: Gradio<{
 		change: never;
-		input: never;  // 가사 수정 시 발생 (G2P 실행용)
-		play: never;   // 재생 버튼 클릭 시
-		pause: never;  // 일시정지 버튼 클릭 시
-		stop: never;   // 정지 버튼 클릭 시
-		clear: never;  // 지우기 버튼 클릭 시
+		input: never;  // Triggered when lyrics are edited (for G2P execution)
+		play: never;   // Triggered when play button is clicked
+		pause: never;  // Triggered when pause button is clicked
+		stop: never;   // Triggered when stop button is clicked
+		clear: never;  // Triggered when clear button is clicked
 		select: SelectData;
 		clear_status: LoadingStatus;
 	}>;
 
-	// 백엔드 데이터 속성들
+	// Backend data properties
 	export let audio_data: string | null = null;
 	export let curve_data: object | null = null;
 	export let segment_data: Array<any> | null = null;
@@ -48,7 +48,7 @@
 	export let width = 800;
 	export let height = 400;
 
-	// value가 초기화되지 않았거나 필수 속성이 누락된 경우 기본값 설정
+	// Set default values if value is not initialized or missing required properties
 	$: if (!value || typeof value !== 'object') {
 		value = {
 			notes: [],
@@ -61,7 +61,7 @@
 			ppqn: 480
 		};
 	} else {
-		// 개별 속성이 없는 경우에만 기본값 설정
+		// Set default values only for missing individual properties
 		if (!value.notes) value.notes = [];
 		if (!value.tempo) value.tempo = 120;
 		if (!value.timeSignature) value.timeSignature = { numerator: 4, denominator: 4 };
@@ -72,9 +72,9 @@
 		if (!value.ppqn) value.ppqn = 480;
 	}
 
-	// 백엔드 데이터 추출 - value가 변경될 때마다 백엔드 데이터 props 업데이트
+	// Extract backend data - Update backend data props whenever value changes
 	$: if (value && typeof value === 'object') {
-		// value에서 백엔드 데이터가 있으면 props 업데이트
+		// Update props if backend data exists in value
 		if ('audio_data' in value && value.audio_data !== undefined) {
 			console.log("🎵 Audio data updated:", !!value.audio_data);
 			audio_data = typeof value.audio_data === 'string' ? value.audio_data : null;
@@ -97,11 +97,11 @@
 		}
 	}
 
-	// 피아노롤에서 데이터 변경 시 호출되는 핸들러 (tempo, 노트 정보 등)
+	// Handler called when piano roll data changes (tempo, note info, etc.)
 	function handlePianoRollChange(event: CustomEvent) {
 		const { notes, tempo, timeSignature, editMode, snapSetting, pixelsPerBeat, sampleRate, ppqn } = event.detail;
 
-		// value 전체 업데이트
+		// Update entire value object
 		value = {
 			notes: notes,
 			tempo,
@@ -113,44 +113,44 @@
 			ppqn: ppqn || 480
 		};
 
-		// Gradio로 변경사항 전달
+		// Pass changes to Gradio
 		gradio.dispatch("change");
 	}
 
-	// 가사 수정 시 호출되는 핸들러 (input 이벤트 먼저 발생)
+	// Handler called when lyrics are edited (input event fires first)
 	function handleLyricInput(event: CustomEvent) {
 		const { notes, lyricData } = event.detail;
 
-		// 노트 정보 업데이트
+		// Update note info
 		value = {
 			...value,
 			notes: notes
 		};
 
-		// input 이벤트 먼저 발생 (G2P 실행용)
+		// Dispatch input event first (for G2P execution)
 		gradio.dispatch("input", lyricData);
 
-		// 그 다음 change 이벤트 발생
+		// Then dispatch change event
 		setTimeout(() => {
 			gradio.dispatch("change");
 		}, 0);
 	}
 
-	// 노트만 변경되었을 때 호출되는 핸들러 (가사 외의 노트 변경)
+	// Handler called when only notes change (note changes other than lyrics)
 	function handleNotesChange(event: CustomEvent) {
 		const { notes } = event.detail;
 
-		// 노트만 업데이트
+		// Update only notes
 		value = {
 			...value,
 			notes: notes
 		};
 
-		// Gradio로 변경사항 전달
+		// Send changes to Gradio
 		gradio.dispatch("change");
 	}
 
-	// 재생 제어 이벤트 핸들러들
+	// Playback control event handlers
 	function handlePlay(event: CustomEvent) {
 		gradio.dispatch("play", event.detail);
 	}
@@ -178,7 +178,7 @@
 		/>
 	{/if}
 
-	<!-- 피아노롤 컴포넌트 -->
+	<!-- PianoRoll Component -->
 	<PianoRoll
 		width={width}
 		height={height}

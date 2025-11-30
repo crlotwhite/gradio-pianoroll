@@ -503,7 +503,7 @@
   function saveLyric() {
     if (!editedNoteId) return;
 
-    // 이전 가사와 새 가사 저장
+    // Save old and new lyrics
     const oldNote = notes.find(note => note.id === editedNoteId);
     const oldLyric = oldNote?.lyric || '';
     const newLyric = lyricInputValue;
@@ -519,9 +519,9 @@
       return note;
     });
 
-    // 가사가 실제로 변경된 경우에만 이벤트 발생
+    // Dispatch event only if lyric actually changed
     if (oldLyric !== newLyric) {
-      // 먼저 input 이벤트 발생 (G2P 실행용)
+      // Dispatch input event first (for G2P execution)
       dispatch('lyricInput', {
         notes,
         lyricData: {
@@ -532,7 +532,7 @@
         }
       });
     } else {
-      // 가사가 변경되지 않은 경우 일반 노트 변경 이벤트만 발생
+      // Dispatch only note change event if lyric didn't change
       dispatch('noteChange', { notes });
     }
 
@@ -606,7 +606,7 @@
             lineWidth: layerInfo.lineWidth || 2,
             yMin: layerInfo.yMin || 0,
             yMax: layerInfo.yMax || 1,
-            height: layerInfo.height || (isF0Data ? undefined : height / 3), // F0는 전체 높이, 나머지는 1/3
+            height: layerInfo.height || (isF0Data ? undefined : height / 3), // F0 uses full height, others use 1/3
             position: isF0Data ? 'overlay' : (layerInfo.position || 'bottom'),
             renderMode: isF0Data ? 'piano_grid' : 'default',
             visible: layerInfo.visible !== false,
@@ -941,12 +941,12 @@
     const centerY = verticalScroll + height / 2;
     updateMousePositionInfo(centerX, centerY);
 
-    // 초기 웨이브폼 렌더링 시도 (백엔드 오디오를 사용하지 않는 경우)
+    // Initial waveform render attempt (when not using backend audio)
     if (!use_backend_audio && waveformLayer) {
       // console.log('🌊 Initial waveform auto-render attempt on mount');
       setTimeout(() => {
         autoRenderFrontendAudio();
-      }, 100); // 약간의 지연을 두어 다른 초기화가 완료된 후 실행
+      }, 100); // Delay slightly to run after other initialization is complete
     }
 
     // Expose coordinate conversion utilities to parent components
@@ -963,7 +963,7 @@
   function updateWaveformLayer() {
     if (!waveformLayer) return;
 
-    // 1순위: curve_data에서 미리 계산된 웨이브폼 데이터 사용
+    // Priority 1: Use pre-calculated waveform data from curve_data
     if (curve_data && (curve_data as any).waveform_data) {
       waveformLayer.setPreCalculatedWaveform((curve_data as any).waveform_data);
       waveformLayer.setUseBackendAudio(true);
@@ -971,15 +971,15 @@
       return;
     }
 
-    // 2순위: 백엔드 오디오가 있고 use_backend_audio가 true인 경우
+    // Priority 2: Backend audio is available and use_backend_audio is true
     if (use_backend_audio && audio_data) {
-      // 백엔드 오디오는 별도로 디코딩해서 설정해야 함
+      // Backend audio needs to be decoded and set separately
       waveformLayer.setUseBackendAudio(true);
       // console.log('🌊 WaveformLayer: Using backend audio mode');
       return;
     }
 
-    // 3순위: 프론트엔드 오디오 엔진 버퍼 사용
+    // Priority 3: Use frontend audio engine buffer
     const audioBuffer = audioEngine.getRenderedBuffer();
     if (audioBuffer) {
       waveformLayer.setAudioBuffer(audioBuffer);
@@ -988,33 +988,33 @@
       return;
     }
 
-    // 4순위: 백엔드 오디오를 사용하지 않고 버퍼가 없는 경우 자동 렌더링 시도
+    // Priority 4: Try auto-render when not using backend audio and no buffer available
     if (!use_backend_audio && !audioBuffer) {
       // console.log('🌊 WaveformLayer: No buffer available, attempting auto-render');
       autoRenderFrontendAudio();
     }
 
-    // 데이터가 없는 경우
+    // No data available
     waveformLayer.setAudioBuffer(null);
     waveformLayer.setPreCalculatedWaveform(null);
     // console.log('🌊 WaveformLayer: No waveform data available');
   }
 
-  // 자동으로 프론트엔드 오디오 렌더링을 시도하는 함수
+  // Function to automatically attempt frontend audio rendering
   async function autoRenderFrontendAudio() {
     try {
       // console.log('🎵 Auto-rendering frontend audio for waveform...');
 
-      // 오디오 엔진 초기화 (사용자 상호작용 없이 시도)
+      // Initialize audio engine (attempt without user interaction)
       audioEngine.initialize();
 
-      // 총 길이 계산 (32 마디)
+      // Calculate total length (32 measures)
       const totalLengthInBeats = 32 * 4; // 32 measures * 4 beats per measure (4/4 time)
 
-      // 노트 렌더링
+      // Render notes
       await audioEngine.renderNotes(notes, tempo, totalLengthInBeats, pixelsPerBeat);
 
-      // 렌더링 완료 후 웨이브폼 업데이트
+      // Update waveform after rendering is complete
       const newAudioBuffer = audioEngine.getRenderedBuffer();
       if (newAudioBuffer && waveformLayer) {
         waveformLayer.setAudioBuffer(newAudioBuffer);
@@ -1077,7 +1077,7 @@
   $: if (notes && layerManager) {
     renderLayers();
 
-    // 노트가 변경되었고 백엔드 오디오를 사용하지 않는 경우 웨이브폼 자동 업데이트
+    // Auto-update waveform when notes change and not using backend audio
     if (!use_backend_audio && waveformLayer && !audioEngine.getRenderedBuffer()) {
       // console.log('🌊 Notes changed, auto-updating waveform');
       setTimeout(() => {
@@ -1174,7 +1174,7 @@
         on:keydown={handleLyricInputKeydown}
         on:blur={saveLyric}
         class="lyric-input"
-        aria-label="노트 가사 편집"
+        aria-label="Edit note lyrics"
       />
     </div>
   {/if}

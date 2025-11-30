@@ -71,7 +71,7 @@
       return;
     }
 
-    // 현재 레이어와 위의 레이어의 z-index를 교환
+    // Swap z-index of current layer and upper layer
     const currentLayer = allLayers[currentIndex];
     const upperLayer = allLayers[currentIndex + 1];
 
@@ -80,7 +80,7 @@
     layerManager.setLayerZIndex(currentLayer.name, upperLayer.zIndex);
     layerManager.setLayerZIndex(upperLayer.name, currentLayer.zIndex);
 
-    // 즉시 UI 업데이트
+    // Update UI immediately
     triggerUpdate();
     dispatch('layerChanged');
   }
@@ -97,7 +97,7 @@
       return;
     }
 
-    // 현재 레이어와 아래의 레이어의 z-index를 교환
+    // Swap z-index of current layer and lower layer
     const currentLayer = allLayers[currentIndex];
     const lowerLayer = allLayers[currentIndex - 1];
 
@@ -106,7 +106,7 @@
     layerManager.setLayerZIndex(currentLayer.name, lowerLayer.zIndex);
     layerManager.setLayerZIndex(lowerLayer.name, currentLayer.zIndex);
 
-    // 즉시 UI 업데이트
+    // Update UI immediately
     triggerUpdate();
     dispatch('layerChanged');
   }

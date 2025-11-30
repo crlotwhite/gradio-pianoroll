@@ -81,7 +81,7 @@ export const FINE_CONTROL_DIVISION = 32;
 /** Default note velocity (0-127) */
 export const DEFAULT_VELOCITY = 100;
 
-/** Default lyric for new notes */
+/** Default lyric for new notes (Korean syllable 'ra') */
 export const DEFAULT_LYRIC = '라';
 
 /** Default snap setting */

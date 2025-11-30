@@ -1,22 +1,22 @@
 """
-연구자용 유틸리티 모듈
+Utility Module for Researchers
 
-이 패키지는 연구자들이 피아노롤 컴포넌트를 보다 쉽게 사용할 수 있도록
-다양한 헬퍼 함수와 템플릿을 제공합니다.
+This package provides various helper functions and templates
+to help researchers use the piano roll component more easily.
 
-모든 유틸리티는 선택적으로 import할 수 있으며, 메인 컴포넌트와는
-독립적으로 작동합니다.
+All utilities can be imported optionally and operate
+independently from the main component.
 
-사용 예시:
+Usage example:
     from gradio_pianoroll import PianoRoll
     from gradio_pianoroll.utils import research
 
-    # 연구자용 편의 함수 사용
+    # Use researcher convenience functions
     data = research.from_notes([(60, 0, 1), (64, 1, 1)])
     piano_roll = PianoRoll(value=data)
 """
 
-# 각 모듈을 lazy import로 제공
+# Provide lazy imports for each module
 __all__ = []
 
 

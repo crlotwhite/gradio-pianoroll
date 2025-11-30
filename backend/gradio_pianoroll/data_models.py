@@ -1,7 +1,7 @@
 """
-Piano Roll 데이터 모델과 유효성 검사 함수들
+Piano Roll data models and validation functions.
 
-현재 dict 기반 구조를 유지하면서 타입 안전성과 유효성 검사를 개선합니다.
+Maintains the current dict-based structure while improving type safety and validation.
 """
 
 from __future__ import annotations
@@ -15,23 +15,23 @@ logger = logging.getLogger(__name__)
 
 
 class TimeSignature(TypedDict):
-    """박자표 정보"""
+    """Time signature information."""
 
     numerator: int
     denominator: int
 
 
 class Note(TypedDict, total=False):
-    """노트 정보 - total=False로 일부 필드 선택적"""
+    """Note information - total=False makes some fields optional."""
 
-    # 필수 필드들
+    # Required fields
     id: str
     start: float
     duration: float
     pitch: int
     velocity: int
 
-    # 선택적 타이밍 필드들
+    # Optional timing fields
     startFlicks: Optional[float]
     durationFlicks: Optional[float]
     startSeconds: Optional[float]
@@ -44,20 +44,20 @@ class Note(TypedDict, total=False):
     startSample: Optional[int]
     durationSamples: Optional[int]
 
-    # 텍스트 필드들
+    # Text fields
     lyric: Optional[str]
     phoneme: Optional[str]
 
 
 class LineDataPoint(TypedDict):
-    """라인 데이터 포인트"""
+    """Line data point."""
 
     x: float
     y: float
 
 
 class LineLayerConfig(TypedDict, total=False):
-    """라인 레이어 설정"""
+    """Line layer configuration."""
 
     color: str
     lineWidth: float
@@ -74,28 +74,28 @@ class LineLayerConfig(TypedDict, total=False):
 
 
 class PianoRollData(TypedDict, total=False):
-    """피아노롤 전체 데이터 구조"""
+    """Piano roll complete data structure."""
 
-    # 필수 필드들
+    # Required fields
     notes: List[Note]
     tempo: int
     timeSignature: TimeSignature
     editMode: str
     snapSetting: str
 
-    # 선택적 필드들
+    # Optional fields
     pixelsPerBeat: Optional[float]
     sampleRate: Optional[int]
     ppqn: Optional[int]
 
-    # 백엔드 데이터
+    # Backend data
     audio_data: Optional[str]
     curve_data: Optional[Dict[str, Any]]
     segment_data: Optional[List[Dict[str, Any]]]
     line_data: Optional[Dict[str, LineLayerConfig]]
     use_backend_audio: Optional[bool]
 
-    # 파형 데이터
+    # Waveform data
     waveform_data: Optional[List[Dict[str, float]]]
 
 
@@ -245,26 +245,26 @@ class PianoRollDataClass:
 
 def validate_note(note: Union[Dict[str, Any], NoteData]) -> List[str]:
     """
-    노트 데이터 유효성 검사
+    Validate note data.
 
     Args:
-        note: 검사할 노트 데이터
+        note: Note data to validate.
 
     Returns:
-        오류 메시지 리스트 (빈 리스트면 유효)
+        List of error messages (empty list if valid).
     """
     if dataclasses.is_dataclass(note):
         note = dataclasses.asdict(note)
 
     errors = []
 
-    # 필수 필드 검사
+    # Required field validation
     required_fields = ["id", "start", "duration", "pitch", "velocity"]
     for field in required_fields:
         if field not in note:
             errors.append(f"Required field '{field}' is missing")
 
-    # 타입 검사
+    # Type validation
     if "start" in note and not isinstance(note["start"], (int, float)):
         errors.append("'start' must be a number")
     if "duration" in note and not isinstance(note["duration"], (int, float)):
@@ -274,7 +274,7 @@ def validate_note(note: Union[Dict[str, Any], NoteData]) -> List[str]:
     if "velocity" in note and not isinstance(note["velocity"], int):
         errors.append("'velocity' must be an integer")
 
-    # 범위 검사
+    # Range validation
     if "pitch" in note and not (0 <= note["pitch"] <= 127):
         errors.append("'pitch' must be between 0 and 127")
     if "velocity" in note and not (0 <= note["velocity"] <= 127):
@@ -289,13 +289,13 @@ def validate_note(note: Union[Dict[str, Any], NoteData]) -> List[str]:
 
 def validate_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) -> List[str]:
     """
-    피아노롤 데이터 전체 유효성 검사
+    Validate entire piano roll data.
 
     Args:
-        data: 검사할 피아노롤 데이터
+        data: Piano roll data to validate.
 
     Returns:
-        오류 메시지 리스트 (빈 리스트면 유효)
+        List of error messages (empty list if valid).
     """
     if dataclasses.is_dataclass(data):
         data = dataclasses.asdict(data)
@@ -305,13 +305,13 @@ def validate_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) ->
     if not isinstance(data, dict):
         return ["Piano roll data must be a dictionary"]
 
-    # 필수 필드 검사
+    # Required field validation
     required_fields = ["notes", "tempo", "timeSignature", "editMode", "snapSetting"]
     for field in required_fields:
         if field not in data:
             errors.append(f"Required field '{field}' is missing")
 
-    # notes 검사
+    # Notes validation
     if "notes" in data:
         if not isinstance(data["notes"], list):
             errors.append("'notes' must be a list")
@@ -321,12 +321,12 @@ def validate_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) ->
                 for error in note_errors:
                     errors.append(f"Note {i}: {error}")
 
-    # tempo 검사
+    # Tempo validation
     if "tempo" in data:
         if not isinstance(data["tempo"], (int, float)) or data["tempo"] <= 0:
             errors.append("'tempo' must be a positive number")
 
-    # timeSignature 검사
+    # Time signature validation
     if "timeSignature" in data:
         ts = data["timeSignature"]
         if dataclasses.is_dataclass(ts):
@@ -354,14 +354,14 @@ def validate_and_warn(
     data: Union[Dict[str, Any], PianoRollDataClass], context: str = "Piano roll data"
 ) -> Union[Dict[str, Any], PianoRollDataClass]:
     """
-    데이터 유효성 검사하고 경고 출력
+    Validate data and output warnings.
 
     Args:
-        data: 검사할 데이터
-        context: 컨텍스트 정보
+        data: Data to validate.
+        context: Context information.
 
     Returns:
-        원본 데이터 (유효성 검사 통과 시) 또는 빈 dict (실패 시)
+        Original data (if validation passes) or empty dict (if fails).
     """
     errors = validate_piano_roll_data(data)
 
@@ -376,7 +376,7 @@ def validate_and_warn(
 
 
 def create_default_piano_roll_data() -> PianoRollDataClass:
-    """기본 피아노롤 데이터 생성"""
+    """Create default piano roll data."""
     return PianoRollDataClass(
         notes=[],
         tempo=120,
@@ -391,13 +391,13 @@ def create_default_piano_roll_data() -> PianoRollDataClass:
 
 def ensure_note_ids(data: Union[Dict[str, Any], PianoRollDataClass]) -> Union[Dict[str, Any], PianoRollDataClass]:
     """
-    노트들에 ID가 없으면 자동 생성
+    Auto-generate IDs for notes if missing.
 
     Args:
-        data: 피아노롤 데이터
+        data: Piano roll data.
 
     Returns:
-        ID가 보장된 데이터
+        Data with guaranteed IDs.
     """
     notes = None
     if dataclasses.is_dataclass(data):
@@ -429,13 +429,13 @@ def ensure_note_ids(data: Union[Dict[str, Any], PianoRollDataClass]) -> Union[Di
 
 def clean_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) -> PianoRollDataClass:
     """
-    피아노롤 데이터 정리 (None 값 제거, 기본값 설정 등)
+    Clean piano roll data (remove None values, set defaults, etc.).
 
     Args:
-        data: 정리할 데이터
+        data: Data to clean.
 
     Returns:
-        정리된 데이터
+        Cleaned data.
     """
     if not data:
         return create_default_piano_roll_data()
@@ -443,7 +443,7 @@ def clean_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) -> Pi
     if dataclasses.is_dataclass(data):
         data = dataclasses.asdict(data)
 
-    # 기본값 설정
+    # Set default values
     cleaned = {
         "notes": data.get("notes", []),
         "tempo": data.get("tempo", 120),
@@ -455,7 +455,7 @@ def clean_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) -> Pi
         "ppqn": data.get("ppqn", 480),
     }
 
-    # 선택적 필드들 (None이 아닌 경우만 포함)
+    # Optional fields (include only if not None)
     optional_fields = [
         "audio_data",
         "curve_data",

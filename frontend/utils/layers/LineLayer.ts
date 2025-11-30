@@ -81,8 +81,8 @@ export class LineLayer extends BaseLayer {
 
   private renderPianoGridMode(context: LayerRenderContext): void {
     /**
-     * Piano Grid Mode: F0 곡선이 피아노롤 그리드와 정확히 정렬되어 렌더링
-     * 수직 스크롤에 따라 이동하고, Y 좌표가 피아노롤 좌표계와 정확히 맞춤
+     * Piano Grid Mode: F0 curve is rendered exactly aligned with the piano roll grid.
+     * Moves with vertical scroll, Y coordinate exactly matches the piano roll coordinate system.
      */
     const { ctx, width, height, horizontalScroll, verticalScroll } = context;
 
@@ -161,8 +161,8 @@ export class LineLayer extends BaseLayer {
 
   private renderIndependentRangeMode(context: LayerRenderContext): void {
     /**
-     * Independent Range Mode: loudness, voice/unvoice 등의 데이터를 전체 캔버스 높이에 고정 표시
-     * 수직 스크롤의 영향을 받지 않고, 전체 grid canvas 높이를 사용
+     * Independent Range Mode: Display data like loudness, voice/unvoice fixed to full canvas height.
+     * Not affected by vertical scroll, uses the entire grid canvas height.
      */
     const { ctx, width, height, horizontalScroll } = context;
 
@@ -197,8 +197,8 @@ export class LineLayer extends BaseLayer {
 
   private renderDefaultMode(context: LayerRenderContext): void {
     /**
-     * Default Mode: 비-F0 데이터들을 전체 캔버스 영역에 고정 표시
-     * 수직 스크롤의 영향을 받지 않음
+     * Default Mode: Display non-F0 data fixed to the full canvas area.
+     * Not affected by vertical scroll.
      */
     const { ctx, width, height, horizontalScroll } = context;
 
@@ -330,7 +330,7 @@ export class LineLayer extends BaseLayer {
 
       // Map Y value to canvas coordinates (inverted: higher values at top)
       const normalizedY = (point.y - this.config.yMin) / yRange;
-      const screenY = top + height - (normalizedY * height); // 반전: 높은 값이 위로
+      const screenY = top + height - (normalizedY * height); // Inverted: higher values appear at top
 
       if (!hasStarted) {
         ctx.moveTo(screenX, screenY);
@@ -365,7 +365,7 @@ export class LineLayer extends BaseLayer {
 
       // Map Y value to canvas coordinates (inverted: higher values at top)
       const normalizedY = (point.y - this.config.yMin) / yRange;
-      const screenY = top + height - (normalizedY * height); // 반전: 높은 값이 위로
+      const screenY = top + height - (normalizedY * height); // Inverted: higher values appear at top
 
       ctx.beginPath();
       ctx.arc(screenX, screenY, pointRadius, 0, 2 * Math.PI);
@@ -401,7 +401,7 @@ export class LineLayer extends BaseLayer {
       // Map Y value to canvas coordinates (inverted: higher values at top)
       // Use full height for better visibility
       const normalizedY = (point.y - this.config.yMin) / yRange;
-      const screenY = top + height - (normalizedY * height); // 반전: 높은 값이 위로
+      const screenY = top + height - (normalizedY * height); // Inverted: higher values appear at top
 
       if (!hasStarted) {
         ctx.moveTo(screenX, screenY);
@@ -434,7 +434,7 @@ export class LineLayer extends BaseLayer {
 
       // Map Y value to canvas coordinates (inverted: higher values at top)
       const normalizedY = (point.y - this.config.yMin) / yRange;
-      const screenY = top + height - (normalizedY * height); // 반전: 높은 값이 위로
+      const screenY = top + height - (normalizedY * height); // Inverted: higher values appear at top
 
       ctx.beginPath();
       ctx.arc(screenX, screenY, pointRadius, 0, 2 * Math.PI);

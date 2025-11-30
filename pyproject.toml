@@ -62,7 +62,7 @@ packages = ["/backend/gradio_pianoroll"]
 [tool.hatch.build.targets.sdist]
 only-include = ["backend", "frontend", "pyproject.toml", "README.md", "mkdocs.yml", "DEPLOYMENT.md"]
 
-# mypy 타입 체크 설정
+# mypy type checking settings
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true
@@ -78,12 +78,12 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 
-# gradio_pianoroll 패키지는 엄격한 타입 체크
+# Strict type checking for gradio_pianoroll package
 [[tool.mypy.overrides]]
 module = "gradio_pianoroll.*"
 strict = true
 
-# 외부 라이브러리는 느슨하게
+# Relaxed checking for external libraries
 [[tool.mypy.overrides]]
 module = [
     "gradio.*",
@@ -92,7 +92,7 @@ module = [
 ]
 ignore_missing_imports = true
 
-# black 코드 포맷팅 설정
+# Black code formatting settings
 [tool.black]
 line-length = 88
 target-version = ['py310']
@@ -111,7 +111,7 @@ extend-exclude = '''
 )/
 '''
 
-# isort import 정렬 설정
+# isort import sorting settings
 [tool.isort]
 profile = "black"
 multi_line_output = 3
@@ -121,7 +121,7 @@ use_parentheses = true
 ensure_newline_before_comments = true
 line_length = 88
 
-# ruff 설정 (uv 프로젝트용)
+# ruff settings (for uv project)
 [tool.ruff]
 line-length = 88
 target-version = "py310"
