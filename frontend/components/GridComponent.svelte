@@ -7,7 +7,7 @@
   import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks, calculateAllTimingData } from '../utils/flicks';
   import { LayerManager, GridLayer, NotesLayer, WaveformLayer, LineLayer } from '../utils/layers';
   import LayerControlPanel from './LayerControlPanel.svelte';
-  import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint, CoordinateConfig } from '../types';
+  import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint, CoordinateConfig, MouseHandlerConfig, MouseState, EditMode } from '../types';
   import { AudioEngineManager } from '../utils/audioEngine';
   import { NOTE_HEIGHT, TOTAL_NOTES, DEFAULT_VELOCITY, DEFAULT_LYRIC } from '../utils/constants';
   import { getSubdivisionsFromSnapSetting as getSnapSubdivisions, getGridSizeFromSnap, getInitialNoteDuration, getMinimumNoteSize, snapToGrid as snapValueToGrid, snapDurationToGrid } from '../utils/snapUtils';
@@ -24,6 +24,12 @@
     clampPitch,
     calculateDragPitch,
   } from '../utils/coordinateUtils';
+  import {
+    createInitialMouseState,
+    handleMouseDown as mouseHandlerDown,
+    handleMouseMove as mouseHandlerMove,
+    handleMouseUp as mouseHandlerUp,
+  } from '../utils/mouseHandler';
 
   const log = createLogger('GridComponent');
 
@@ -101,22 +107,14 @@
   // State
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
-  let isDragging = false;
-  let isResizing = false;
-  let isCreatingNote = false;
-  let selectedNotes: Set<string> = new Set();
-  let dragStartX = 0;
-  let dragStartY = 0;
-  let lastMouseX = 0;
-  let lastMouseY = 0;
-  let draggedNoteId: string | null = null;
-  let resizedNoteId: string | null = null;
-  let creationStartTime = 0;
-  let creationPitch = 0;
-  let noteOffsetX = 0; // Offset from mouse to note start for natural movement
-  let noteOffsetY = 0; // Vertical offset for pitch adjustment
 
-  let isNearNoteEdge = false; // Track if mouse is near a note edge for resize cursor
+  // Mouse interaction state (managed by mouseHandler)
+  let mouseState: MouseState = createInitialMouseState();
+
+  // Reactive accessors for mouse state (for template and other uses)
+  $: selectedNotes = mouseState.selectedNotes;
+  $: isNearNoteEdge = mouseState.isNearNoteEdge;
+  $: isResizing = mouseState.isResizing;
 
   // Layer system
   let layerManager: LayerManager;
@@ -135,6 +133,17 @@
     pixelsPerBeat,
     beatsPerMeasure,
     snapSetting,
+  };
+
+  // Mouse handler configuration (reactive)
+  $: mouseHandlerConfig: MouseHandlerConfig = {
+    pixelsPerBeat,
+    tempo,
+    sampleRate,
+    ppqn,
+    snapSetting,
+    horizontalScroll,
+    verticalScroll,
   };
 
   // Current mouse position info (for position display)
@@ -223,119 +232,25 @@
     const x = event.clientX - rect.left + horizontalScroll;
     const y = event.clientY - rect.top + verticalScroll;
 
-    // Store initial position for drag operations
-    dragStartX = x;
-    dragStartY = y;
-    lastMouseX = x;
-    lastMouseY = y;
+    // Delegate to mouseHandler
+    const result = mouseHandlerDown(
+      x,
+      y,
+      editMode as EditMode,
+      event.shiftKey,
+      notes,
+      mouseState,
+      mouseHandlerConfig,
+      findNoteAtPosition,
+      snapToGrid
+    );
 
+    // Update state
+    mouseState = result.state;
+    notes = result.notes;
 
-
-    // Reset offsets by default
-    noteOffsetX = 0;
-    noteOffsetY = 0;
-
-    // Check if clicking on a note
-    const clickedNote = findNoteAtPosition(x, y);
-    log.debug('Clicked note:', clickedNote ? `${clickedNote.id} at ${clickedNote.start}-${clickedNote.start + clickedNote.duration}, pitch ${clickedNote.pitch}` : 'none');
-
-    if (editMode === 'draw' && !clickedNote) {
-      // Start note creation process
-      const time = snapToGrid(x);
-      const { pitch: clickedPitch } = yToPitch(y);
-
-      // Store the starting position and pitch for the new note
-      creationStartTime = time;
-      creationPitch = clampPitch(clickedPitch);
-
-      // Calculate initial note duration based on snap setting
-      const initialDuration = getInitialNoteDuration(snapSetting, pixelsPerBeat);
-
-      // Calculate timing data for start position and duration
-      const startTiming = calculateAllTimingData(time, pixelsPerBeat, tempo, sampleRate, ppqn);
-      const durationTiming = calculateAllTimingData(initialDuration, pixelsPerBeat, tempo, sampleRate, ppqn);
-
-      // Create a new note with duration based on snap setting
-      const newNote = {
-        id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        start: time,
-        duration: initialDuration,
-        pitch: creationPitch,
-        velocity: DEFAULT_VELOCITY,
-        lyric: DEFAULT_LYRIC,
-        startFlicks: startTiming.flicks,
-        durationFlicks: durationTiming.flicks,
-        startSeconds: startTiming.seconds,
-        durationSeconds: durationTiming.seconds,
-        endSeconds: startTiming.seconds + durationTiming.seconds,
-        startBeats: startTiming.beats,
-        durationBeats: durationTiming.beats,
-        startTicks: startTiming.ticks,
-        durationTicks: durationTiming.ticks,
-        startSample: startTiming.samples,
-        durationSamples: durationTiming.samples
-      };
-
-      // Add note to the collection
-      notes = [...notes, newNote];
-
-      // Set note as selected and being resized
-      selectedNotes = new Set([newNote.id]);
-      resizedNoteId = newNote.id;  // We're resizing, not dragging
-      isCreatingNote = true;       // Flag that we're in note creation mode
-      isResizing = true;          // Enable resizing mode
-
+    if (result.notesChanged) {
       dispatch('noteChange', { notes });
-    }
-    else if (editMode === 'erase' && clickedNote) {
-      // Erase clicked note
-      notes = notes.filter(note => note.id !== clickedNote.id);
-      selectedNotes.delete(clickedNote.id);
-
-      dispatch('noteChange', { notes });
-    }
-    else if (editMode === 'select') {
-      if (clickedNote) {
-        // Check if clicking near the end of the note (for resizing)
-        const noteEndX = clickedNote.start + clickedNote.duration;
-        // Edge detection threshold scales with zoom level
-        const edgeDetectionThreshold = Math.max(5, Math.min(15, pixelsPerBeat / 8));
-        if (Math.abs(x - noteEndX) < edgeDetectionThreshold) {
-          // Start resizing - similar to draw mode
-          isResizing = true;
-          resizedNoteId = clickedNote.id;
-          // Store the original note start position for absolute resizing calculation
-          creationStartTime = clickedNote.start;
-        } else {
-          // Select and drag note
-          if (!event.shiftKey) {
-            // If not holding shift, clear previous selection
-            if (!selectedNotes.has(clickedNote.id)) {
-              selectedNotes = new Set([clickedNote.id]);
-              log.debug('Selected note:', clickedNote.id);
-            }
-          } else {
-            // Add to selection with shift key
-            selectedNotes.add(clickedNote.id);
-            log.debug('Added note to selection:', clickedNote.id, 'Total selected:', selectedNotes.size);
-          }
-
-          // Calculate offset from mouse position to note start for natural dragging
-          // This maintains the relative position between mouse and note during drag
-          noteOffsetX = clickedNote.start - x;
-          noteOffsetY = pitchToY(clickedNote.pitch) - y;
-
-          isDragging = true;
-          draggedNoteId = clickedNote.id;
-          log.debug('Started dragging note:', clickedNote.id);
-          log.debug('Drag offsets:', { noteOffsetX, noteOffsetY });
-        }
-      } else {
-        // Clicked empty space, clear selection unless shift is held
-        if (!event.shiftKey) {
-          selectedNotes = new Set();
-        }
-      }
     }
 
     // Redraw
@@ -349,131 +264,45 @@
     const x = event.clientX - rect.left + horizontalScroll;
     const y = event.clientY - rect.top + verticalScroll;
 
-    const deltaX = x - lastMouseX;
-    const deltaY = y - lastMouseY;
-
-    lastMouseX = x;
-    lastMouseY = y;
-
     // Update mouse position information
     updateMousePositionInfo(x, y);
 
-    // Check if mouse is near any note edge for resize cursor
-    if (editMode === 'select' && !isDragging && !isResizing) {
-      const clickedNote = findNoteAtPosition(x, y);
-      if (clickedNote) {
-        const noteEndX = clickedNote.start + clickedNote.duration;
-        // Edge detection threshold scales with zoom level
-        const edgeDetectionThreshold = Math.max(5, Math.min(15, pixelsPerBeat / 8));
-        // If mouse is within threshold pixels of the note edge, show resize cursor
-        isNearNoteEdge = Math.abs(x - noteEndX) < edgeDetectionThreshold;
-      } else {
-        isNearNoteEdge = false;
-      }
+    // Delegate to mouseHandler
+    const result = mouseHandlerMove(
+      x,
+      y,
+      editMode as EditMode,
+      notes,
+      mouseState,
+      mouseHandlerConfig,
+      findNoteAtPosition,
+      snapToGrid
+    );
+
+    // Update state
+    mouseState = result.state;
+    notes = result.notes;
+
+    if (result.notesChanged) {
+      dispatch('noteChange', { notes });
     }
 
-    if (isDragging && draggedNoteId && editMode === 'select') {
-      // Move selected notes to snap to grid positions
-      notes = notes.map(note => {
-        if (selectedNotes.has(note.id)) {
-          // Calculate new position based on current mouse position with offset
-          // Apply the offset to maintain the original click position relative to the note
-          let newStart = x + noteOffsetX;
-          let newPitch = calculateDragPitch(y, noteOffsetY);
-
-          // Snap to grid
-          newStart = snapToGrid(newStart);
-
-          // Ensure valid ranges
-          newStart = Math.max(0, newStart);
-          // newPitch is already clamped by calculateDragPitch
-
-          // console.log(`📍 Moving note ${note.id} to grid position ${newStart},${newPitch}`);
-
-          // Calculate all timing data for new start position
-          const newStartTiming = calculateAllTimingData(newStart, pixelsPerBeat, tempo, sampleRate, ppqn);
-
-          return {
-            ...note,
-            start: newStart,
-            pitch: newPitch,
-            startFlicks: newStartTiming.flicks,
-            startSeconds: newStartTiming.seconds,
-            startBeats: newStartTiming.beats,
-            startTicks: newStartTiming.ticks,
-            startSample: newStartTiming.samples,
-            endSeconds: newStartTiming.seconds + (note.durationSeconds || 0)
-          };
-        }
-        return note;
-      });
-
-      dispatch('noteChange', { notes });
-      renderLayers();
-    }
-    else if (isResizing && resizedNoteId) {
-      // Resize note
-      notes = notes.map(note => {
-        if (note.id === resizedNoteId) {
-          // Get the grid size based on snap setting
-          const gridSize = getGridSizeFromSnap(snapSetting, pixelsPerBeat);
-
-          // Calculate width from the start position to the current mouse position
-          const width = Math.max(gridSize, x - creationStartTime);
-
-          // Snap the duration to grid
-          const newDuration = snapDurationToGrid(width, snapSetting, pixelsPerBeat);
-
-          // Calculate all timing data for new duration
-          const newDurationTiming = calculateAllTimingData(newDuration, pixelsPerBeat, tempo, sampleRate, ppqn);
-
-          return {
-            ...note,
-            duration: newDuration,
-            durationFlicks: newDurationTiming.flicks,
-            durationSeconds: newDurationTiming.seconds,
-            durationBeats: newDurationTiming.beats,
-            durationTicks: newDurationTiming.ticks,
-            durationSamples: newDurationTiming.samples,
-            endSeconds: (note.startSeconds || 0) + newDurationTiming.seconds
-          };
-        }
-        return note;
-      });
-
-      dispatch('noteChange', { notes });
+    if (result.needsRedraw) {
       renderLayers();
     }
   }
 
   function handleMouseUp() {
-    // Check if we're finalizing note creation
-    if (isCreatingNote) {
-      // If the note is too small, remove it, but base minimum size on current snap setting
-      if (resizedNoteId) {
-        const createdNote = notes.find(note => note.id === resizedNoteId);
+    // Delegate to mouseHandler
+    const result = mouseHandlerUp(notes, mouseState, mouseHandlerConfig);
 
-        // Calculate minimum note size based on snap setting
-        const minimumNoteSize = getMinimumNoteSize(snapSetting, pixelsPerBeat);
+    // Update state
+    mouseState = result.state;
+    notes = result.notes;
 
-        // Now check if the note is too small based on the dynamic minimum size
-        if (createdNote && createdNote.duration < minimumNoteSize) {
-          // Remove notes that are too small (likely accidental clicks)
-          notes = notes.filter(note => note.id !== resizedNoteId);
-          dispatch('noteChange', { notes });
-        }
-      }
-
-      // Reset creation state
-      isCreatingNote = false;
+    if (result.notesChanged) {
+      dispatch('noteChange', { notes });
     }
-
-    // Reset interaction states
-    isDragging = false;
-    isResizing = false;
-    isNearNoteEdge = false; // Reset resize cursor state
-    draggedNoteId = null;
-    resizedNoteId = null;
 
     // Redraw the grid
     renderLayers();

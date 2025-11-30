@@ -35,3 +35,16 @@ export type {
   CoordinateConfig,
   MousePositionInfo,
 } from '../utils/coordinateUtils';
+
+// Mouse handler types (re-export from utils)
+export type {
+  EditMode,
+  InteractionMode,
+  MouseHandlerConfig,
+  MouseState,
+  MouseDownResult,
+  MouseMoveResult,
+  MouseUpResult,
+  FindNoteCallback,
+  SnapToGridCallback,
+} from '../utils/mouseHandler';

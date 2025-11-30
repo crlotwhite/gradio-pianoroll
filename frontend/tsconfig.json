@@ -12,6 +12,6 @@
       "types": ["svelte"],
       "baseUrl": "."
     },
-    "include": ["src/**/*", "*.svelte"],
+    "include": ["**/*", "*.svelte"],
     "exclude": ["node_modules"]
 }
