@@ -48,3 +48,10 @@ export type {
   FindNoteCallback,
   SnapToGridCallback,
 } from '../utils/mouseHandler';
+
+// Note renderer types (re-export from utils)
+export type {
+  RenderableNote,
+  NoteRenderConfig,
+  NoteRenderContext,
+} from '../utils/noteRenderer';
