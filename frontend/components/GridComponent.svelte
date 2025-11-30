@@ -7,11 +7,23 @@
   import { pixelsToFlicks, flicksToPixels, getExactNoteFlicks, roundFlicks, calculateAllTimingData } from '../utils/flicks';
   import { LayerManager, GridLayer, NotesLayer, WaveformLayer, LineLayer } from '../utils/layers';
   import LayerControlPanel from './LayerControlPanel.svelte';
-  import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint } from '../types';
+  import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint, CoordinateConfig } from '../types';
   import { AudioEngineManager } from '../utils/audioEngine';
   import { NOTE_HEIGHT, TOTAL_NOTES, DEFAULT_VELOCITY, DEFAULT_LYRIC } from '../utils/constants';
   import { getSubdivisionsFromSnapSetting as getSnapSubdivisions, getGridSizeFromSnap, getInitialNoteDuration, getMinimumNoteSize, snapToGrid as snapValueToGrid, snapDurationToGrid } from '../utils/snapUtils';
   import { createLogger } from '../utils/logger';
+  import {
+    xToMeasureInfo,
+    measureInfoToX,
+    yToPitch,
+    pitchToY,
+    getMidiNoteName,
+    beatToPixel,
+    pixelToBeat,
+    getMousePositionInfo,
+    clampPitch,
+    calculateDragPitch,
+  } from '../utils/coordinateUtils';
 
   const log = createLogger('GridComponent');
 
@@ -118,6 +130,13 @@
   // Audio engine for waveform data
   $: audioEngine = AudioEngineManager.getInstance(elem_id || 'default');
 
+  // Coordinate configuration for utility functions (reactive)
+  $: coordinateConfig: CoordinateConfig = {
+    pixelsPerBeat,
+    beatsPerMeasure,
+    snapSetting,
+  };
+
   // Current mouse position info (for position display)
   let currentMousePosition = {
     x: 0,
@@ -222,12 +241,12 @@
 
     if (editMode === 'draw' && !clickedNote) {
       // Start note creation process
-      const pitch = Math.floor(y / NOTE_HEIGHT);
       const time = snapToGrid(x);
+      const { pitch: clickedPitch } = yToPitch(y);
 
       // Store the starting position and pitch for the new note
       creationStartTime = time;
-      creationPitch = TOTAL_NOTES - 1 - pitch;
+      creationPitch = clampPitch(clickedPitch);
 
       // Calculate initial note duration based on snap setting
       const initialDuration = getInitialNoteDuration(snapSetting, pixelsPerBeat);
@@ -304,7 +323,7 @@
           // Calculate offset from mouse position to note start for natural dragging
           // This maintains the relative position between mouse and note during drag
           noteOffsetX = clickedNote.start - x;
-          noteOffsetY = (TOTAL_NOTES - 1 - clickedNote.pitch) * NOTE_HEIGHT - y;
+          noteOffsetY = pitchToY(clickedNote.pitch) - y;
 
           isDragging = true;
           draggedNoteId = clickedNote.id;
@@ -360,16 +379,14 @@
           // Calculate new position based on current mouse position with offset
           // Apply the offset to maintain the original click position relative to the note
           let newStart = x + noteOffsetX;
-          let newPitchY = y + noteOffsetY;
-          let newPitch = Math.floor(newPitchY / NOTE_HEIGHT);
-          newPitch = TOTAL_NOTES - 1 - newPitch;
+          let newPitch = calculateDragPitch(y, noteOffsetY);
 
           // Snap to grid
           newStart = snapToGrid(newStart);
 
           // Ensure valid ranges
           newStart = Math.max(0, newStart);
-          newPitch = Math.max(0, Math.min(127, newPitch));
+          // newPitch is already clamped by calculateDragPitch
 
           // console.log(`📍 Moving note ${note.id} to grid position ${newStart},${newPitch}`);
 
@@ -478,8 +495,8 @@
       editedNoteId = clickedNote.id;
       lyricInputValue = clickedNote.lyric || '';
 
-      // Calculate position for the input field
-      const noteY = (TOTAL_NOTES - 1 - clickedNote.pitch) * NOTE_HEIGHT - verticalScroll;
+      // Calculate screen position for the input field
+      const noteY = pitchToY(clickedNote.pitch) - verticalScroll;
 
       lyricInputPosition = {
         x: clickedNote.start - horizontalScroll,
@@ -692,7 +709,7 @@
     // Fallback to original implementation using world coordinates
     // console.log('⚠️ Using fallback note finding');
     const foundNote = notes.find(note => {
-      const noteY = (TOTAL_NOTES - 1 - note.pitch) * NOTE_HEIGHT;
+      const noteY = pitchToY(note.pitch);
       return (
         x >= note.start &&
         x <= note.start + note.duration &&
@@ -704,97 +721,33 @@
     return foundNote;
   }
 
-  // Coordinate conversion utility functions
+  // --- Coordinate conversion wrapper functions ---
+  // These functions wrap the imported coordinateUtils with component-local config
 
-  // Convert X coordinate to measure, beat, tick information
-  function xToMeasureInfo(x: number) {
-    // Calculate measure
-    const measureIndex = Math.floor(x / pixelsPerMeasure);
-
-    // Calculate beat within measure
-    const xWithinMeasure = x - (measureIndex * pixelsPerMeasure);
-    const beatWithinMeasure = Math.floor(xWithinMeasure / pixelsPerBeat);
-
-    // Calculate tick within beat (based on current snap setting)
-    let divisionValue = 4; // Default to quarter note (1/4)
-    if (snapSetting !== 'none') {
-      const [numerator, denominator] = snapSetting.split('/');
-      if (numerator === '1' && denominator) {
-        divisionValue = parseInt(denominator);
-      }
-    }
-
-    const ticksPerBeat = divisionValue;
-    const xWithinBeat = xWithinMeasure - (beatWithinMeasure * pixelsPerBeat);
-    const tickWithinBeat = Math.floor((xWithinBeat / pixelsPerBeat) * ticksPerBeat);
-
-    return {
-      measure: measureIndex + 1, // 1-based measure number
-      beat: beatWithinMeasure + 1, // 1-based beat number
-      tick: tickWithinBeat,
-      measureFraction: `${beatWithinMeasure + 1}/${ticksPerBeat}` // e.g. 2/4 for second beat in 4/4
-    };
-  }
-
-  // Convert measure, beat, tick to X coordinate
-  function measureInfoToX(measure: number, beat: number, tick: number, ticksPerBeat: number) {
-    // Convert to 0-based indices
-    const measureIndex = measure - 1;
-    const beatIndex = beat - 1;
-
-    // Calculate x position
-    const measureX = measureIndex * pixelsPerMeasure;
-    const beatX = beatIndex * pixelsPerBeat;
-    const tickX = (tick / ticksPerBeat) * pixelsPerBeat;
-
-    return measureX + beatX + tickX;
-  }
-
-  // Convert Y coordinate to MIDI pitch
-  function yToPitch(y: number) {
-    const pitchIndex = Math.floor(y / NOTE_HEIGHT);
-    const pitch = TOTAL_NOTES - 1 - pitchIndex;
-
-    // Convert MIDI pitch to note name (e.g. C4, F#5)
-    const noteName = getMidiNoteName(pitch);
-
-    return { pitch, noteName };
-  }
-
-  // Convert MIDI pitch to Y coordinate
-  function pitchToY(pitch: number) {
-    return (TOTAL_NOTES - 1 - pitch) * NOTE_HEIGHT;
-  }
-
-  // Get note name from MIDI pitch
-  function getMidiNoteName(pitch: number) {
-    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const noteName = noteNames[pitch % 12];
-    const octave = Math.floor(pitch / 12) - 1; // MIDI standard: C4 is 60
-    return `${noteName}${octave}`;
-  }
-
-  // Update mouse position info
+  // Update mouse position info using coordinateUtils
   function updateMousePositionInfo(x: number, y: number) {
-    // Get measure, beat, tick info from x coordinate
-    const measureInfo = xToMeasureInfo(x);
-
-    // Get pitch info from y coordinate
-    const pitchInfo = yToPitch(y);
+    const positionInfo = getMousePositionInfo(x, y, coordinateConfig);
 
     // Update current mouse position
-    currentMousePosition = {
-      x,
-      y,
-      measure: measureInfo.measure,
-      beat: measureInfo.beat,
-      tick: measureInfo.tick,
-      pitch: pitchInfo.pitch,
-      noteName: pitchInfo.noteName
-    };
+    currentMousePosition = positionInfo;
 
     // Emit position info event for parent components to use
     dispatch('positionInfo', currentMousePosition);
+  }
+
+  // Convert X coordinate to measure info (local wrapper)
+  function localXToMeasureInfo(x: number) {
+    return xToMeasureInfo(x, coordinateConfig);
+  }
+
+  // Convert measure info to X (local wrapper)
+  function localMeasureInfoToX(measure: number, beat: number, tick: number, ticksPerBeat: number) {
+    return measureInfoToX(measure, beat, tick, ticksPerBeat, coordinateConfig);
+  }
+
+  // Convert beat to pixel (local wrapper)
+  function localBeatToPixel(beat: number) {
+    return beatToPixel(beat, pixelsPerBeat);
   }
 
   // Snap value to grid based on selected snap setting with higher precision
@@ -816,11 +769,6 @@
       log.warn(`Unknown snap setting: ${snapSetting}, using fallback calculation`);
       return snapValueToGrid(value, snapSetting, pixelsPerBeat);
     }
-  }
-
-  // Convert beat position to pixel position
-  function beatToPixel(beat: number) {
-    return beat * pixelsPerBeat;
   }
 
   // Render using layer system
@@ -950,9 +898,11 @@
     }
 
     // Expose coordinate conversion utilities to parent components
+    // Wrap imported functions with local config for convenience
     dispatch('utilsReady', {
-      xToMeasureInfo,
-      measureInfoToX,
+      xToMeasureInfo: (x: number) => xToMeasureInfo(x, coordinateConfig),
+      measureInfoToX: (measure: number, beat: number, tick: number, ticksPerBeat: number) =>
+        measureInfoToX(measure, beat, tick, ticksPerBeat, coordinateConfig),
       yToPitch,
       pitchToY,
       getMidiNoteName

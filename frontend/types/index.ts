@@ -27,3 +27,11 @@ export type {
 
 // Audio engine types
 export type { PlayheadUpdateCallback } from './audio';
+
+// Coordinate utility types (re-export from utils)
+export type {
+  MeasureInfo,
+  PitchInfo,
+  CoordinateConfig,
+  MousePositionInfo,
+} from '../utils/coordinateUtils';
