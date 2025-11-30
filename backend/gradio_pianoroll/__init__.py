@@ -5,11 +5,30 @@ import os
 
 from .pianoroll import PianoRoll
 from .data_models import (
+    # Primary dataclasses
     TimeSignatureData,
     NoteData,
     LineDataPointData,
     LineLayerConfigData,
-    PianoRollDataClass as PianoRollData,
+    PianoRollData,
+    # TypedDict aliases for JSON schema hints
+    TimeSignatureDict,
+    NoteDict,
+    LineDataPointDict,
+    LineLayerConfigDict,
+    PianoRollDataDict,
+    # Legacy aliases
+    TimeSignature,
+    Note,
+    LineDataPoint,
+    LineLayerConfig,
+    # Utility functions
+    validate_note,
+    validate_piano_roll_data,
+    validate_and_warn,
+    create_default_piano_roll_data,
+    ensure_note_ids,
+    clean_piano_roll_data,
 )
 
 logger = logging.getLogger(__name__)
@@ -25,12 +44,32 @@ logger.setLevel(getattr(logging, level_str, logging.WARNING))
 
 # Core component is always available
 __all__ = [
+    # Main component
     "PianoRoll",
+    # Primary dataclasses
     "TimeSignatureData",
     "NoteData",
     "LineDataPointData",
     "LineLayerConfigData",
     "PianoRollData",
+    # TypedDict aliases for JSON schema hints
+    "TimeSignatureDict",
+    "NoteDict",
+    "LineDataPointDict",
+    "LineLayerConfigDict",
+    "PianoRollDataDict",
+    # Legacy aliases (backwards compatibility)
+    "TimeSignature",
+    "Note",
+    "LineDataPoint",
+    "LineLayerConfig",
+    # Utility functions
+    "validate_note",
+    "validate_piano_roll_data",
+    "validate_and_warn",
+    "create_default_piano_roll_data",
+    "ensure_note_ids",
+    "clean_piano_roll_data",
 ]
 
 # Optional utilities - users can import explicitly if needed

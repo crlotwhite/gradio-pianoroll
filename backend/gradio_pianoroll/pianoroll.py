@@ -23,7 +23,8 @@ from .constants import (
     DEFAULT_EDIT_MODE,
 )
 from .data_models import (
-    PianoRollDataClass as PianoRollData,
+    PianoRollData,
+    NoteData,
     clean_piano_roll_data,
     ensure_note_ids,
     validate_and_warn,

@@ -1,7 +1,12 @@
 """
 Piano Roll data models and validation functions.
 
-Maintains the current dict-based structure while improving type safety and validation.
+This module provides both TypedDict (for JSON serialization type hints) and
+dataclass (for internal processing) representations of piano roll data.
+
+Recommended usage:
+- Use dataclasses (NoteData, PianoRollData) for internal processing
+- TypedDicts are kept for JSON schema documentation and backwards compatibility
 """
 
 from __future__ import annotations
@@ -13,16 +18,25 @@ from typing import Any, Dict, List, Optional, TypedDict, Union
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# TypedDict Definitions (for JSON serialization type hints)
+# ============================================================================
 
-class TimeSignature(TypedDict):
-    """Time signature information."""
+
+class TimeSignatureDict(TypedDict):
+    """Time signature JSON structure."""
 
     numerator: int
     denominator: int
 
 
-class Note(TypedDict, total=False):
-    """Note information - total=False makes some fields optional."""
+class NoteDict(TypedDict, total=False):
+    """
+    Note JSON structure - total=False makes some fields optional.
+
+    This TypedDict documents the expected JSON format for notes.
+    For internal processing, use the NoteData dataclass instead.
+    """
 
     # Required fields
     id: str
@@ -49,15 +63,15 @@ class Note(TypedDict, total=False):
     phoneme: Optional[str]
 
 
-class LineDataPoint(TypedDict):
-    """Line data point."""
+class LineDataPointDict(TypedDict):
+    """Line data point JSON structure."""
 
     x: float
     y: float
 
 
-class LineLayerConfig(TypedDict, total=False):
-    """Line layer configuration."""
+class LineLayerConfigDict(TypedDict, total=False):
+    """Line layer configuration JSON structure."""
 
     color: str
     lineWidth: float
@@ -70,16 +84,21 @@ class LineLayerConfig(TypedDict, total=False):
     dataType: Optional[str]
     unit: Optional[str]
     originalRange: Optional[Dict[str, Any]]
-    data: List[LineDataPoint]
+    data: List[LineDataPointDict]
 
 
-class PianoRollData(TypedDict, total=False):
-    """Piano roll complete data structure."""
+class PianoRollDataDict(TypedDict, total=False):
+    """
+    Piano roll complete data JSON structure.
+
+    This TypedDict documents the expected JSON format.
+    For internal processing, use the PianoRollData dataclass instead.
+    """
 
     # Required fields
-    notes: List[Note]
+    notes: List[NoteDict]
     tempo: int
-    timeSignature: TimeSignature
+    timeSignature: TimeSignatureDict
     editMode: str
     snapSetting: str
 
@@ -92,11 +111,22 @@ class PianoRollData(TypedDict, total=False):
     audio_data: Optional[str]
     curve_data: Optional[Dict[str, Any]]
     segment_data: Optional[List[Dict[str, Any]]]
-    line_data: Optional[Dict[str, LineLayerConfig]]
+    line_data: Optional[Dict[str, LineLayerConfigDict]]
     use_backend_audio: Optional[bool]
 
     # Waveform data
     waveform_data: Optional[List[Dict[str, float]]]
+
+
+# Legacy aliases for backwards compatibility
+TimeSignature = TimeSignatureDict
+Note = NoteDict
+LineDataPoint = LineDataPointDict
+LineLayerConfig = LineLayerConfigDict
+
+# ============================================================================
+# Dataclass Definitions (for internal processing)
+# ============================================================================
 
 
 @dataclasses.dataclass
@@ -186,7 +216,14 @@ class LineLayerConfigData:
 
 
 @dataclasses.dataclass
-class PianoRollDataClass:
+class PianoRollData:
+    """
+    Primary dataclass for piano roll data processing.
+
+    Use this class for internal data manipulation. For JSON serialization,
+    call to_dict() to convert to a dictionary.
+    """
+
     notes: List[NoteData]
     tempo: int
     timeSignature: TimeSignatureData
@@ -203,7 +240,8 @@ class PianoRollDataClass:
     waveform_data: Optional[List[Dict[str, float]]] = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PianoRollDataClass":
+    def from_dict(cls, data: Dict[str, Any]) -> "PianoRollData":
+        """Create PianoRollData from a dictionary."""
         notes = [
             n if isinstance(n, NoteData) else NoteData.from_dict(n)
             for n in data.get("notes", [])
@@ -240,7 +278,12 @@ class PianoRollDataClass:
         )
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
         return dataclasses.asdict(self)
+
+
+# Legacy alias for backwards compatibility
+PianoRollDataClass = PianoRollData
 
 
 def validate_note(note: Union[Dict[str, Any], NoteData]) -> List[str]:
@@ -287,7 +330,7 @@ def validate_note(note: Union[Dict[str, Any], NoteData]) -> List[str]:
     return errors
 
 
-def validate_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) -> List[str]:
+def validate_piano_roll_data(data: Union[Dict[str, Any], PianoRollData]) -> List[str]:
     """
     Validate entire piano roll data.
 
@@ -351,8 +394,8 @@ def validate_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) ->
 
 
 def validate_and_warn(
-    data: Union[Dict[str, Any], PianoRollDataClass], context: str = "Piano roll data"
-) -> Union[Dict[str, Any], PianoRollDataClass]:
+    data: Union[Dict[str, Any], PianoRollData], context: str = "Piano roll data"
+) -> Union[Dict[str, Any], PianoRollData]:
     """
     Validate data and output warnings.
 
@@ -375,9 +418,9 @@ def validate_and_warn(
     return data
 
 
-def create_default_piano_roll_data() -> PianoRollDataClass:
+def create_default_piano_roll_data() -> PianoRollData:
     """Create default piano roll data."""
-    return PianoRollDataClass(
+    return PianoRollData(
         notes=[],
         tempo=120,
         timeSignature=TimeSignatureData(4, 4),
@@ -389,7 +432,7 @@ def create_default_piano_roll_data() -> PianoRollDataClass:
     )
 
 
-def ensure_note_ids(data: Union[Dict[str, Any], PianoRollDataClass]) -> Union[Dict[str, Any], PianoRollDataClass]:
+def ensure_note_ids(data: Union[Dict[str, Any], PianoRollData]) -> Union[Dict[str, Any], PianoRollData]:
     """
     Auto-generate IDs for notes if missing.
 
@@ -427,7 +470,7 @@ def ensure_note_ids(data: Union[Dict[str, Any], PianoRollDataClass]) -> Union[Di
     return data
 
 
-def clean_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) -> PianoRollDataClass:
+def clean_piano_roll_data(data: Union[Dict[str, Any], PianoRollData]) -> PianoRollData:
     """
     Clean piano roll data (remove None values, set defaults, etc.).
 
@@ -469,4 +512,4 @@ def clean_piano_roll_data(data: Union[Dict[str, Any], PianoRollDataClass]) -> Pi
         if field in data and data[field] is not None:
             cleaned[field] = data[field]
 
-    return PianoRollDataClass.from_dict(cleaned)
+    return PianoRollData.from_dict(cleaned)
