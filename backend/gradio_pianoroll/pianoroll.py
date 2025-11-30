@@ -188,9 +188,9 @@ class PianoRoll(Component):
             # Ensure all notes have timing values, generate them if missing
             if "notes" in self.value and self.value["notes"]:
                 pixels_per_beat = self.value.get(
-                    "pixelsPerBeat", default_pixels_per_beat
+                    "pixelsPerBeat", DEFAULT_PIXELS_PER_BEAT
                 )
-                tempo = self.value.get("tempo", default_tempo)
+                tempo = self.value.get("tempo", DEFAULT_TEMPO)
 
                 for note in self.value["notes"]:
                     # Add flicks values if missing

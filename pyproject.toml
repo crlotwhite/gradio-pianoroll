@@ -54,7 +54,7 @@ docs = [
 ]
 
 [tool.hatch.build]
-artifacts = ["/backend/gradio_pianoroll/templates", "*.pyi"]
+artifacts = ["/backend/gradio_pianoroll/templates", "*.pyi", "/\\backend\\gradio_pianoroll\\templates"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["/backend/gradio_pianoroll"]

@@ -130,14 +130,16 @@
   $: audioEngine = AudioEngineManager.getInstance(elem_id || 'default');
 
   // Coordinate configuration for utility functions (reactive)
-  $: coordinateConfig: CoordinateConfig = {
+  let coordinateConfig: CoordinateConfig;
+  $: coordinateConfig = {
     pixelsPerBeat,
     beatsPerMeasure,
     snapSetting,
   };
 
   // Mouse handler configuration (reactive)
-  $: mouseHandlerConfig: MouseHandlerConfig = {
+  let mouseHandlerConfig: MouseHandlerConfig;
+  $: mouseHandlerConfig = {
     pixelsPerBeat,
     tempo,
     sampleRate,
