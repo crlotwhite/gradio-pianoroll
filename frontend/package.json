@@ -30,7 +30,8 @@
     "@gradio/preview": "0.13.0",
     "@tsconfig/svelte": "^5.0.4",
     "svelte-preprocess": "^6.0.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.0.14"
   },
   "peerDependencies": {
     "svelte": "^4.0.0"

@@ -1,0 +1,29 @@
+{
+  "name": "gradio-pianoroll",
+  "version": "1.0.0",
+  "description": "---\r tags:\r - gradio-custom-component\r - Audio\r title: gradio_pianoroll\r short_description: A PianoRoll Component for\r colorFrom: blue\r colorTo: yellow\r sdk: gradio\r pinned: false\r app_file: space.py\r license: apache-2.0\r emoji: 🎹\r ---",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/crlotwhite/gradio-pianoroll.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/crlotwhite/gradio-pianoroll/issues"
+  },
+  "homepage": "https://github.com/crlotwhite/gradio-pianoroll#readme",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
+  }
+}
