@@ -1,11 +1,3 @@
-[build-system]
-requires = [
-  "hatchling",
-  "hatch-requirements-txt",
-  "hatch-fancy-pypi-readme>=22.5.0",
-]
-build-backend = "hatchling.build"
-
 [project]
 name = "gradio_pianoroll"
 version = "0.0.9"
@@ -15,53 +7,50 @@ license = "apache-2.0"
 requires-python = ">=3.10"
 authors = [{ name = "crlotwhite", email = "crlotwhite@gmail.com" }]
 keywords = ["gradio-custom-component", "gradio-template-Fallback", "audio"]
-# Add dependencies here
 dependencies = ["gradio>=4.0,<6.0"]
 classifiers = [
   'Development Status :: 3 - Alpha',
   'Operating System :: OS Independent',
   'Programming Language :: Python :: 3',
   'Programming Language :: Python :: 3 :: Only',
-  'Programming Language :: Python :: 3.8',
-  'Programming Language :: Python :: 3.9',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
   'Topic :: Scientific/Engineering',
   'Topic :: Scientific/Engineering :: Artificial Intelligence',
   'Topic :: Scientific/Engineering :: Visualization',
 ]
 
-# The repository and space URLs are optional, but recommended.
-# Adding a repository URL will create a badge in the auto-generated README that links to the repository.
-# Adding a space URL will create a badge in the auto-generated README that links to the space.
-# This will make it easy for people to find your deployed demo or source code when they
-# encounter your project in the wild.
-
 [project.urls]
 repository = "https://github.com/crlotwhite/gradio-pianoroll"
 space = "https://huggingface.co/spaces/crlotwhite/gradio_pianoroll"
 
-[project.optional-dependencies]
-dev = [
+[build-system]
+requires = [
+  "hatchling",
+  "hatch-requirements-txt",
+  "hatch-fancy-pypi-readme>=22.5.0",
+]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
     "build",
     "twine",
     "mypy>=1.5.0",
     "black>=23.0.0",
     "isort>=5.12.0",
     "pytest>=7.0.0",
-    "flake8>=6.0.0"
+    "flake8>=6.0.0",
+    "ruff>=0.8.0",
 ]
+
+[dependency-groups]
 docs = [
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.0.0",
     "mkdocs-include-markdown-plugin>=6.0.0",
-    "pymdown-extensions>=10.0.0"
-]
-quality = [
-    "mypy>=1.5.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "flake8>=6.0.0"
+    "pymdown-extensions>=10.0.0",
 ]
 
 [tool.hatch.build]
@@ -132,59 +121,14 @@ use_parentheses = true
 ensure_newline_before_comments = true
 line_length = 88
 
-# Hatch 환경 및 스크립트 설정
-[tool.hatch.envs.default]
-dependencies = [
-    "mypy>=1.5.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "pytest>=7.0.0",
-    "flake8>=6.0.0"
-]
+# ruff 설정 (uv 프로젝트용)
+[tool.ruff]
+line-length = 88
+target-version = "py310"
 
-[tool.hatch.envs.default.scripts]
-# 개발 관련 스크립트들
-type-check = "mypy backend/"
-format = "black backend/"
-sort-imports = "isort backend/"
-lint = "flake8 backend/"
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "C4"]
+ignore = ["E501"]
 
-# Stub 생성 관련 스크립트들
-generate-stubs = [
-    "python -c \"import glob, os; [os.remove(f) for f in glob.glob('backend/gradio_pianoroll/**/*.pyi', recursive=True) if os.path.exists(f)]\"",
-    "python -c \"import sys, os; sys.argv=['stubgen', os.path.join(os.getcwd(), 'backend', 'gradio_pianoroll'), '-o', os.path.join(os.getcwd(), 'backend'), '--include-private']; import mypy.stubgen; mypy.stubgen.main()\"",
-    "python -c \"print('✅ Stub files generated in backend/gradio_pianoroll/ directory')\""
-]
-
-clean-stubs = [
-    "python -c \"import glob, os; [os.remove(f) for f in glob.glob('backend/gradio_pianoroll/**/*.pyi', recursive=True) if os.path.exists(f)]\"",
-    "python -c \"print('🗑️ Stub files cleaned from backend/gradio_pianoroll/')\""
-]
-
-# 통합 명령어들
-quality = [
-    "black backend/",
-    "isort backend/",
-    "mypy backend/",
-    "flake8 backend/"
-]
-
-build-stubs = [
-    "clean-stubs",
-    "generate-stubs"
-]
-
-dev-setup = [
-    "quality",
-    "pytest",
-    "generate-stubs"
-]
-
-# 릴리즈 준비
-prepare-release = [
-    "quality",
-    "pytest",
-    "clean-stubs",
-    "generate-stubs",
-    "python -c \"print('🚀 Release preparation completed')\""
-]
+[tool.ruff.lint.isort]
+known-first-party = ["gradio_pianoroll"]
