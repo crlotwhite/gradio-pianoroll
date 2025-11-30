@@ -11,6 +11,17 @@ from gradio.components.base import Component
 from gradio.events import Events
 from gradio.i18n import I18nData
 
+from .constants import (
+    DEFAULT_PIXELS_PER_BEAT,
+    DEFAULT_TEMPO,
+    DEFAULT_SAMPLE_RATE,
+    DEFAULT_PPQN,
+    DEFAULT_PIANOROLL_WIDTH,
+    DEFAULT_PIANOROLL_HEIGHT,
+    MIN_COMPONENT_WIDTH,
+    DEFAULT_SNAP_SETTING,
+    DEFAULT_EDIT_MODE,
+)
 from .data_models import (
     PianoRollDataClass as PianoRollData,
     clean_piano_roll_data,
@@ -73,7 +84,7 @@ class PianoRoll(Component):
         inputs: Component | Sequence[Component] | set[Component] | None = None,
         show_label: bool | None = None,
         scale: int | None = None,
-        min_width: int = 160,
+        min_width: int = MIN_COMPONENT_WIDTH,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -81,8 +92,8 @@ class PianoRoll(Component):
         render: bool = True,
         key: int | str | tuple[int | str, ...] | None = None,
         preserved_by_key: list[str] | str | None = "value",
-        width: int | None = 1000,
-        height: int | None = 600,
+        width: int | None = DEFAULT_PIANOROLL_WIDTH,
+        height: int | None = DEFAULT_PIANOROLL_HEIGHT,
     ):
         """
         Parameters:
@@ -110,12 +121,7 @@ class PianoRoll(Component):
         self.width = width
         self.height = height
 
-        # Default settings for flicks calculation
-        default_pixels_per_beat = 80
-        default_tempo = 120
-        default_sample_rate = 44100
-        default_ppqn = 480
-
+        # Use constants for default settings
         default_notes = [
             create_note_with_timing(
                 generate_note_id(),
@@ -124,10 +130,10 @@ class PianoRoll(Component):
                 60,
                 100,
                 "안녕",
-                default_pixels_per_beat,
-                default_tempo,
-                default_sample_rate,
-                default_ppqn,
+                DEFAULT_PIXELS_PER_BEAT,
+                DEFAULT_TEMPO,
+                DEFAULT_SAMPLE_RATE,
+                DEFAULT_PPQN,
             ),  # 1st beat of measure 1
             create_note_with_timing(
                 generate_note_id(),
@@ -136,10 +142,10 @@ class PianoRoll(Component):
                 64,
                 90,
                 "하세요",
-                default_pixels_per_beat,
-                default_tempo,
-                default_sample_rate,
-                default_ppqn,
+                DEFAULT_PIXELS_PER_BEAT,
+                DEFAULT_TEMPO,
+                DEFAULT_SAMPLE_RATE,
+                DEFAULT_PPQN,
             ),  # 1st beat of measure 2
             create_note_with_timing(
                 generate_note_id(),
@@ -148,23 +154,23 @@ class PianoRoll(Component):
                 67,
                 95,
                 "반가워요",
-                default_pixels_per_beat,
-                default_tempo,
-                default_sample_rate,
-                default_ppqn,
+                DEFAULT_PIXELS_PER_BEAT,
+                DEFAULT_TEMPO,
+                DEFAULT_SAMPLE_RATE,
+                DEFAULT_PPQN,
             ),  # 1st beat of measure 3
         ]
 
         if value is None:
             self.value = {
                 "notes": default_notes,
-                "tempo": default_tempo,
+                "tempo": DEFAULT_TEMPO,
                 "timeSignature": {"numerator": 4, "denominator": 4},
-                "editMode": "select",
-                "snapSetting": "1/4",
-                "pixelsPerBeat": default_pixels_per_beat,
-                "sampleRate": default_sample_rate,
-                "ppqn": default_ppqn,
+                "editMode": DEFAULT_EDIT_MODE,
+                "snapSetting": DEFAULT_SNAP_SETTING,
+                "pixelsPerBeat": DEFAULT_PIXELS_PER_BEAT,
+                "sampleRate": DEFAULT_SAMPLE_RATE,
+                "ppqn": DEFAULT_PPQN,
             }
         else:
             # 데이터 정리 및 유효성 검사

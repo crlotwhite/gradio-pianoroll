@@ -9,6 +9,11 @@
   import LayerControlPanel from './LayerControlPanel.svelte';
   import type { LayerRenderContext, Note, LineLayerConfig, LineDataPoint } from '../types/layer';
   import { AudioEngineManager } from '../utils/audioEngine';
+  import { NOTE_HEIGHT, TOTAL_NOTES, DEFAULT_VELOCITY, DEFAULT_LYRIC } from '../utils/constants';
+  import { getSubdivisionsFromSnapSetting as getSnapSubdivisions, getGridSizeFromSnap, getInitialNoteDuration, getMinimumNoteSize, snapToGrid as snapValueToGrid, snapDurationToGrid } from '../utils/snapUtils';
+  import { createLogger } from '../utils/logger';
+
+  const log = createLogger('GridComponent');
 
   // Props
   export let width = 880;  // Width of the grid (total width - keyboard width)
@@ -51,17 +56,13 @@
   export let ppqn = 480;         // MIDI pulses per quarter note
   export let elem_id = '';       // Component ID for audio engine management
 
-  // Backend audio data (추가)
+  // Backend audio data
   export let audio_data: string | null = null;
   export let curve_data: object | null = null;
   export let line_data: object | null = null;  // Line layer data
   export let use_backend_audio: boolean = false;
 
-  // Constants
-  const NOTE_HEIGHT = 20;  // Height of a note row (same as white key height)
-
-  // Sizing and grid constants
-  const TOTAL_NOTES = 128;  // Total MIDI notes
+  // Sizing and grid constants (NOTE_HEIGHT and TOTAL_NOTES imported from constants)
   export let pixelsPerBeat = 80;  // How many pixels wide a beat is (controls zoom level)
 
   // Get subdivisions based on time signature denominator
@@ -81,41 +82,8 @@
     }
   }
 
-  // Get subdivisions based on snap setting (음악적 의미에 맞게)
-  function getSubdivisionsFromSnapSetting(): { count: number, pixelsPerSubdivision: number } {
-    if (snapSetting === 'none') {
-      // Default to quarter note subdivisions if snap is 'none'
-      return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
-    }
-
-    const [numerator, denominator] = snapSetting.split('/');
-    if (numerator === '1' && denominator) {
-      const divisionValue = parseInt(denominator);
-
-      switch (divisionValue) {
-        case 1: // Whole note - 4 beats
-          return { count: 1, pixelsPerSubdivision: pixelsPerBeat * 4 };
-        case 2: // Half note - 2 beats
-          return { count: 1, pixelsPerSubdivision: pixelsPerBeat * 2 };
-        case 4: // Quarter note - 1 beat
-          return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
-        case 8: // Eighth note - 0.5 beat
-          return { count: 2, pixelsPerSubdivision: pixelsPerBeat / 2 };
-        case 16: // Sixteenth note - 0.25 beat
-          return { count: 4, pixelsPerSubdivision: pixelsPerBeat / 4 };
-        case 32: // Thirty-second note - 0.125 beat
-          return { count: 8, pixelsPerSubdivision: pixelsPerBeat / 8 };
-        default:
-          return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
-      }
-    }
-
-    // Default to quarter note subdivisions
-    return { count: 1, pixelsPerSubdivision: pixelsPerBeat };
-  }
-
   // Derived grid constants based on time signature and snap setting
-  $: subdivisions = getSubdivisionsFromSnapSetting();
+  $: subdivisions = getSnapSubdivisions(snapSetting, pixelsPerBeat);
   $: snapChanged = snapSetting; // Reactive variable to trigger redraw when snap changes
 
   // State
@@ -197,7 +165,7 @@
 
       if (newVerticalScroll !== verticalScroll) {
         verticalScroll = newVerticalScroll;
-        console.log('📊 GridComponent: verticalScroll updated to', verticalScroll);
+        log.debug('verticalScroll updated to', verticalScroll);
         dispatch('scroll', { horizontalScroll, verticalScroll });
       }
     }
@@ -227,7 +195,7 @@
   function handleMouseDown(event: MouseEvent) {
     if (!canvas) return;
 
-    console.log('🖱️ Mouse down event triggered');
+    log.debug('Mouse down event triggered');
 
     // Ensure layers are properly initialized
     ensureLayersReady();
@@ -250,7 +218,7 @@
 
     // Check if clicking on a note
     const clickedNote = findNoteAtPosition(x, y);
-    console.log('🎯 Clicked note:', clickedNote ? `${clickedNote.id} at ${clickedNote.start}-${clickedNote.start + clickedNote.duration}, pitch ${clickedNote.pitch}` : 'none');
+    log.debug('Clicked note:', clickedNote ? `${clickedNote.id} at ${clickedNote.start}-${clickedNote.start + clickedNote.duration}, pitch ${clickedNote.pitch}` : 'none');
 
     if (editMode === 'draw' && !clickedNote) {
       // Start note creation process
@@ -261,43 +229,8 @@
       creationStartTime = time;
       creationPitch = TOTAL_NOTES - 1 - pitch;
 
-      // Calculate initial note duration based on snap setting (음악적 의미에 맞게)
-      let initialDuration = pixelsPerBeat; // Default: quarter note (1/4)
-
-      // Parse the snap setting to determine initial note duration
-      if (snapSetting !== 'none') {
-        const [numerator, denominator] = snapSetting.split('/');
-        if (numerator === '1' && denominator) {
-          const divisionValue = parseInt(denominator);
-          // Calculate duration in pixels based on snap setting
-          // 음악적 의미에 맞는 duration 계산
-          switch (divisionValue) {
-            case 1: // Whole note - 4 beats
-              initialDuration = pixelsPerBeat * 4;
-              break;
-            case 2: // Half note - 2 beats
-              initialDuration = pixelsPerBeat * 2;
-              break;
-            case 4: // Quarter note - 1 beat
-              initialDuration = pixelsPerBeat;
-              break;
-            case 8: // Eighth note - 0.5 beat
-              initialDuration = pixelsPerBeat / 2;
-              break;
-            case 16: // Sixteenth note - 0.25 beat
-              initialDuration = pixelsPerBeat / 4;
-              break;
-            case 32: // Thirty-second note - 0.125 beat
-              initialDuration = pixelsPerBeat / 8;
-              break;
-            default:
-              initialDuration = pixelsPerBeat; // Quarter note
-          }
-        }
-      } else {
-        // When snap is 'none', use a small default size
-        initialDuration = pixelsPerBeat / 8;
-      }
+      // Calculate initial note duration based on snap setting
+      const initialDuration = getInitialNoteDuration(snapSetting, pixelsPerBeat);
 
       // Calculate timing data for start position and duration
       const startTiming = calculateAllTimingData(time, pixelsPerBeat, tempo, sampleRate, ppqn);
@@ -309,8 +242,8 @@
         start: time,
         duration: initialDuration,
         pitch: creationPitch,
-        velocity: 100,
-        lyric: '라',  // Default lyric is '라'
+        velocity: DEFAULT_VELOCITY,
+        lyric: DEFAULT_LYRIC,
         startFlicks: startTiming.flicks,
         durationFlicks: durationTiming.flicks,
         startSeconds: startTiming.seconds,
@@ -360,12 +293,12 @@
             // If not holding shift, clear previous selection
             if (!selectedNotes.has(clickedNote.id)) {
               selectedNotes = new Set([clickedNote.id]);
-              console.log('🔘 Selected note:', clickedNote.id);
+              log.debug('Selected note:', clickedNote.id);
             }
           } else {
             // Add to selection with shift key
             selectedNotes.add(clickedNote.id);
-            console.log('🔘 Added note to selection:', clickedNote.id, 'Total selected:', selectedNotes.size);
+            log.debug('Added note to selection:', clickedNote.id, 'Total selected:', selectedNotes.size);
           }
 
           // Calculate offset from mouse position to note start for natural dragging
@@ -375,8 +308,8 @@
 
           isDragging = true;
           draggedNoteId = clickedNote.id;
-          console.log('🖱️ Started dragging note:', clickedNote.id);
-          console.log('📏 Drag offsets:', { noteOffsetX, noteOffsetY });
+          log.debug('Started dragging note:', clickedNote.id);
+          log.debug('Drag offsets:', { noteOffsetX, noteOffsetY });
         }
       } else {
         // Clicked empty space, clear selection unless shift is held
@@ -465,57 +398,14 @@
       // Resize note
       notes = notes.map(note => {
         if (note.id === resizedNoteId) {
-          let newDuration;
+          // Get the grid size based on snap setting
+          const gridSize = getGridSizeFromSnap(snapSetting, pixelsPerBeat);
 
-          // Get the grid size based on snap setting (음악적 의미에 맞게)
-          let gridSize;
-          if (snapSetting === 'none') {
-            // If snap is off, use a small default size for fine control
-            gridSize = pixelsPerBeat / 32; // Very fine control
-          } else {
-            // Parse the snap setting fraction
-            gridSize = pixelsPerBeat; // Default to quarter note (1/4)
-            const [numerator, denominator] = snapSetting.split('/');
-            if (numerator === '1' && denominator) {
-              const divisionValue = parseInt(denominator);
-
-              // 음악적 의미에 맞는 grid size 계산
-              switch (divisionValue) {
-                case 1: // Whole note - 4 beats
-                  gridSize = pixelsPerBeat * 4;
-                  break;
-                case 2: // Half note - 2 beats
-                  gridSize = pixelsPerBeat * 2;
-                  break;
-                case 4: // Quarter note - 1 beat
-                  gridSize = pixelsPerBeat;
-                  break;
-                case 8: // Eighth note - 0.5 beat
-                  gridSize = pixelsPerBeat / 2;
-                  break;
-                case 16: // Sixteenth note - 0.25 beat
-                  gridSize = pixelsPerBeat / 4;
-                  break;
-                case 32: // Thirty-second note - 0.125 beat
-                  gridSize = pixelsPerBeat / 8;
-                  break;
-                default:
-                  gridSize = pixelsPerBeat;
-              }
-            }
-          }
-
-          // Use the same approach for both note creation and resize in select mode
           // Calculate width from the start position to the current mouse position
           const width = Math.max(gridSize, x - creationStartTime);
 
-          // Snap the width to the grid based on current snap setting
-          const snappedWidth = snapSetting === 'none'
-            ? width
-            : Math.round(width / gridSize) * gridSize;
-
-          // Ensure minimum size
-          newDuration = Math.max(gridSize, snappedWidth);
+          // Snap the duration to grid
+          const newDuration = snapDurationToGrid(width, snapSetting, pixelsPerBeat);
 
           // Calculate all timing data for new duration
           const newDurationTiming = calculateAllTimingData(newDuration, pixelsPerBeat, tempo, sampleRate, ppqn);
@@ -546,42 +436,8 @@
       if (resizedNoteId) {
         const createdNote = notes.find(note => note.id === resizedNoteId);
 
-        // Calculate minimum note size based on snap setting (음악적 의미에 맞게)
-        let minimumNoteSize;
-        if (snapSetting === 'none') {
-          minimumNoteSize = pixelsPerBeat / 32; // Tiny minimum size when snap is off
-        } else {
-          // Parse the snap setting fraction
-          minimumNoteSize = pixelsPerBeat / 2; // Default to half quarter note
-          const [numerator, denominator] = snapSetting.split('/');
-          if (numerator === '1' && denominator) {
-            const divisionValue = parseInt(denominator);
-
-            // 음악적 의미에 맞는 minimum size 계산 (snap grid의 절반)
-            switch (divisionValue) {
-              case 1: // Whole note - 4 beats
-                minimumNoteSize = (pixelsPerBeat * 4) / 2;
-                break;
-              case 2: // Half note - 2 beats
-                minimumNoteSize = (pixelsPerBeat * 2) / 2;
-                break;
-              case 4: // Quarter note - 1 beat
-                minimumNoteSize = pixelsPerBeat / 2;
-                break;
-              case 8: // Eighth note - 0.5 beat
-                minimumNoteSize = (pixelsPerBeat / 2) / 2;
-                break;
-              case 16: // Sixteenth note - 0.25 beat
-                minimumNoteSize = (pixelsPerBeat / 4) / 2;
-                break;
-              case 32: // Thirty-second note - 0.125 beat
-                minimumNoteSize = (pixelsPerBeat / 8) / 2;
-                break;
-              default:
-                minimumNoteSize = pixelsPerBeat / 2;
-            }
-          }
-        }
+        // Calculate minimum note size based on snap setting
+        const minimumNoteSize = getMinimumNoteSize(snapSetting, pixelsPerBeat);
 
         // Now check if the note is too small based on the dynamic minimum size
         if (createdNote && createdNote.duration < minimumNoteSize) {
@@ -712,7 +568,7 @@
   function updateLineLayers() {
     if (!layerManager || !line_data) return;
 
-    console.log('📊 Updating line layers with data:', line_data);
+    log.debug('Updating line layers with data:', line_data);
 
     // Clear existing line layers
     for (const [name, layer] of lineLayers) {
@@ -795,21 +651,21 @@
           lineLayers.set(layerName, lineLayer);
           layerManager.addLayer(lineLayer);
 
-          console.log(`✅ Added line layer: ${layerName} with ${dataPoints.length} points (mode: ${config.renderMode})`);
+          log.debug(`Added line layer: ${layerName} with ${dataPoints.length} points (mode: ${config.renderMode})`);
         } catch (error) {
           console.error(`❌ Failed to create line layer ${layerName}:`, error);
         }
       });
     }
 
-    console.log(`📊 Line layers updated: ${lineLayers.size} total layers`);
-    console.log(`📊 LayerManager has ${layerManager.getLayerNames().length} layers:`, layerManager.getLayerNames());
+    log.debug(`Line layers updated: ${lineLayers.size} total layers`);
+    log.debug(`LayerManager has ${layerManager.getLayerNames().length} layers:`, layerManager.getLayerNames());
 
     renderLayers();
 
     // Update layer control panel to show new line layers
     if (layerControlPanel) {
-      console.log('🎛️ Updating layer control panel');
+      log.debug('Updating layer control panel');
       layerControlPanel.updateLayers();
     }
   }
@@ -941,7 +797,7 @@
     dispatch('positionInfo', currentMousePosition);
   }
 
-  // Snap value to grid based on selected snap setting with higher precision (음악적 의미에 맞게)
+  // Snap value to grid based on selected snap setting with higher precision
   function snapToGrid(value: number) {
     // If snap is set to 'none', return the exact value
     if (snapSetting === 'none') {
@@ -956,44 +812,9 @@
       // Round to nearest grid position
       return Math.round(value / exactNotePixels) * exactNotePixels;
     } catch (error) {
-      // Fallback to original calculation if snap setting is not recognized
-      console.warn(`Unknown snap setting: ${snapSetting}, using fallback calculation`);
-
-      // Parse the snap setting fraction
-      let gridSize = pixelsPerBeat; // Default to quarter note (1/4)
-
-      if (snapSetting !== 'none') {
-        const [numerator, denominator] = snapSetting.split('/');
-        if (numerator === '1' && denominator) {
-          const divisionValue = parseInt(denominator);
-
-          // 음악적 의미에 맞는 grid size 계산
-          switch (divisionValue) {
-            case 1: // Whole note - 4 beats
-              gridSize = pixelsPerBeat * 4;
-              break;
-            case 2: // Half note - 2 beats
-              gridSize = pixelsPerBeat * 2;
-              break;
-            case 4: // Quarter note - 1 beat
-              gridSize = pixelsPerBeat;
-              break;
-            case 8: // Eighth note - 0.5 beat
-              gridSize = pixelsPerBeat / 2;
-              break;
-            case 16: // Sixteenth note - 0.25 beat
-              gridSize = pixelsPerBeat / 4;
-              break;
-            case 32: // Thirty-second note - 0.125 beat
-              gridSize = pixelsPerBeat / 8;
-              break;
-            default:
-              gridSize = pixelsPerBeat;
-          }
-        }
-      }
-
-      return Math.round(value / gridSize) * gridSize;
+      // Fallback to utility function if snap setting is not recognized
+      log.warn(`Unknown snap setting: ${snapSetting}, using fallback calculation`);
+      return snapValueToGrid(value, snapSetting, pixelsPerBeat);
     }
   }
 
@@ -1041,7 +862,7 @@
   // Initialize layer system
   function initializeLayers() {
     if (!ctx || !canvas) {
-      console.log('⚠️ Cannot initialize layers: missing ctx or canvas');
+      log.warn('Cannot initialize layers: missing ctx or canvas');
       return;
     }
 
@@ -1202,8 +1023,8 @@
         renderLayers();
       }
     } catch (error: any) {
-      console.log('⚠️ Auto-render failed (expected if no user interaction):', error.message);
-      // 실패는 정상적인 동작 (사용자 상호작용이 필요한 경우)
+      log.debug('Auto-render failed (expected if no user interaction):', error.message);
+      // Failure is normal behavior (when user interaction is required)
     }
   }
 

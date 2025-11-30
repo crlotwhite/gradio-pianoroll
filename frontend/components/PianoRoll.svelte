@@ -15,24 +15,43 @@
   import { BackendAudioEngine } from '../utils/backendAudioEngine';
   import { beatsToFlicks, flicksToBeats, formatFlicks } from '../utils/flicks';
   import { createEventDispatcher } from 'svelte';
+  import {
+    DEFAULT_PIXELS_PER_BEAT,
+    MIN_PIXELS_PER_BEAT,
+    MAX_PIXELS_PER_BEAT,
+    ZOOM_STEP,
+    DEFAULT_KEYBOARD_WIDTH,
+    DEFAULT_TIMELINE_HEIGHT,
+    DEFAULT_PIANOROLL_WIDTH,
+    DEFAULT_PIANOROLL_HEIGHT,
+    DEFAULT_TEMPO,
+    DEFAULT_SAMPLE_RATE,
+    DEFAULT_PPQN,
+    DEFAULT_SNAP_SETTING,
+    DEFAULT_EDIT_MODE
+  } from '../utils/constants';
+  import { createLogger } from '../utils/logger';
+
+  const log = createLogger('PianoRoll');
+
   /**
    * @typedef {import('../../types/component').PianoRollProps} PianoRollProps
    */
 
-  // 이벤트 디스패처 생성
+  // Create event dispatcher
   const dispatch = createEventDispatcher();
 
-  // Props (외부에서 주입되는 값)
+  // Props (values injected from parent)
   /** @type {number} */
-  export let width = 1000;  // Total width of the piano roll
+  export let width = DEFAULT_PIANOROLL_WIDTH;  // Total width of the piano roll
   /** @type {number} */
-  export let height = 600;  // Total height of the piano roll
+  export let height = DEFAULT_PIANOROLL_HEIGHT;  // Total height of the piano roll
   /** @type {number} */
-  export let keyboardWidth = 120; // Width of the keyboard component
+  export let keyboardWidth = DEFAULT_KEYBOARD_WIDTH; // Width of the keyboard component
   /** @type {number} */
-  export let timelineHeight = 40; // Height of the timeline component
+  export let timelineHeight = DEFAULT_TIMELINE_HEIGHT; // Height of the timeline component
   /** @type {string} */
-  export let elem_id = '';  // 컴포넌트 고유 ID
+  export let elem_id = '';  // Component unique ID
 
   /** @type {string | null} */
   export let audio_data: string | null = null;
@@ -67,26 +86,23 @@
 
   // Settings
   /** @type {number} */
-  export let tempo = 120;
+  export let tempo = DEFAULT_TEMPO;
   /** @type {{ numerator: number, denominator: number }} */
   export let timeSignature = { numerator: 4, denominator: 4 };
   /** @type {string} */
-  export let editMode = 'select'; // 'select', 'draw', 'erase', etc.
+  export let editMode = DEFAULT_EDIT_MODE; // 'select', 'draw', 'erase', etc.
   /** @type {string} */
-  export let snapSetting = '1/4'; // Default snap setting: 1/4
+  export let snapSetting = DEFAULT_SNAP_SETTING; // Default snap setting: 1/4
 
   // Audio metadata
   /** @type {number} */
-  export let sampleRate = 44100; // Audio sample rate
+  export let sampleRate = DEFAULT_SAMPLE_RATE; // Audio sample rate
   /** @type {number} */
-  export let ppqn = 480;         // MIDI pulses per quarter note
+  export let ppqn = DEFAULT_PPQN;         // MIDI pulses per quarter note
 
   // Zoom level (pixels per beat) - now controlled from parent
   /** @type {number} */
-  export let pixelsPerBeat = 80;
-  const MIN_PIXELS_PER_BEAT = 40; // Minimum zoom level
-  const MAX_PIXELS_PER_BEAT = 200; // Maximum zoom level
-  const ZOOM_STEP = 20; // Zoom step size (must be integer to avoid coordinate calculation errors)
+  export let pixelsPerBeat = DEFAULT_PIXELS_PER_BEAT;
 
   // Zoom in function
   /**
@@ -112,7 +128,7 @@
     }
   }
 
-  // State variables (내부 상태)
+  // State variables (internal state)
   // Playback state
   let isPlaying = false;
   let isRendering = false;
@@ -125,12 +141,12 @@
   // References to DOM elements
   let containerElement: HTMLDivElement;
 
-  // 컴포넌트별 오디오 엔진 인스턴스
+  // Per-component audio engine instance
   $: audioEngine = AudioEngineManager.getInstance(elem_id || 'default');
-  // Backend audio engine 인스턴스
+  // Backend audio engine instance
   const backendAudioEngine = new BackendAudioEngine();
 
-  // 전체 데이터 변경 이벤트 발생
+  // Dispatch data change event
   /**
    * Dispatch a 'dataChange' event with the current piano roll state.
    */
@@ -164,7 +180,7 @@
   function handleGridScroll(event: CustomEvent) {
     horizontalScroll = event.detail.horizontalScroll;
     verticalScroll = event.detail.verticalScroll;
-    console.log('🎨 PianoRoll: scroll received, verticalScroll =', verticalScroll);
+    log.debug('scroll received, verticalScroll =', verticalScroll);
     // The scroll values are now reactively bound to the other components
     // and will trigger updates when they change
   }
@@ -344,16 +360,16 @@
    */
   async function play() {
     if (isPlaying) {
-      console.log("⚠️ Already playing, ignoring play request");
+      log.debug('Already playing, ignoring play request');
       return;
     }
 
-    console.log("▶️ Play function called");
-    console.log("- use_backend_audio:", use_backend_audio);
-    console.log("- audio_data present:", !!audio_data);
-    console.log("- elem_id:", elem_id);
+    log.debug('Play function called');
+    log.debug('- use_backend_audio:', use_backend_audio);
+    log.debug('- audio_data present:', !!audio_data);
+    log.debug('- elem_id:', elem_id);
 
-    // 재생 이벤트 발생
+    // Dispatch play event
     dispatch('play', {
       currentPosition: currentFlicks,
       notes,
@@ -362,32 +378,32 @@
     });
 
     if (use_backend_audio && audio_data) {
-      console.log("🎵 Using backend audio for playback");
-      // 백엔드 오디오 재생
+      log.debug('Using backend audio for playback');
+      // Play backend audio
       handleBackendAudioInit().then(() => {
         handleBackendAudioPlay();
       }).catch((error) => {
-        console.error("❌ Backend audio initialization failed:", error);
+        log.error('Backend audio initialization failed:', error);
         fallbackToFrontendAudio();
       });
       return;
     }
 
-    console.log("🎵 Using frontend audio engine");
+    log.debug('Using frontend audio engine');
     if (!audioEngine.getRenderedBuffer()) {
-      console.log("🔄 No rendered buffer, rendering first...");
+      log.debug('No rendered buffer, rendering first...');
       // Render audio first if not already rendered
       renderAudio().then(() => {
         startPlayback();
       });
     } else {
-      console.log("✅ Rendered buffer ready, starting playback");
+      log.debug('Rendered buffer ready, starting playback');
       startPlayback();
     }
   }
 
   function fallbackToFrontendAudio() {
-    console.log("🔄 Falling back to frontend audio engine");
+    log.debug('Falling back to frontend audio engine');
     use_backend_audio = false;
     if (!audioEngine.getRenderedBuffer()) {
       renderAudio().then(() => {
@@ -400,11 +416,11 @@
 
   function startPlayback() {
     if (use_backend_audio) {
-      console.log("⚠️ startPlayback called but use_backend_audio is true - should not happen");
-      return; // 백엔드 오디오 사용 시 건너뛰기
+      log.warn('startPlayback called but use_backend_audio is true - should not happen');
+      return; // Skip when using backend audio
     }
 
-    console.log("▶️ Starting frontend audio playback");
+    log.debug('Starting frontend audio playback');
     audioEngine.play();
     isPlaying = true;
   }
@@ -413,10 +429,10 @@
    * Pause the piano roll audio (frontend or backend).
    */
   function pause() {
-    console.log("⏸️ Pause function called");
-    console.log("- use_backend_audio:", use_backend_audio);
+    log.debug('Pause function called');
+    log.debug('- use_backend_audio:', use_backend_audio);
 
-    // 일시정지 이벤트 발생
+    // Dispatch pause event
     dispatch('pause', {
       currentPosition: currentFlicks,
       use_backend_audio
@@ -427,7 +443,7 @@
       return;
     }
 
-    console.log("⏸️ Pausing frontend audio");
+    log.debug('Pausing frontend audio');
     audioEngine.pause();
     isPlaying = false;
   }
@@ -436,10 +452,10 @@
    * Stop the piano roll audio (frontend or backend) and reset playhead.
    */
   function stop() {
-    console.log("⏹️ Stop function called");
-    console.log("- use_backend_audio:", use_backend_audio);
+    log.debug('Stop function called');
+    log.debug('- use_backend_audio:', use_backend_audio);
 
-    // 정지 이벤트 발생
+    // Dispatch stop event
     dispatch('stop', {
       currentPosition: currentFlicks,
       use_backend_audio
@@ -450,7 +466,7 @@
       return;
     }
 
-    console.log("⏹️ Stopping frontend audio");
+    log.debug('Stopping frontend audio');
     audioEngine.stop();
     isPlaying = false;
     currentFlicks = 0;
@@ -458,17 +474,17 @@
     audioEngine.seekToFlicks(0);
   }
 
-  // 오디오 다운로드 함수
+  // Audio download function
   /**
    * Download the rendered audio (frontend or backend).
    */
   async function downloadAudio() {
-    console.log("💾 Download audio function called");
-    console.log("- use_backend_audio:", use_backend_audio);
-    console.log("- audio_data present:", !!audio_data);
+    log.debug('Download audio function called');
+    log.debug('- use_backend_audio:', use_backend_audio);
+    log.debug('- audio_data present:', !!audio_data);
 
     if (use_backend_audio && audio_data) {
-      // 백엔드 오디오 다운로드
+      // Download backend audio
       isRendering = true;
       try {
         await handleBackendAudioDownload();
@@ -476,7 +492,7 @@
         isRendering = false;
       }
     } else {
-      // 프론트엔드 오디오 다운로드
+      // Download frontend audio
       await downloadFrontendAudio();
     }
   }
@@ -485,34 +501,34 @@
    * Download the rendered frontend audio as a WAV file.
    */
   async function downloadFrontendAudio() {
-    console.log("💾 Downloading frontend audio...");
+    log.debug('Downloading frontend audio...');
 
     try {
-      // 오디오가 렌더링되지 않았다면 먼저 렌더링
+      // Render audio first if not already rendered
       if (!audioEngine.getRenderedBuffer()) {
-        console.log("🔄 No rendered buffer, rendering audio first...");
+        log.debug('No rendered buffer, rendering audio first...');
         isRendering = true;
         await renderAudio();
         isRendering = false;
       }
 
-      // 렌더링된 오디오가 있는지 확인
+      // Check if rendered audio is available
       if (!audioEngine.getRenderedBuffer()) {
-        console.error("❌ Failed to render audio for download");
+        log.error('Failed to render audio for download');
         return;
       }
 
-      // 파일명 생성 (현재 시간 포함)
+      // Generate filename (with current timestamp)
       const now = new Date();
       const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '_');
       const filename = `piano_roll_${timestamp}.wav`;
 
-      // 다운로드 실행
+      // Execute download
       audioEngine.downloadAudio(filename);
 
-      console.log("✅ Frontend audio download initiated:", filename);
+      log.info('Frontend audio download initiated:', filename);
     } catch (error) {
-      console.error("❌ Error downloading frontend audio:", error);
+      log.error('Error downloading frontend audio:', error);
     } finally {
       isRendering = false;
     }
