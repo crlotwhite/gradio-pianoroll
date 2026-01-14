@@ -5,6 +5,9 @@
 <script lang="ts">
   import { onMount, onDestroy, afterUpdate } from 'svelte';
   import { AudioEngineManager } from '../utils/audioEngine';
+  import { createLogger } from '../utils/logger';
+
+  const log = createLogger('WaveformComponent');
 
   // Props
   export let width = 880;
@@ -254,9 +257,9 @@
 
     if (hasDrawnAnyPoint) {
       ctx.stroke();
-      console.log(`Waveform drawing complete: ${waveformData.length} points used`);
+      log.debug("Waveform drawing complete:", { pointsUsed: waveformData.length });
     } else {
-      console.log("Waveform data not present in current screen area");
+      log.debug("Waveform data not present in current screen area");
     }
 
     isRendered = true;

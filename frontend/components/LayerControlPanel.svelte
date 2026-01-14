@@ -12,6 +12,10 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { LayerManager, LineLayer } from '../utils/layers';
+  import { createLogger } from '../utils/logger';
+
+  const log = createLogger('LayerControlPanel');
+
   /** @type {import('../../types/component').LayerControlPanelProps} */
 
   // Props
@@ -60,14 +64,14 @@
   }
 
   function moveLayerUp(layerName: string) {
-    console.log('📈 Moving layer up:', layerName);
+    log.debug('Moving layer up:', layerName);
     if (!layerManager) return;
 
     const allLayers = layerManager.getLayerInfo().sort((a, b) => a.zIndex - b.zIndex);
     const currentIndex = allLayers.findIndex(layer => layer.name === layerName);
 
     if (currentIndex === -1 || currentIndex >= allLayers.length - 1) {
-      console.log('⚠️ Cannot move layer up - already at top or not found');
+      log.warn('Cannot move layer up - already at top or not found');
       return;
     }
 
@@ -75,7 +79,7 @@
     const currentLayer = allLayers[currentIndex];
     const upperLayer = allLayers[currentIndex + 1];
 
-    console.log(`🔄 Swapping layers: ${currentLayer.name} (${currentLayer.zIndex}) ↔ ${upperLayer.name} (${upperLayer.zIndex})`);
+    log.debug('Swapping layers:', { from: currentLayer.name, to: upperLayer.name });
 
     layerManager.setLayerZIndex(currentLayer.name, upperLayer.zIndex);
     layerManager.setLayerZIndex(upperLayer.name, currentLayer.zIndex);
@@ -86,14 +90,14 @@
   }
 
   function moveLayerDown(layerName: string) {
-    console.log('📉 Moving layer down:', layerName);
+    log.debug('Moving layer down:', layerName);
     if (!layerManager) return;
 
     const allLayers = layerManager.getLayerInfo().sort((a, b) => a.zIndex - b.zIndex);
     const currentIndex = allLayers.findIndex(layer => layer.name === layerName);
 
     if (currentIndex === -1 || currentIndex <= 0) {
-      console.log('⚠️ Cannot move layer down - already at bottom or not found');
+      log.warn('Cannot move layer down - already at bottom or not found');
       return;
     }
 
@@ -101,7 +105,7 @@
     const currentLayer = allLayers[currentIndex];
     const lowerLayer = allLayers[currentIndex - 1];
 
-    console.log(`🔄 Swapping layers: ${currentLayer.name} (${currentLayer.zIndex}) ↔ ${lowerLayer.name} (${lowerLayer.zIndex})`);
+    log.debug('Swapping layers:', { from: currentLayer.name, to: lowerLayer.name });
 
     layerManager.setLayerZIndex(currentLayer.name, lowerLayer.zIndex);
     layerManager.setLayerZIndex(lowerLayer.name, currentLayer.zIndex);

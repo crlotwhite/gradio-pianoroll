@@ -8,6 +8,9 @@
 	import type { SelectData } from "@gradio/utils";
 
 	import PianoRoll from "./components/PianoRoll.svelte";
+	import { createLogger } from "./utils/logger";
+
+	const log = createLogger('Index');
 
 	export let elem_id = "";
 	export let elem_classes: string[] = [];
@@ -76,23 +79,22 @@
 	$: if (value && typeof value === 'object') {
 		// Update props if backend data exists in value
 		if ('audio_data' in value && value.audio_data !== undefined) {
-			console.log("🎵 Audio data updated:", !!value.audio_data);
+			log.debug("Audio data updated:", !!value.audio_data);
 			audio_data = typeof value.audio_data === 'string' ? value.audio_data : null;
 		}
 		if ('curve_data' in value && value.curve_data !== undefined) {
-			console.log("📊 Curve data updated:", value.curve_data);
+			log.debug("Curve data updated:", value.curve_data);
 			curve_data = value.curve_data && typeof value.curve_data === 'object' ? value.curve_data : null;
 		}
 		if ('segment_data' in value && value.segment_data !== undefined) {
-			console.log("📍 Segment data updated:", value.segment_data);
+			log.debug("Segment data updated:", value.segment_data);
 			segment_data = Array.isArray(value.segment_data) ? value.segment_data : null;
 		}
 		if ('use_backend_audio' in value && value.use_backend_audio !== undefined) {
-			// console.log("🔊 Backend audio flag:", value.use_backend_audio);
 			use_backend_audio = typeof value.use_backend_audio === 'boolean' ? value.use_backend_audio : false;
 		}
 		if ('line_data' in value && value.line_data !== undefined) {
-			console.log("📊 Line data updated:", value.line_data);
+			log.debug("Line data updated:", value.line_data);
 			line_data = value.line_data && typeof value.line_data === 'object' ? value.line_data : null;
 		}
 	}

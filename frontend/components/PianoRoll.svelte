@@ -610,7 +610,7 @@
 
     // Initial audio render - always render when not using backend audio
     if (!use_backend_audio) {
-      console.log("🎵 Initial frontend audio rendering on mount");
+      log.debug("Initial frontend audio rendering on mount");
       renderAudio();
     }
   });
@@ -629,18 +629,19 @@
 
   // Reactive statement to decode backend audio when audio_data changes
   $: if (audio_data && use_backend_audio) {
-    console.log("🔄 Audio data or backend flag changed, initializing...");
-    console.log("- audio_data present:", !!audio_data);
-    console.log("- use_backend_audio:", use_backend_audio);
+    log.debug("Audio data or backend flag changed, initializing...", {
+      hasAudioData: !!audio_data,
+      useBackendAudio: use_backend_audio,
+    });
 
     handleBackendAudioInit().catch((error) => {
-      console.error("❌ Failed to initialize backend audio:", error);
+      log.error("Failed to initialize backend audio:", error);
     });
   }
 
   // Reactive statement to start frontend rendering when switching from backend to frontend
   $: if (!use_backend_audio && audioEngine) {
-    console.log("🔄 Switched to frontend audio - starting automatic rendering");
+    log.debug("Switched to frontend audio - starting automatic rendering");
     renderAudio();
   }
 </script>
