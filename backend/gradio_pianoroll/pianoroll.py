@@ -439,106 +439,9 @@ class PianoRoll(Component):
         return {
             "type": "object",
             "properties": {
-                "notes": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "string"},
-                            "start": {
-                                "type": "number",
-                                "description": "Start position in pixels",
-                            },
-                            "duration": {
-                                "type": "number",
-                                "description": "Duration in pixels",
-                            },
-                            "startFlicks": {
-                                "type": "number",
-                                "description": "Start position in flicks (precise timing)",
-                            },
-                            "durationFlicks": {
-                                "type": "number",
-                                "description": "Duration in flicks (precise timing)",
-                            },
-                            "startSeconds": {
-                                "type": "number",
-                                "description": "Start time in seconds (for audio processing)",
-                            },
-                            "durationSeconds": {
-                                "type": "number",
-                                "description": "Duration in seconds (for audio processing)",
-                            },
-                            "endSeconds": {
-                                "type": "number",
-                                "description": "End time in seconds (startSeconds + durationSeconds)",
-                            },
-                            "startBeats": {
-                                "type": "number",
-                                "description": "Start position in musical beats",
-                            },
-                            "durationBeats": {
-                                "type": "number",
-                                "description": "Duration in musical beats",
-                            },
-                            "startTicks": {
-                                "type": "integer",
-                                "description": "Start position in MIDI ticks",
-                            },
-                            "durationTicks": {
-                                "type": "integer",
-                                "description": "Duration in MIDI ticks",
-                            },
-                            "startSample": {
-                                "type": "integer",
-                                "description": "Start position in audio samples",
-                            },
-                            "durationSamples": {
-                                "type": "integer",
-                                "description": "Duration in audio samples",
-                            },
-                            "pitch": {
-                                "type": "number",
-                                "description": "MIDI pitch (0-127)",
-                            },
-                            "velocity": {
-                                "type": "number",
-                                "description": "MIDI velocity (0-127)",
-                            },
-                            "lyric": {
-                                "type": "string",
-                                "description": "Optional lyric text",
-                            },
-                        },
-                        "required": [
-                            "id",
-                            "start",
-                            "duration",
-                            "startFlicks",
-                            "durationFlicks",
-                            "startSeconds",
-                            "durationSeconds",
-                            "endSeconds",
-                            "startBeats",
-                            "durationBeats",
-                            "startTicks",
-                            "durationTicks",
-                            "startSample",
-                            "durationSamples",
-                            "pitch",
-                            "velocity",
-                        ],
-                    },
-                },
+                "notes": self._get_notes_api_schema(),
                 "tempo": {"type": "number", "description": "BPM tempo"},
-                "timeSignature": {
-                    "type": "object",
-                    "properties": {
-                        "numerator": {"type": "number"},
-                        "denominator": {"type": "number"},
-                    },
-                    "required": ["numerator", "denominator"],
-                },
+                "timeSignature": self._get_time_signature_api_schema(),
                 "editMode": {"type": "string", "description": "Current edit mode"},
                 "snapSetting": {"type": "string", "description": "Note snap setting"},
                 "pixelsPerBeat": {
@@ -555,79 +458,229 @@ class PianoRoll(Component):
                     "description": "Pulses Per Quarter Note for MIDI tick calculations",
                     "default": 480,
                 },
-                # Backend data attributes for passing
-                "audio_data": {
-                    "type": "string",
-                    "description": "Backend audio data (base64 encoded audio or URL)",
-                    "nullable": True,
-                },
-                "curve_data": {
-                    "type": "object",
-                    "description": "Linear curve data (pitch curves, loudness curves, etc.)",
-                    "properties": {
-                        "pitch_curve": {
-                            "type": "array",
-                            "items": {"type": "number"},
-                            "description": "Pitch curve data points",
-                        },
-                        "loudness_curve": {
-                            "type": "array",
-                            "items": {"type": "number"},
-                            "description": "Loudness curve data points",
-                        },
-                        "formant_curves": {
-                            "type": "object",
-                            "description": "Formant frequency curves",
-                            "additionalProperties": {
-                                "type": "array",
-                                "items": {"type": "number"},
-                            },
-                        },
-                    },
-                    "additionalProperties": True,
-                    "nullable": True,
-                },
-                "segment_data": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "start": {
-                                "type": "number",
-                                "description": "Segment start time (seconds)",
-                            },
-                            "end": {
-                                "type": "number",
-                                "description": "Segment end time (seconds)",
-                            },
-                            "type": {
-                                "type": "string",
-                                "description": "Segment type (phoneme, syllable, word, etc.)",
-                            },
-                            "value": {
-                                "type": "string",
-                                "description": "Segment value/text",
-                            },
-                            "confidence": {
-                                "type": "number",
-                                "description": "Confidence score (0-1)",
-                                "minimum": 0,
-                                "maximum": 1,
-                            },
-                        },
-                        "required": ["start", "end", "type", "value"],
-                    },
-                    "description": "Segmentation data (pronunciation timing, etc.)",
-                    "nullable": True,
-                },
-                "use_backend_audio": {
-                    "type": "boolean",
-                    "description": "Whether to use backend audio (disables frontend audio engine when true)",
-                    "default": False,
-                },
+                "audio_data": self._get_audio_data_api_schema(),
+                "curve_data": self._get_curve_data_api_schema(),
+                "segment_data": self._get_segment_data_api_schema(),
+                "use_backend_audio": self._get_use_backend_audio_api_schema(),
             },
             "required": ["notes", "tempo", "timeSignature", "editMode", "snapSetting"],
             "description": "Piano roll data object containing notes array, settings, and optional backend data",
+        }
+
+    def _get_notes_api_schema(self) -> dict:
+        """
+        Returns the API schema for notes array.
+
+        Returns:
+            dict: OpenAPI schema for notes.
+        """
+        return {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "start": {
+                        "type": "number",
+                        "description": "Start position in pixels",
+                    },
+                    "duration": {
+                        "type": "number",
+                        "description": "Duration in pixels",
+                    },
+                    "startFlicks": {
+                        "type": "number",
+                        "description": "Start position in flicks (precise timing)",
+                    },
+                    "durationFlicks": {
+                        "type": "number",
+                        "description": "Duration in flicks (precise timing)",
+                    },
+                    "startSeconds": {
+                        "type": "number",
+                        "description": "Start time in seconds (for audio processing)",
+                    },
+                    "durationSeconds": {
+                        "type": "number",
+                        "description": "Duration in seconds (for audio processing)",
+                    },
+                    "endSeconds": {
+                        "type": "number",
+                        "description": "End time in seconds (startSeconds + durationSeconds)",
+                    },
+                    "startBeats": {
+                        "type": "number",
+                        "description": "Start position in musical beats",
+                    },
+                    "durationBeats": {
+                        "type": "number",
+                        "description": "Duration in musical beats",
+                    },
+                    "startTicks": {
+                        "type": "integer",
+                        "description": "Start position in MIDI ticks",
+                    },
+                    "durationTicks": {
+                        "type": "integer",
+                        "description": "Duration in MIDI ticks",
+                    },
+                    "startSample": {
+                        "type": "integer",
+                        "description": "Start position in audio samples",
+                    },
+                    "durationSamples": {
+                        "type": "integer",
+                        "description": "Duration in audio samples",
+                    },
+                    "pitch": {
+                        "type": "number",
+                        "description": "MIDI pitch (0-127)",
+                    },
+                    "velocity": {
+                        "type": "number",
+                        "description": "MIDI velocity (0-127)",
+                    },
+                    "lyric": {
+                        "type": "string",
+                        "description": "Optional lyric text",
+                    },
+                },
+                "required": [
+                    "id",
+                    "start",
+                    "duration",
+                    "startFlicks",
+                    "durationFlicks",
+                    "startSeconds",
+                    "durationSeconds",
+                    "endSeconds",
+                    "startBeats",
+                    "durationBeats",
+                    "startTicks",
+                    "durationTicks",
+                    "startSample",
+                    "durationSamples",
+                    "pitch",
+                    "velocity",
+                ],
+            },
+        }
+
+    def _get_time_signature_api_schema(self) -> dict:
+        """
+        Returns the API schema for time signature.
+
+        Returns:
+            dict: OpenAPI schema for time signature.
+        """
+        return {
+            "type": "object",
+            "properties": {
+                "numerator": {"type": "number"},
+                "denominator": {"type": "number"},
+            },
+            "required": ["numerator", "denominator"],
+        }
+
+    def _get_audio_data_api_schema(self) -> dict:
+        """
+        Returns the API schema for audio data.
+
+        Returns:
+            dict: OpenAPI schema for audio data.
+        """
+        return {
+            "type": "string",
+            "description": "Backend audio data (base64 encoded audio or URL)",
+            "nullable": True,
+        }
+
+    def _get_curve_data_api_schema(self) -> dict:
+        """
+        Returns the API schema for curve data.
+
+        Returns:
+            dict: OpenAPI schema for curve data.
+        """
+        return {
+            "type": "object",
+            "description": "Linear curve data (pitch curves, loudness curves, etc.)",
+            "properties": {
+                "pitch_curve": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Pitch curve data points",
+                },
+                "loudness_curve": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Loudness curve data points",
+                },
+                "formant_curves": {
+                    "type": "object",
+                    "description": "Formant frequency curves",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                    },
+                },
+            },
+            "additionalProperties": True,
+            "nullable": True,
+        }
+
+    def _get_segment_data_api_schema(self) -> dict:
+        """
+        Returns the API schema for segment data.
+
+        Returns:
+            dict: OpenAPI schema for segment data.
+        """
+        return {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "start": {
+                        "type": "number",
+                        "description": "Segment start time (seconds)",
+                    },
+                    "end": {
+                        "type": "number",
+                        "description": "Segment end time (seconds)",
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Segment type (phoneme, syllable, word, etc.)",
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "Segment value/text",
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "description": "Confidence score (0-1)",
+                        "minimum": 0,
+                        "maximum": 1,
+                    },
+                },
+                "required": ["start", "end", "type", "value"],
+            },
+            "description": "Segmentation data (pronunciation timing, etc.)",
+            "nullable": True,
+        }
+
+    def _get_use_backend_audio_api_schema(self) -> dict:
+        """
+        Returns the API schema for use_backend_audio flag.
+
+        Returns:
+            dict: OpenAPI schema for use_backend_audio.
+        """
+        return {
+            "type": "boolean",
+            "description": "Whether to use backend audio (disables frontend audio engine when true)",
+            "default": False,
         }
 
     def update_backend_data(
