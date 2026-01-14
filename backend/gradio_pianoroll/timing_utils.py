@@ -16,11 +16,66 @@ Functions:
     - create_note_with_timing: Create a note dict with all timing data
 """
 
+import dataclasses
 import time
 import random
 import string
 
 from .constants import FLICKS_PER_SECOND
+
+
+@dataclasses.dataclass
+class TimingConverter:
+    """
+    타이밍 변환을 위한 헬퍼 클래스.
+
+    픽셀 값을 다양한 시간 단위(flicks, seconds, beats, ticks, samples)로 변환합니다.
+    일관된 변환을 위해 pixels_per_beat, tempo, sample_rate, ppqn 설정을 저장합니다.
+
+    Example:
+        >>> converter = TimingConverter(pixels_per_beat=80, tempo=120)
+        >>> converter.to_seconds(160)
+        2.0
+        >>> converter.to_flicks(160)
+        1411200000.0
+    """
+
+    pixels_per_beat: float
+    tempo: float
+    sample_rate: int = 44100
+    ppqn: int = 480
+
+    def to_flicks(self, pixels: float) -> float:
+        """픽셀을 flicks 단위로 변환합니다."""
+        return (pixels * 60 * FLICKS_PER_SECOND) / (self.pixels_per_beat * self.tempo)
+
+    def to_seconds(self, pixels: float) -> float:
+        """픽셀을 초 단위로 변환합니다."""
+        return (pixels * 60) / (self.pixels_per_beat * self.tempo)
+
+    def to_beats(self, pixels: float) -> float:
+        """픽셀을 비트 단위로 변환합니다."""
+        return pixels / self.pixels_per_beat
+
+    def to_ticks(self, pixels: float) -> int:
+        """픽셀을 MIDI ticks 단위로 변환합니다."""
+        beats = self.to_beats(pixels)
+        return int(beats * self.ppqn)
+
+    def to_samples(self, pixels: float) -> int:
+        """픽셀을 오디오 샘플 단위로 변환합니다."""
+        seconds = self.to_seconds(pixels)
+        return int(seconds * self.sample_rate)
+
+    def calculate_all(self, pixels: float) -> dict:
+        """픽셀 값에 대한 모든 시간 표현을 계산합니다."""
+        return {
+            "seconds": self.to_seconds(pixels),
+            "beats": self.to_beats(pixels),
+            "flicks": self.to_flicks(pixels),
+            "ticks": self.to_ticks(pixels),
+            "samples": self.to_samples(pixels),
+        }
 
 
 def generate_note_id() -> str:
