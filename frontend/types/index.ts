@@ -1,34 +1,123 @@
 /**
- * Centralized type definitions for the piano roll frontend
+ * Centralized type exports for Piano Roll
  *
- * This module re-exports all types from their respective source files
- * to provide a single import point for type definitions.
+ * This module serves as the main barrel file for all type definitions.
+ * Import types from here to avoid importing from multiple files.
  */
 
-// Layer system types (canonical source for Note, LineDataPoint, LineLayerConfig)
+// ============================================================================
+// Note Types (from ./notes)
+// ============================================================================
+
 export type {
-  LayerRenderContext,
-  LayerProps,
   Note,
-  LineDataPoint,
-  LineLayerConfig,
-} from './layer';
+  NoteTimingData,
+  TimeSignature,
+  NoteRenderConfig,
+  RenderableNote,
+  QuantizationSettings,
+} from './notes';
 
-// Piano roll data types
-export type { TimeSignature, PianoRollData, LineLayerConfigWithData } from './piano_roll_data';
+// ============================================================================
+// Playback Types (from ./playback)
+// ============================================================================
 
-// Component props types
+export type {
+  PlaybackState,
+  AudioSourceType,
+  PlaybackEventType,
+  PlaybackEventPayload,
+  AudioRenderConfig,
+  AudioRenderResult,
+  AudioEngine,
+  BackendAudioConfig,
+  WaveformConfig,
+} from './playback';
+
+// ============================================================================
+// Event Types (from ./events)
+// ============================================================================
+
+export type {
+  PianoRollEvent,
+  NoteChangeEvent,
+  LyricInputEvent,
+  DataChangeEvent,
+  PlaybackEvent,
+  ScrollEvent,
+  PositionInfoEvent,
+  UtilsReadyEvent,
+  LayerChangedEvent,
+  GridScrollEvent,
+  EditModeChangePayload,
+  TempoChangePayload,
+  TimeSignatureChangePayload,
+  SnapChangePayload,
+  ZoomChangePayload,
+  PositionChangePayload,
+  ToolbarEventMap,
+  GridEventMap,
+} from './events';
+
+// ============================================================================
+// Audio Types (from ./audio)
+// ============================================================================
+
+export type {
+  PlayheadUpdateCallback,
+  AudioBufferWithMetadata,
+  WaveformAnalysis,
+  AudioExportOptions,
+  AudioDeviceInfo,
+  AudioContextState,
+} from './audio';
+
+// ============================================================================
+// Component Props Types (from ./component)
+// ============================================================================
+
 export type {
   PianoRollProps,
   ToolbarProps,
   LayerControlPanelProps,
   DebugComponentProps,
+  KeyboardProps,
+  TimelineProps,
+  PlayheadProps,
+  GridProps,
+  LyricEditorProps,
+  WaveformProps,
 } from './component';
 
-// Audio engine types
-export type { PlayheadUpdateCallback } from './audio';
+// ============================================================================
+// Layer Types (from ./layer)
+// ============================================================================
 
-// Coordinate utility types (re-export from utils)
+export type {
+  LayerRenderContext,
+  LayerProps,
+  LineDataPoint,
+  LineLayerConfig,
+  LayerType,
+  Layer,
+} from './layer';
+
+// ============================================================================
+// Piano Roll Data Types (from ./piano_roll_data)
+// ============================================================================
+
+export type {
+  LineLayerConfigWithData,
+  PianoRollData,
+  PianoRollSettings,
+  PianoRollValidationResult,
+} from './piano_roll_data';
+
+// ============================================================================
+// Re-export from utils (coordinate and mouse handler types)
+// These are kept here for convenience, but are defined in the utils directory.
+// ============================================================================
+
 export type {
   MeasureInfo,
   PitchInfo,
@@ -36,7 +125,6 @@ export type {
   MousePositionInfo,
 } from '../utils/coordinateUtils';
 
-// Mouse handler types (re-export from utils)
 export type {
   EditMode,
   InteractionMode,
@@ -49,9 +137,8 @@ export type {
   SnapToGridCallback,
 } from '../utils/mouseHandler';
 
-// Note renderer types (re-export from utils)
 export type {
-  RenderableNote,
-  NoteRenderConfig,
+  RenderableNote as NoteRendererRenderableNote,
+  NoteRenderConfig as NoteRendererNoteRenderConfig,
   NoteRenderContext,
 } from '../utils/noteRenderer';
