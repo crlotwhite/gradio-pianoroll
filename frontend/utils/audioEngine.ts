@@ -488,8 +488,5 @@ class AudioEngineManager {
   }
 }
 
-// Default instance (for backward compatibility)
-export const audioEngine = AudioEngineManager.getInstance('default');
-
 // Export instance manager
 export { AudioEngineManager };

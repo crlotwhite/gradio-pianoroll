@@ -237,11 +237,10 @@
   async function renderAudio() {
     // Skip rendering when using backend audio
     if (use_backend_audio) {
-      console.log("🎵 Backend audio enabled - skipping frontend rendering");
+      log.debug("Backend audio enabled - skipping frontend rendering");
       return;
     }
 
-    // console.log("🎵 Frontend audio rendering started");
     isRendering = true;
     try {
       // Initialize component-specific audio engine
@@ -259,10 +258,6 @@
       isRendering = false;
     }
   }
-
-  // Removed existing backendAudioContext, backendAudioBuffer, backendAudioSource, backendPlayStartTime, backendPlayheadInterval states
-
-  // Removed existing initBackendAudio, decodeBackendAudio, startBackendAudioPlayback, pauseBackendAudio, stopBackendAudio, updateBackendPlayhead, downloadBackendAudio functions
 
   // Replacement functions
   async function handleBackendAudioInit() {
