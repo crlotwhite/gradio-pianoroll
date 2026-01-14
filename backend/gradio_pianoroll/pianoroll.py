@@ -38,6 +38,7 @@ from .timing_utils import (
     pixels_to_samples,
     pixels_to_seconds,
     pixels_to_ticks,
+    TimingConverter,
 )
 
 if TYPE_CHECKING:
@@ -269,41 +270,69 @@ class PianoRoll(Component):
         if not isinstance(value, PianoRollData):
             value = PianoRollData.from_dict(value)
 
-        if value.notes:
-            pixels_per_beat = value.pixelsPerBeat or 80
-            tempo = value.tempo
-            sample_rate = value.sampleRate or 44100
-            ppqn = value.ppqn or 480
+        self._ensure_note_timing_data(value)
+        self._attach_backend_data(value)
 
-            for note in value.notes:
-                if not note.id:
-                    note.id = generate_note_id()
+        return value.to_dict()
 
-                if note.startFlicks is None or note.startSeconds is None:
-                    start_timing = calculate_all_timing_data(
-                        note.start, pixels_per_beat, tempo, sample_rate, ppqn
-                    )
-                    note.startFlicks = start_timing["flicks"]
-                    note.startSeconds = start_timing["seconds"]
-                    note.startBeats = start_timing["beats"]
-                    note.startTicks = start_timing["ticks"]
-                    note.startSample = start_timing["samples"]
+    def _ensure_note_timing_data(self, value: PianoRollData) -> None:
+        """
+        Ensure all notes have timing data calculated.
 
-                if note.durationFlicks is None or note.durationSeconds is None:
-                    duration_timing = calculate_all_timing_data(
-                        note.duration, pixels_per_beat, tempo, sample_rate, ppqn
-                    )
-                    note.durationFlicks = duration_timing["flicks"]
-                    note.durationSeconds = duration_timing["seconds"]
-                    note.durationBeats = duration_timing["beats"]
-                    note.durationTicks = duration_timing["ticks"]
-                    note.durationSamples = duration_timing["samples"]
+        Args:
+            value: Piano roll data to process.
+        """
+        if not value.notes:
+            return
 
-                if note.endSeconds is None:
-                    note.endSeconds = (note.startSeconds or 0) + (
-                        note.durationSeconds or 0
-                    )
+        converter = TimingConverter(
+            pixels_per_beat=value.pixelsPerBeat or DEFAULT_PIXELS_PER_BEAT,
+            tempo=value.tempo,
+            sample_rate=value.sampleRate or DEFAULT_SAMPLE_RATE,
+            ppqn=value.ppqn or DEFAULT_PPQN,
+        )
 
+        for note in value.notes:
+            # Generate ID if missing
+            if not note.id:
+                note.id = generate_note_id()
+
+            # Calculate start timing if missing
+            if note.startFlicks is None or note.startSeconds is None:
+                start_timing = converter.calculate_all(note.start)
+                self._apply_timing_to_note(note, start_timing, "start")
+
+            # Calculate duration timing if missing
+            if note.durationFlicks is None or note.durationSeconds is None:
+                duration_timing = converter.calculate_all(note.duration)
+                self._apply_timing_to_note(note, duration_timing, "duration")
+
+            # Calculate end time if missing
+            if note.endSeconds is None:
+                note.endSeconds = (note.startSeconds or 0) + (note.durationSeconds or 0)
+
+    def _apply_timing_to_note(self, note: NoteData, timing: dict, prefix: str) -> None:
+        """
+        Apply timing data to a note attribute.
+
+        Args:
+            note: Note to update.
+            timing: Timing data dictionary.
+            prefix: Attribute prefix (e.g., 'start' or 'duration').
+        """
+        setattr(note, f"{prefix}Flicks", timing["flicks"])
+        setattr(note, f"{prefix}Seconds", timing["seconds"])
+        setattr(note, f"{prefix}Beats", timing["beats"])
+        setattr(note, f"{prefix}Ticks", timing["ticks"])
+        setattr(note, f"{prefix}Sample", timing["samples"])
+
+    def _attach_backend_data(self, value: PianoRollData) -> None:
+        """
+        Attach backend data to the value if not already present.
+
+        Args:
+            value: Piano roll data to update.
+        """
         if value.audio_data is None and getattr(self, "audio_data", None):
             value.audio_data = self.audio_data
         if value.curve_data is None and getattr(self, "curve_data", None):
@@ -313,13 +342,11 @@ class PianoRoll(Component):
         if value.use_backend_audio is None:
             value.use_backend_audio = getattr(self, "use_backend_audio", False)
 
-        logger.debug("🔊 [postprocess] Backend audio data processed:")
+        logger.debug("[postprocess] Backend audio data processed:")
         logger.debug("   - audio_data present: %s", bool(value.audio_data))
         logger.debug("   - use_backend_audio: %s", value.use_backend_audio)
         logger.debug("   - curve_data present: %s", bool(value.curve_data))
         logger.debug("   - segment_data present: %s", bool(value.segment_data))
-
-        return value.to_dict()
 
     def example_payload(self):
         """
