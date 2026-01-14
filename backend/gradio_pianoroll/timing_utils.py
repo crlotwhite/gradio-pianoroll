@@ -20,6 +20,8 @@ import time
 import random
 import string
 
+from .constants import FLICKS_PER_SECOND
+
 
 def generate_note_id() -> str:
     """
@@ -43,7 +45,6 @@ def pixels_to_flicks(pixels: float, pixels_per_beat: float, tempo: float) -> flo
     Returns:
         float: Flicks value (precise timing unit).
     """
-    FLICKS_PER_SECOND = 705600000
     return (pixels * 60 * FLICKS_PER_SECOND) / (pixels_per_beat * tempo)
 
 
