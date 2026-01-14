@@ -286,6 +286,232 @@ class PianoRollData:
 PianoRollDataClass = PianoRollData
 
 
+# ============================================================================
+# Validation Classes
+# ============================================================================
+
+
+@dataclasses.dataclass
+class ValidationResult:
+    """
+    검증 결과를 담는 데이터 클래스.
+
+    Attributes:
+        is_valid: 검증 통과 여부
+        errors: 오류 메시지 목록
+        warnings: 경고 메시지 목록
+    """
+
+    is_valid: bool
+    errors: List[str]
+    warnings: List[str]
+
+    @classmethod
+    def success(cls) -> "ValidationResult":
+        """성공 결과를 반환합니다."""
+        return cls(is_valid=True, errors=[], warnings=[])
+
+    @classmethod
+    def failure(cls, errors: List[str], warnings: Optional[List[str]] = None) -> "ValidationResult":
+        """실패 결과를 반환합니다."""
+        return cls(is_valid=False, errors=errors, warnings=warnings or [])
+
+    def has_errors(self) -> bool:
+        """오류가 있는지 확인합니다."""
+        return len(self.errors) > 0
+
+    def has_warnings(self) -> bool:
+        """경고가 있는지 확인합니다."""
+        return len(self.warnings) > 0
+
+    def merge(self, other: "ValidationResult") -> "ValidationResult":
+        """다른 결과와 병합합니다."""
+        return ValidationResult(
+            is_valid=self.is_valid and other.is_valid,
+            errors=self.errors + other.errors,
+            warnings=self.warnings + other.warnings,
+        )
+
+
+class NoteValidator:
+    """Note 데이터 검증기."""
+
+    # 필수 필드 목록
+    REQUIRED_FIELDS = ["id", "start", "duration", "pitch", "velocity"]
+
+    @classmethod
+    def to_dict(cls, note: Union[Dict[str, Any], NoteData]) -> Dict[str, Any]:
+        """노트를 딕셔너리로 변환합니다."""
+        if dataclasses.is_dataclass(note):
+            return dataclasses.asdict(note)
+        return dict(note)
+
+    @classmethod
+    def validate_required_fields(cls, note: Dict[str, Any]) -> List[str]:
+        """필수 필드 유효성을 검증합니다."""
+        errors = []
+        for field in cls.REQUIRED_FIELDS:
+            if field not in note:
+                errors.append(f"Required field '{field}' is missing")
+        return errors
+
+    @classmethod
+    def validate_types(cls, note: Dict[str, Any]) -> List[str]:
+        """타입 유효성을 검증합니다."""
+        errors = []
+
+        if "start" in note and not isinstance(note["start"], (int, float)):
+            errors.append("'start' must be a number")
+        if "duration" in note and not isinstance(note["duration"], (int, float)):
+            errors.append("'duration' must be a number")
+        if "pitch" in note and not isinstance(note["pitch"], int):
+            errors.append("'pitch' must be an integer")
+        if "velocity" in note and not isinstance(note["velocity"], int):
+            errors.append("'velocity' must be an integer")
+
+        return errors
+
+    @classmethod
+    def validate_range(cls, note: Dict[str, Any]) -> List[str]:
+        """범위 유효성을 검증합니다."""
+        errors = []
+
+        if "pitch" in note and not (0 <= note["pitch"] <= 127):
+            errors.append("'pitch' must be between 0 and 127")
+        if "velocity" in note and not (0 <= note["velocity"] <= 127):
+            errors.append("'velocity' must be between 0 and 127")
+        if "start" in note and note["start"] < 0:
+            errors.append("'start' must be non-negative")
+        if "duration" in note and note["duration"] <= 0:
+            errors.append("'duration' must be positive")
+
+        return errors
+
+    @classmethod
+    def validate(cls, note: Union[Dict[str, Any], NoteData]) -> ValidationResult:
+        """
+        노트 전체를 검증합니다.
+
+        Args:
+            note: 검증할 노트 데이터.
+
+        Returns:
+            ValidationResult: 검증 결과.
+        """
+        note_dict = cls.to_dict(note)
+
+        all_errors = []
+        all_errors.extend(cls.validate_required_fields(note_dict))
+        all_errors.extend(cls.validate_types(note_dict))
+        all_errors.extend(cls.validate_range(note_dict))
+
+        return ValidationResult.failure(all_errors) if all_errors else ValidationResult.success()
+
+
+class PianoRollValidator:
+    """PianoRoll 데이터 검증기."""
+
+    # 필수 필드 목록
+    REQUIRED_FIELDS = ["notes", "tempo", "timeSignature", "editMode", "snapSetting"]
+
+    @classmethod
+    def to_dict(cls, data: Union[Dict[str, Any], PianoRollData]) -> Dict[str, Any]:
+        """데이터를 딕셔너리로 변환합니다."""
+        if dataclasses.is_dataclass(data):
+            return dataclasses.asdict(data)
+        return dict(data)
+
+    @classmethod
+    def validate_required_fields(cls, data: Dict[str, Any]) -> List[str]:
+        """필수 필드 유효성을 검증합니다."""
+        errors = []
+        for field in cls.REQUIRED_FIELDS:
+            if field not in data:
+                errors.append(f"Required field '{field}' is missing")
+        return errors
+
+    @classmethod
+    def validate_notes(cls, data: Dict[str, Any]) -> List[str]:
+        """노트 목록을 검증합니다."""
+        errors = []
+
+        if "notes" not in data:
+            return errors
+
+        if not isinstance(data["notes"], list):
+            return ["'notes' must be a list"]
+
+        for i, note in enumerate(data["notes"]):
+            note_errors = NoteValidator.validate(note)
+            for error in note_errors.errors:
+                errors.append(f"Note {i}: {error}")
+
+        return errors
+
+    @classmethod
+    def validate_tempo(cls, data: Dict[str, Any]) -> List[str]:
+        """템포를 검증합니다."""
+        if "tempo" in data:
+            if not isinstance(data["tempo"], (int, float)) or data["tempo"] <= 0:
+                return ["'tempo' must be a positive number"]
+        return []
+
+    @classmethod
+    def validate_time_signature(cls, data: Dict[str, Any]) -> List[str]:
+        """타임 시그니처를 검증합니다."""
+        errors = []
+
+        if "timeSignature" not in data:
+            return errors
+
+        ts = data["timeSignature"]
+        if dataclasses.is_dataclass(ts):
+            ts = dataclasses.asdict(ts)
+
+        if not isinstance(ts, dict):
+            return ["'timeSignature' must be a dictionary"]
+
+        if (
+            "numerator" not in ts
+            or not isinstance(ts["numerator"], int)
+            or ts["numerator"] <= 0
+        ):
+            errors.append("'timeSignature.numerator' must be a positive integer")
+        if (
+            "denominator" not in ts
+            or not isinstance(ts["denominator"], int)
+            or ts["denominator"] <= 0
+        ):
+            errors.append("'timeSignature.denominator' must be a positive integer")
+
+        return errors
+
+    @classmethod
+    def validate(cls, data: Union[Dict[str, Any], PianoRollData]) -> ValidationResult:
+        """
+        피아노롤 전체 데이터를 검증합니다.
+
+        Args:
+            data: 검증할 피아노롤 데이터.
+
+        Returns:
+            ValidationResult: 검증 결과.
+        """
+        # 딕셔너리인지 확인
+        data_dict = cls.to_dict(data)
+
+        if not isinstance(data_dict, dict):
+            return ValidationResult.failure(["Piano roll data must be a dictionary"])
+
+        all_errors = []
+        all_errors.extend(cls.validate_required_fields(data_dict))
+        all_errors.extend(cls.validate_notes(data_dict))
+        all_errors.extend(cls.validate_tempo(data_dict))
+        all_errors.extend(cls.validate_time_signature(data_dict))
+
+        return ValidationResult.failure(all_errors) if all_errors else ValidationResult.success()
+
+
 def validate_note(note: Union[Dict[str, Any], NoteData]) -> List[str]:
     """
     Validate note data.
@@ -296,38 +522,8 @@ def validate_note(note: Union[Dict[str, Any], NoteData]) -> List[str]:
     Returns:
         List of error messages (empty list if valid).
     """
-    if dataclasses.is_dataclass(note):
-        note = dataclasses.asdict(note)
-
-    errors = []
-
-    # Required field validation
-    required_fields = ["id", "start", "duration", "pitch", "velocity"]
-    for field in required_fields:
-        if field not in note:
-            errors.append(f"Required field '{field}' is missing")
-
-    # Type validation
-    if "start" in note and not isinstance(note["start"], (int, float)):
-        errors.append("'start' must be a number")
-    if "duration" in note and not isinstance(note["duration"], (int, float)):
-        errors.append("'duration' must be a number")
-    if "pitch" in note and not isinstance(note["pitch"], int):
-        errors.append("'pitch' must be an integer")
-    if "velocity" in note and not isinstance(note["velocity"], int):
-        errors.append("'velocity' must be an integer")
-
-    # Range validation
-    if "pitch" in note and not (0 <= note["pitch"] <= 127):
-        errors.append("'pitch' must be between 0 and 127")
-    if "velocity" in note and not (0 <= note["velocity"] <= 127):
-        errors.append("'velocity' must be between 0 and 127")
-    if "start" in note and note["start"] < 0:
-        errors.append("'start' must be non-negative")
-    if "duration" in note and note["duration"] <= 0:
-        errors.append("'duration' must be positive")
-
-    return errors
+    result = NoteValidator.validate(note)
+    return result.errors
 
 
 def validate_piano_roll_data(data: Union[Dict[str, Any], PianoRollData]) -> List[str]:
