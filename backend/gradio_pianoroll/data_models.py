@@ -536,57 +536,8 @@ def validate_piano_roll_data(data: Union[Dict[str, Any], PianoRollData]) -> List
     Returns:
         List of error messages (empty list if valid).
     """
-    if dataclasses.is_dataclass(data):
-        data = dataclasses.asdict(data)
-
-    errors = []
-
-    if not isinstance(data, dict):
-        return ["Piano roll data must be a dictionary"]
-
-    # Required field validation
-    required_fields = ["notes", "tempo", "timeSignature", "editMode", "snapSetting"]
-    for field in required_fields:
-        if field not in data:
-            errors.append(f"Required field '{field}' is missing")
-
-    # Notes validation
-    if "notes" in data:
-        if not isinstance(data["notes"], list):
-            errors.append("'notes' must be a list")
-        else:
-            for i, note in enumerate(data["notes"]):
-                note_errors = validate_note(note)
-                for error in note_errors:
-                    errors.append(f"Note {i}: {error}")
-
-    # Tempo validation
-    if "tempo" in data:
-        if not isinstance(data["tempo"], (int, float)) or data["tempo"] <= 0:
-            errors.append("'tempo' must be a positive number")
-
-    # Time signature validation
-    if "timeSignature" in data:
-        ts = data["timeSignature"]
-        if dataclasses.is_dataclass(ts):
-            ts = dataclasses.asdict(ts)
-        if not isinstance(ts, dict):
-            errors.append("'timeSignature' must be a dictionary")
-        else:
-            if (
-                "numerator" not in ts
-                or not isinstance(ts["numerator"], int)
-                or ts["numerator"] <= 0
-            ):
-                errors.append("'timeSignature.numerator' must be a positive integer")
-            if (
-                "denominator" not in ts
-                or not isinstance(ts["denominator"], int)
-                or ts["denominator"] <= 0
-            ):
-                errors.append("'timeSignature.denominator' must be a positive integer")
-
-    return errors
+    result = PianoRollValidator.validate(data)
+    return result.errors
 
 
 def validate_and_warn(
