@@ -271,7 +271,7 @@
     // Create reference objects for playhead updates
     const isPlayingRef = { value: isPlaying };
     const currentFlicksRef = { value: currentFlicks };
-    
+
     backendAudioEngine.startBackendAudioPlayback(currentFlicks, () => {
       isPlaying = false;
       // Stop playhead updates
@@ -280,10 +280,10 @@
         backendAudioEngine.backendPlayheadInterval = null;
       }
     });
-    
+
     // Update playback state
     isPlaying = true;
-    
+
     // Start playhead updates
     backendAudioEngine.updateBackendPlayhead(
       isPlayingRef,
@@ -294,16 +294,16 @@
         currentFlicks = 0;
       }
     );
-    
+
     // Additional interval for real-time playhead updates
     const playheadUpdateInterval = setInterval(() => {
       if (isPlaying && backendAudioEngine.backendAudioContext && backendAudioEngine.backendAudioBuffer) {
         const elapsedTime = backendAudioEngine.backendAudioContext.currentTime - backendAudioEngine.backendPlayStartTime;
         const newFlicks = Math.round(elapsedTime * 705600000);
-        
+
         // Update currentFlicks in real-time
         currentFlicks = newFlicks;
-        
+
         // Check if playback has ended
         if (elapsedTime >= backendAudioEngine.backendAudioBuffer.duration) {
           isPlaying = false;
@@ -321,7 +321,7 @@
     // Pass current position as reference object
     const currentFlicksRef = { value: currentFlicks };
     backendAudioEngine.pauseBackendAudio(currentFlicksRef);
-    
+
     // Reflect updated position
     currentFlicks = currentFlicksRef.value;
     isPlaying = false;
@@ -331,7 +331,7 @@
     // Pass current position as reference object
     const currentFlicksRef = { value: currentFlicks };
     backendAudioEngine.stopBackendAudio(currentFlicksRef);
-    
+
     // Reset position to 0
     isPlaying = false;
     currentFlicks = 0;

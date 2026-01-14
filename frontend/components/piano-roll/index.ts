@@ -5,7 +5,7 @@
  */
 
 export { PlaybackController, createPlaybackController } from './PlaybackController';
-export type { PlaybackControllerOptions, PlaybackCallbacks, PlaybackState, PlaybackEventPayload } from './PlaybackController';
+export type { PlaybackOptions, PlaybackCallbacks, PlaybackState, PlaybackEventPayload, AudioSourceType } from './PlaybackController';
 
 export { AudioManager, createAudioManager } from './AudioManager';
 export type { AudioManagerConfig, RenderResult, AudioPlaybackState } from './AudioManager';

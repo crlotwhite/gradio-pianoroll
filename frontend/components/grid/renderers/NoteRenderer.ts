@@ -104,10 +104,6 @@ export class NoteRenderer {
     const screenX = note.start - horizontalScroll;
     const screenY = pitchToY(note.pitch) - verticalScroll;
 
-    // Skip if not visible
-    if (screenX + note.duration < 0 || screenX > context.width) return;
-    if (screenY + this.config.noteHeight < 0 || screenY > context.height) return;
-
     // Determine note color based on selection state
     const isSelected = selection?.selectedNotes.has(note.id) ?? false;
     const isNearEdge = selection?.nearEdgeNoteId === note.id;

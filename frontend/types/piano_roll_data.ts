@@ -2,18 +2,21 @@
  * Piano roll data types
  *
  * This module contains the main data structures used throughout
- * the piano roll application. Note types are exported from './notes'.
+ * the piano roll application.
  */
 
-// Re-export Note and related types from notes.ts
-export type { Note, NoteTimingData, TimeSignature, QuantizationSettings } from './notes';
+import type { Note, TimeSignature } from './notes';
+import type { LineDataPoint } from './layer';
+
+// Re-export for convenience
+export type { Note, TimeSignature } from './notes';
 
 /**
  * Extended LineLayerConfig for PianoRollData
  * Includes the data array for the line points
  */
 export interface LineLayerConfigWithData {
-  data: import('./layer').LineDataPoint[];
+  data: LineDataPoint[];
   color?: string;
   lineWidth?: number;
   yMin?: number;

@@ -5,6 +5,7 @@
  * measure lines, beat lines, and subdivision lines.
  */
 
+import { createLogger } from '../../../utils/logger';
 import type { LayerRenderContext, TimeSignature } from '../../../types';
 
 const log = createLogger('GridRenderer');
